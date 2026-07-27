@@ -1,0 +1,235 @@
+@import "tailwindcss";
+
+/* ══════════════════════════════════════════════════════
+   DARK (Vercel-style solid)
+══════════════════════════════════════════════════════ */
+:root,
+[data-theme="dark"],
+[data-theme="admin-dark"] {
+  --cn-bg-page:        #1f2024;
+  --cn-bg-card:        #2b2d37;
+  --cn-bg-input:       #31333e;
+  --cn-bg-hover:       #31333e;
+  --cn-bg-row-even:    #2b2d37;
+  --cn-bg-row-odd:     #1f2024;
+  --cn-border:         rgba(255, 255, 255, 0.09);
+  --cn-border-light:   rgba(255, 255, 255, 0.05);
+  --cn-text-primary:   #ffffff;
+  --cn-text-secondary: #dfdfe5;
+  --cn-text-muted:     #89898e;
+  --cn-text-faint:     #6D6D73;
+  --cn-accent:         #FE4A23;
+  --cn-accent-hover:   #ff6545;
+  --cn-bg-header:      #2b2d37;
+  --cn-bg-dropdown:    #31333e;
+  --cn-bg-sidebar:     #1f2024;
+  --cn-shadow-card:    0 1px 2px rgba(0,0,0,0.30);
+  --cn-shadow-hover:   0 4px 18px rgba(0,0,0,0.45), 0 1px 4px rgba(0,0,0,0.30);
+}
+
+/* ══════════════════════════════════════════════════════
+   LIGHT (clean solid)
+══════════════════════════════════════════════════════ */
+[data-theme="light"],
+[data-theme="admin-light"] {
+  --cn-bg-page:        #f4f4f5;
+  --cn-bg-card:        #ffffff;
+  --cn-bg-input:       #f0f0f0;
+  --cn-bg-hover:       #e8e8e8;
+  --cn-bg-row-even:    #ffffff;
+  --cn-bg-row-odd:     #fafafa;
+  --cn-border:         rgba(0, 0, 0, 0.07);
+  --cn-border-light:   rgba(0, 0, 0, 0.04);
+  --cn-text-primary:   #111111;
+  --cn-text-secondary: #333333;
+  --cn-text-muted:     #666666;
+  --cn-text-faint:     #aaaaaa;
+  --cn-accent:         #FE4A23;
+  --cn-accent-hover:   #e03e1d;
+  --cn-bg-header:      #ffffff;
+  --cn-bg-dropdown:    #ffffff;
+  --cn-bg-sidebar:     #fafafa;
+  --cn-shadow-card:    0 1px 2px rgba(0,0,0,0.06);
+  --cn-shadow-hover:   0 4px 14px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06);
+}
+
+/* ══════════════════════════════════════════════════════
+   ADMIN SKIN — overrides applied on top of light/dark
+   Cleaner, more minimal, Nubo-inspired aesthetic
+══════════════════════════════════════════════════════ */
+[data-theme="admin-light"] {
+  --cn-bg-page:        #f0f2f5;
+  --cn-bg-card:        #ffffff;
+  --cn-bg-input:       #f5f6f8;
+  --cn-bg-hover:       #eef0f3;
+  --cn-bg-row-even:    #ffffff;
+  --cn-bg-row-odd:     #fafbfc;
+  --cn-border:         rgba(0,0,0,0.06);
+  --cn-border-light:   rgba(0,0,0,0.04);
+  --cn-text-primary:   #111827;
+  --cn-text-secondary: #374151;
+  --cn-text-muted:     #6b7280;
+  --cn-text-faint:     #d1d5db;
+  --cn-bg-header:      #ffffff;
+  --cn-bg-dropdown:    #ffffff;
+  --cn-bg-sidebar:     #ffffff;
+  --cn-shadow-card:    0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
+  --cn-shadow-hover:   0 4px 16px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06);
+}
+
+[data-theme="admin-dark"] {
+  --cn-bg-page:        #1f2024;
+  --cn-bg-card:        #2b2d37;
+  --cn-bg-input:       #31333e;
+  --cn-bg-hover:       #31333e;
+  --cn-bg-row-even:    #2b2d37;
+  --cn-bg-row-odd:     #1f2024;
+  --cn-border:         rgba(255,255,255,0.08);
+  --cn-border-light:   rgba(255,255,255,0.045);
+  --cn-text-primary:   #ffffff;
+  --cn-text-secondary: #dfdfe5;
+  --cn-text-muted:     #89898e;
+  --cn-text-faint:     #6D6D73;
+  --cn-bg-header:      #2b2d37;
+  --cn-bg-dropdown:    #31333e;
+  --cn-bg-sidebar:     #1f2024;
+  --cn-shadow-card:    0 1px 3px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.24);
+  --cn-shadow-hover:   0 4px 18px rgba(0,0,0,0.45), 0 1px 4px rgba(0,0,0,0.28);
+}
+
+/* ── Admin-skin layout refinements ─────────────────── */
+[data-theme^="admin"] .cn-card {
+  border: none !important;
+  box-shadow: var(--cn-shadow-card) !important;
+  border-radius: 12px !important;
+}
+[data-theme^="admin"] .cn-card:hover {
+  box-shadow: var(--cn-shadow-hover) !important;
+}
+[data-theme^="admin"] .cn-card-static:hover {
+  box-shadow: var(--cn-shadow-card) !important;
+  transform: none !important;
+}
+
+/* Sidebar in admin mode */
+[data-theme^="admin"] aside {
+  border-right: 1px solid var(--cn-border) !important;
+}
+
+/* Topbar in admin mode */
+[data-theme^="admin"] header {
+  border-bottom: 1px solid var(--cn-border) !important;
+  box-shadow: 0 1px 0 var(--cn-border) !important;
+}
+
+/* Table rows in admin mode — remove zebra, add clean hover */
+[data-theme^="admin"] table tbody tr {
+  background: var(--cn-bg-row-even) !important;
+  border-bottom: 1px solid var(--cn-border-light) !important;
+}
+[data-theme^="admin"] table tbody tr:hover {
+  background: var(--cn-bg-hover) !important;
+}
+
+/* Table headers in admin mode */
+[data-theme^="admin"] table thead tr {
+  background: var(--cn-bg-input) !important;
+  border-bottom: 1px solid var(--cn-border) !important;
+}
+
+/* Page background — solid, no gradient */
+body {
+  background: var(--cn-bg-page);
+  color: var(--cn-text-primary);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  min-height: 100vh;
+}
+
+/* cn-bg is no longer needed but kept for login screen compatibility */
+.cn-bg { display: none; }
+
+/* Smooth theme transitions */
+*, *::before, *::after {
+  transition: background-color 0.25s, border-color 0.25s, color 0.2s;
+  scroll-behavior: smooth;
+}
+
+img, svg, canvas, video { transition: none; }
+
+/* ── Scrollbar ──────────────────────────────────────── */
+::-webkit-scrollbar       { width: 7px; height: 7px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--cn-border); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: var(--cn-accent); }
+
+/* ── Native select option colours ───────────────────── */
+:root select option,
+[data-theme="dark"] select option {
+  background: #1a1a1a;
+  color: #f6f6f6;
+}
+[data-theme="light"] select option {
+  background: #ffffff;
+  color: #111111;
+}
+
+.recharts-tooltip-wrapper { outline: none !important; }
+
+/* Remove default browser focus ring on cards and chart elements */
+.cn-card:focus,
+.cn-card:focus-within,
+.cn-card:focus-visible,
+.recharts-wrapper:focus,
+.recharts-surface:focus,
+svg:focus,
+[tabindex]:focus {
+  outline: none !important;
+  box-shadow: var(--cn-shadow-card) !important;
+}
+
+/* ── Interactive card lift ──────────────────────────────── */
+.cn-card {
+  box-shadow: var(--cn-shadow-card);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease !important;
+}
+.cn-card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--cn-shadow-hover);
+}
+
+/* Opt out of the hover lift for large static containers (inner cards inside them keep it) */
+.cn-card-static,
+.cn-card-static:hover {
+  transform: none !important;
+  box-shadow: var(--cn-shadow-card) !important;
+}
+
+@keyframes newsFadeIn {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Flat dark theme — no hover lift, no glow, just plain flat cards ───── */
+[data-theme$="dark"] .cn-card,
+[data-theme$="dark"][data-theme^="admin"] .cn-card {
+  box-shadow: none !important;
+  border: 1px solid var(--cn-border) !important;
+}
+[data-theme$="dark"] .cn-card:hover,
+[data-theme$="dark"][data-theme^="admin"] .cn-card:hover {
+  transform: none !important;
+  box-shadow: none !important;
+  border-color: var(--cn-border) !important;
+}
+[data-theme$="dark"] .cn-card:focus,
+[data-theme$="dark"] .cn-card:focus-within,
+[data-theme$="dark"] .cn-card:focus-visible {
+  box-shadow: none !important;
+}
+
+/* ── Readability bump — management feedback: dashboard text too small ──── */
+.text-\[9px\]  { font-size: 11px; }
+.text-\[10px\] { font-size: 12px; }
+.text-\[11px\] { font-size: 12.5px; }
+.text-xs       { font-size: 13px; line-height: 1.5; }
+.text-sm       { font-size: 14.5px; line-height: 1.5; }

@@ -1,0 +1,2806 @@
+'use client';
+
+import { useState, useRef, useEffect, ChangeEvent } from 'react';
+import {
+  PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, Label,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+} from 'recharts';
+import { CheckCircle2, PauseCircle, LayoutGrid, Send, CalendarCheck, CalendarClock, UserCheck, ChevronDown, ChevronUp, AlertTriangle, ThumbsUp, RefreshCw, BadgeCheck, Copy, Check, Search, X } from 'lucide-react';
+import { SheetData } from '@/lib/googleSheets';
+import { memberColor } from '@/lib/memberColors';
+
+// ─── Shared date-filter util (also used per-section) ──────────────────────────
+export type DateFilter = 'all' | 'daily' | 'weekly' | 'monthly';
+export function filterByDate(data: SheetData[], headers: string[], filter: DateFilter): SheetData[] {
+  if (filter === 'all') return data;
+  const bucketCol   = headers.find(h => h.toLowerCase().includes('task daily bucket') || h.toLowerCase().includes('bucket'));
+  const deadlineCol = headers.find(h => h.toLowerCase().includes('deadline'));
+  const tsCol       = headers.find(h => h.toLowerCase().includes('timestamp'));
+  const parseDate = (raw: string): Date | null => {
+    if (!raw) return null;
+    let d = new Date(raw);
+    if (!isNaN(d.getTime())) return d;
+    const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (m) { d = new Date(+m[3], +m[2] - 1, +m[1]); if (!isNaN(d.getTime())) return d; }
+    return null;
+  };
+  const now = new Date();
+  const sod = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const sow = new Date(sod); sow.setDate(sod.getDate() - sod.getDay());
+  const som = new Date(now.getFullYear(), now.getMonth(), 1);
+  return data.filter(row => {
+    const bucket = String(row[bucketCol ?? ''] ?? '').trim().toLowerCase();
+    // Recurring/pending tasks always included regardless of date filter
+    if (bucket === 'everyday' || bucket === 'to be expected') return true;
+    if (filter === 'daily') return bucket === 'today';
+    const dateRaw = String(row[deadlineCol ?? ''] ?? row[tsCol ?? ''] ?? '').trim();
+    const d = parseDate(dateRaw);
+    if (!d) return false;
+    const since = filter === 'weekly' ? sow : som;
+    return d >= since && d < new Date(now.getFullYear(), now.getMonth() + (filter === 'monthly' ? 1 : 0), filter === 'weekly' ? sod.getDate() + (7 - sod.getDay()) : 1);
+  });
+}
+
+function ChartShell({ title, sub, filter: f, onFilter, children }: { title: string; sub?: string; filter: DateFilter; onFilter: (v: DateFilter) => void; children: React.ReactNode }) {
+  return (
+    <div className="cn-card rounded-xl overflow-hidden" style={{ background: 'var(--cn-bg-card)' }}>
+      <div className="flex items-center justify-between gap-3 px-4 sm:px-5 pt-4 pb-3 border-b" style={{ borderColor: 'var(--cn-border)' }}>
+        <div>
+          <h3 className="font-semibold text-sm" style={{ color: 'var(--cn-text-primary)' }}>{title}</h3>
+          {sub && <p className="text-xs mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>{sub}</p>}
+        </div>
+        <DateFilterPills value={f} onChange={onFilter} />
+      </div>
+      <div className="p-4 sm:p-5">{children}</div>
+    </div>
+  );
+}
+
+function DateFilterPills({ value, onChange }: { value: DateFilter; onChange: (f: DateFilter) => void }) {
+  return (
+    <div className="flex items-center gap-1 shrink-0">
+      {(['all', 'daily', 'weekly', 'monthly'] as const).map(f => (
+        <button key={f} type="button" onClick={e => { e.stopPropagation(); onChange(f); }}
+          className="px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer"
+          style={{
+            background: value === f ? 'var(--cn-accent)' : 'var(--cn-bg-input)',
+            color: value === f ? '#fff' : 'var(--cn-text-muted)',
+            border: `1px solid ${value === f ? 'var(--cn-accent)' : 'var(--cn-border)'}`,
+          }}>
+          {f === 'all' ? 'All' : f === 'daily' ? 'Today' : f === 'weekly' ? 'Week' : 'Month'}
+        </button>
+      ))}
+    </div>
+  );
+}
+import QATesting from './QATesting';
+
+interface Props {
+  sheet1Data: SheetData[];
+  sheet1Headers: string[];
+  pmView?: boolean;
+  resourceView?: boolean;
+  resourceName?: string;
+  isAdmin?: boolean;
+  availData?: SheetData[];
+  availHeaders?: string[];
+  onStatusChange?: (row: SheetData, col: string, val: string) => Promise<void>;
+  pmStatusColName?: string;
+  currentUserName?: string;
+  currentUserEmail?: string;
+  showFilter?: boolean;
+  hideKpi?: boolean;
+  hidePmStatus?: boolean;
+}
+
+function findCol(headers: string[], ...terms: string[]): string | undefined {
+  for (const term of terms) {
+    const t = term.toLowerCase();
+    const found = headers.find(h => h.toLowerCase().includes(t));
+    if (found) return found;
+  }
+  return undefined;
+}
+
+export function countValues(data: SheetData[], col: string): { name: string; value: number }[] {
+  const counts: Record<string, number> = {};
+  data.forEach(row => {
+    const val = String(row[col] ?? '').trim();
+    if (val) counts[val] = (counts[val] ?? 0) + 1;
+  });
+  return Object.entries(counts)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+}
+
+// Sum time-estimate hours grouped by a column value
+export function sumHoursByCol(data: SheetData[], groupCol: string, timeCol: string): { name: string; value: number }[] {
+  const totals: Record<string, number> = {};
+  data.forEach(row => {
+    const key = String(row[groupCol] ?? '').trim();
+    if (!key) return;
+    totals[key] = (totals[key] ?? 0) + parseHours(String(row[timeCol] ?? '').trim());
+  });
+  return Object.entries(totals)
+    .map(([name, value]) => ({ name, value: Math.round(value * 10) / 10 }))
+    .sort((a, b) => b.value - a.value);
+}
+
+
+const PRIORITY_COLORS: Record<string, string> = {
+  urgent: '#3b82f6', high: '#ef4444', medium: '#f59e0b', low: '#10b981',
+};
+const TEAM_COLORS: Record<string, string> = {
+  'ui/ux': '#3b82f6', uiux: '#3b82f6', frontend: '#ef4444', front: '#ef4444',
+  backend: '#f59e0b', back: '#f59e0b', qa: '#10b981',
+};
+const TASK_INFO_COLORS: Record<string, string> = {
+  new: '#3b82f6', running: '#ef4444', 'to be expected': '#f59e0b', expected: '#f59e0b',
+};
+export const STATUS_COLORS: Record<string, string> = {
+  'no action taken':     '#6b7280',
+  'n/a':                 '#6b7280',
+  'to be started':       '#dc2626',
+  'in progress':         '#16a34a',
+  'testing':             '#2563eb',
+  'on hold':             '#7c3aed',
+  'submitted to akash':  '#d97706',
+  'submitted to pm':     '#10b981',
+  'submitted to client': '#6d28d9',
+};
+const PALETTE = ['#FE4A23','#3b82f6','#10b981','#f59e0b','#8b5cf6','#06b6d4','#ec4899','#84cc16','#ef4444','#14b8a6'];
+const PM_STATUS_COLORS_MAP: Record<string, string> = {
+  'no action taken':     '#6b7280',
+  'n/a':                 '#6b7280',
+  'rework':              '#dc2626',
+  'approved':            '#16a34a',
+  'submitted to client': '#6d28d9',
+  'changes':             '#0a53a8',
+  'ticketclosed':        '#7c3aed',
+};
+
+function resolveColor(name: string, colorMap: Record<string, string>, index: number): string {
+  const lower = name.toLowerCase();
+  for (const [key, color] of Object.entries(colorMap)) {
+    if (lower.includes(key)) return color;
+  }
+  return PALETTE[index % PALETTE.length];
+}
+
+const tooltipStyle = {
+  contentStyle: {
+    backgroundColor: 'var(--cn-bg-card)',
+    border: '1px solid var(--cn-border)',
+    borderRadius: 6,
+    color: 'var(--cn-text-primary)',
+    fontSize: 12,
+  },
+};
+
+// ─── Resource Overview ────────────────────────────────────────────────────────
+const EXCLUDED_PERSONS = ['admin', 'test'];
+
+const TEAM_PHOTOS: Record<string, string> = {
+  akash: '/team/Akash.png', lovepreet: '/team/Lovepreet.png',
+  manpreet: '/team/Manpreet.png', pawan: '/team/Pawan.png',
+  robin: '/team/Robin.png', shubham: '/team/Shubham.png',
+  vinay: '/team/Vinay.png', dhruv: '/team/Dhruv.png',
+  kiran: '/team/Kiran.png', yash: '/team/Yash.png',
+  muskan: '/team/Muskan.png', moon: '/team/Moon.png',
+  sameer: '/team/Sameer.png',
+};
+
+const TEAM_DESIGNATIONS: Record<string, string> = {
+  akash:     'Senior UI/UX Designer',
+  kiran:     'Project Manager',
+  lovepreet: 'Web Designer',
+  manpreet:  'Web Designer',
+  shubham:   'Web Designer',
+  dhruv:     'CMS Developer',
+  pawan:     'Web Developer - Team Lead',
+  vinay:     'QA Analyst',
+  robin:     'Web Designer',
+};
+
+function teamDesignation(name: string): string {
+  const lower = name.toLowerCase();
+  const key = Object.keys(TEAM_DESIGNATIONS).find(k => lower.includes(k));
+  return key ? TEAM_DESIGNATIONS[key] : '';
+}
+
+function teamPhoto(name: string): string {
+  const lower = name.toLowerCase();
+  const key = Object.keys(TEAM_PHOTOS).find(k => lower.includes(k));
+  return key ? TEAM_PHOTOS[key] : '';
+}
+
+// Parse time strings like "3 Hours", "0.5 Hour", "1.5 Hours", "90 min", "3" → number of hours
+export function parseHours(val: string): number {
+  if (!val) return 0;
+  const lower = val.trim().toLowerCase();
+  // "X hour(s)" or "X hr(s)"
+  const hourMatch = lower.match(/^([\d.]+)\s*h/);
+  if (hourMatch) return parseFloat(hourMatch[1]) || 0;
+  // plain number
+  const num = parseFloat(lower);
+  return isNaN(num) ? 0 : num;
+}
+
+// Status based on todayHours (today+everyday) — matches the badge shown on the card
+function resourceStatus(row: ResourceRow, onLeave = false): { label: string; bg: string; text: string } {
+  if (onLeave)                return { label: 'On Leave',           bg: '#ef4444', text: '#fff' };
+  if (row.todayHours === 0)   return { label: 'Available',          bg: '#22c55e', text: '#fff' };
+  if (row.todayHours <= 6.5)  return { label: 'Partially Available', bg: '#f59e0b', text: '#fff' };
+  if (row.todayHours <= 7.3)  return { label: 'Occupied',           bg: '#f97316', text: '#fff' };
+  return                             { label: 'Occupied',           bg: '#ef4444', text: '#fff' };
+}
+
+
+interface ResourceRow {
+  name: string;
+  activeProject: string;
+  activeTasks: number;
+  onHoldTasks: number;
+  pendingPM: number;
+  toBeStarted: number;
+  testingTasks: number;
+  totalHours: number;
+  todayHours: number;
+  todayTasks: number;
+  pendingTasks: { task: string; project: string; status: string; pmStatus: string; timeEst: string; taskUrl: string; bucketSet: string; bucket: string; timeLogged: string; _raw: SheetData }[];
+}
+
+const PM_STATUS_OPTIONS_RO = ['No Action Taken', 'Changes', 'Approved', 'Submitted To Client', 'TicketClosed'];
+const PM_STATUS_COLORS_RO: Record<string, string> = {
+  'no action taken': '#6b7280', 'n/a': '#6b7280',
+  'approved': '#16a34a', 'submitted to client': '#6d28d9', 'changes': '#dc2626',
+  'ticketclosed': '#7c3aed',
+};
+
+function ResourcePmSelect({ value, raw, colName, onStatusChange }: {
+  value: string; raw: SheetData; colName: string;
+  onStatusChange: (row: SheetData, col: string, val: string) => Promise<void>;
+}) {
+  const match = PM_STATUS_OPTIONS_RO.find(o => o.toLowerCase() === value.toLowerCase()) ?? 'No Action Taken';
+  const [current, setCurrent] = useState(match);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  // Re-sync when the underlying row/value changes (e.g. component reused across a filter switch)
+  useEffect(() => {
+    if (!saving) setCurrent(match);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, raw]);
+
+  const color = PM_STATUS_COLORS_RO[current.toLowerCase()] ?? '#6b7280';
+
+  const handleChange = async (e: ChangeEvent<HTMLSelectElement>) => {
+    const newVal = e.target.value;
+    setCurrent(newVal);
+    setSaving(true);
+    setSaved(false);
+    try {
+      await onStatusChange(raw, colName, newVal);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      setCurrent(match);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <select
+        value={current}
+        onChange={handleChange}
+        disabled={saving}
+        className="text-[10px] font-semibold rounded-full pl-2.5 pr-6 py-0.5 border-0 focus:outline-none cursor-pointer disabled:opacity-60 appearance-none"
+        style={{
+          backgroundColor: color, color: '#fff', minWidth: '120px',
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
+          backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px center',
+        }}
+      >
+        {PM_STATUS_OPTIONS_RO.map(opt => (
+          <option key={opt} value={opt} style={{ background: '#1a1a1a', color: '#fff' }}>{opt}</option>
+        ))}
+      </select>
+      {saving && <span className="w-3 h-3 border border-t-transparent rounded-full animate-spin inline-block" style={{ borderColor: 'var(--cn-accent)' }} />}
+      {saved && <span className="text-[10px]" style={{ color: '#22c55e' }}>✓</span>}
+    </div>
+  );
+}
+
+const STATUS_OPTIONS_RO = ['No Action Taken', 'To Be Started', 'In Progress', 'Testing', 'On Hold', 'Submitted To Akash', 'Submitted To PM'];
+
+function ResourceStatusSelect({ value, raw, colName, onStatusChange }: {
+  value: string; raw: SheetData; colName: string;
+  onStatusChange: (row: SheetData, col: string, val: string) => Promise<void>;
+}) {
+  const match = STATUS_OPTIONS_RO.find(o => o.toLowerCase() === value.toLowerCase()) ?? value;
+  const [current, setCurrent] = useState(match || 'No Action Taken');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  // Re-sync when the underlying row/value changes (e.g. component reused across a filter switch)
+  useEffect(() => {
+    if (!saving) setCurrent(match || 'No Action Taken');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, raw]);
+
+  const color = STATUS_COLORS[current.toLowerCase()] ?? '#6b7280';
+
+  const handleChange = async (e: ChangeEvent<HTMLSelectElement>) => {
+    const newVal = e.target.value;
+    setCurrent(newVal);
+    setSaving(true);
+    setSaved(false);
+    try {
+      await onStatusChange(raw, colName, newVal);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      setCurrent(match);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <select
+        value={current}
+        onChange={handleChange}
+        disabled={saving}
+        className="text-[10px] font-semibold rounded-full pl-2.5 pr-6 py-0.5 border-0 focus:outline-none cursor-pointer disabled:opacity-60 appearance-none"
+        style={{
+          backgroundColor: color, color: '#fff', minWidth: '110px',
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
+          backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px center',
+        }}
+      >
+        {STATUS_OPTIONS_RO.map(opt => (
+          <option key={opt} value={opt} style={{ background: '#1a1a1a', color: '#fff' }}>{opt}</option>
+        ))}
+        {current && !STATUS_OPTIONS_RO.map(o => o.toLowerCase()).includes(current.toLowerCase()) && (
+          <option value={current}>{current}</option>
+        )}
+      </select>
+      {saving && <span className="w-3 h-3 border border-t-transparent rounded-full animate-spin inline-block" style={{ borderColor: 'var(--cn-accent)' }} />}
+      {saved && <span className="text-[10px]" style={{ color: '#22c55e' }}>✓</span>}
+    </div>
+  );
+}
+
+function ResourceTimeLoggedEdit({ value, raw, colName, onStatusChange }: {
+  value: string; raw: SheetData; colName: string;
+  onStatusChange: (row: SheetData, col: string, val: string) => Promise<void>;
+}) {
+  const [current, setCurrent] = useState(value);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const original = useRef(value);
+
+  // Re-sync when the underlying row/value changes (e.g. component reused across a filter switch)
+  useEffect(() => {
+    if (!saving) {
+      setCurrent(value);
+      original.current = value;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, raw]);
+
+  const handleSave = async () => {
+    if (current === original.current) return;
+    setSaving(true);
+    setSaved(false);
+    try {
+      await onStatusChange(raw, colName, current);
+      original.current = current;
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      setCurrent(original.current);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <input
+        type="text"
+        value={current}
+        onChange={e => { setCurrent(e.target.value); setSaved(false); }}
+        onKeyDown={e => { if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur(); }}
+        onBlur={handleSave}
+        disabled={saving}
+        placeholder="—"
+        className="w-16 px-1.5 py-0.5 text-[10px] rounded border focus:outline-none disabled:opacity-60 transition-colors"
+        style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', borderColor: 'var(--cn-border)' }}
+      />
+      {saving && <span className="w-3 h-3 border border-t-transparent rounded-full animate-spin shrink-0" style={{ borderColor: 'var(--cn-accent)' }} />}
+      {saved && <span className="text-[10px] shrink-0" style={{ color: '#22c55e' }}>✓</span>}
+    </div>
+  );
+}
+
+function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatusColName, canEditPmStatus = true, statusColName, timeLoggedColName, canEditStatus = false, canCopy = false, pmEmailCol, currentUserEmail }: {
+  row: ResourceRow; onLeave: boolean;
+  isOpen: boolean; onToggle: () => void;
+  onStatusChange?: (row: SheetData, col: string, val: string) => Promise<void>;
+  pmStatusColName?: string;
+  canEditPmStatus?: boolean;
+  statusColName?: string;
+  timeLoggedColName?: string;
+  canEditStatus?: boolean;
+  canCopy?: boolean;
+  pmEmailCol?: string;
+  currentUserEmail?: string;
+}) {
+  const visibleTasks = row.pendingTasks;
+  const open = isOpen;
+  const initials = row.name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
+  const bg      = memberColor(row.name);
+  const photo   = teamPhoto(row.name);
+  const status  = resourceStatus(row, onLeave);
+  const isOccupied = row.activeTasks > 0;
+  const highlightColor = onLeave ? '#ef4444' : bg;
+  const [copiedRowIdx, setCopiedRowIdx] = useState<number | null>(null);
+  const [copiedTable, setCopiedTable] = useState(false);
+
+  const statusDot = (color: string) => (
+    <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
+  );
+
+  // Same row-copy format as the Tasks Bucket table (FilteredDataTable.copyRow)
+  const copyRow = (t: ResourceRow['pendingTasks'][number], idx: number) => {
+    const text = `Project Name: ${t.project}\nTask URL: ${t.taskUrl}\nEst Time: `;
+    navigator.clipboard.writeText(text).catch(() => {});
+    setCopiedRowIdx(idx);
+    setTimeout(() => setCopiedRowIdx(null), 2000);
+  };
+
+  // Same columns/format as the Tasks Bucket table (FilteredDataTable.copyTable):
+  // Project Name, Task Name, Task URL, Time Estimation, Time Logged On AC, Task Status
+  const COPY_COLS = ['Project Name', 'Task Name', 'Task URL', 'Time Estimation', 'Time Logged On AC', 'Task Status'];
+  const copyTable = async () => {
+    // Only Today / Everyday tasks get copied — others (Tomorrow, Submitted, etc.) are excluded
+    const copyableTasks = visibleTasks.filter(t => {
+      const b = t.bucket.trim().toLowerCase();
+      return b === 'today' || b === 'everyday';
+    });
+    const rowsToCopy = copyableTasks.map(t => [t.project, t.task, t.taskUrl, t.timeEst, t.timeLogged, t.status]);
+    const html = `
+<table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;color:#111;">
+  <thead>
+    <tr style="background-color:#FE4A23;color:#ffffff;">
+      <th style="border:1px solid #555;padding:8px 12px;text-align:left;white-space:nowrap;">#</th>
+      ${COPY_COLS.map(h => `<th style="border:1px solid #555;padding:8px 12px;text-align:left;white-space:nowrap;">${h}</th>`).join('')}
+    </tr>
+  </thead>
+  <tbody>
+    ${rowsToCopy.map((r, i) => `
+    <tr style="background-color:${i % 2 === 0 ? '#ffffff' : '#fafafa'};">
+      <td style="border:1px solid #ddd;padding:6px 12px;color:#888;">${i + 1}</td>
+      ${r.map(v => `<td style="border:1px solid #ddd;padding:6px 12px;">${v ?? ''}</td>`).join('')}
+    </tr>`).join('')}
+  </tbody>
+</table>`;
+    const text = [
+      ['#', ...COPY_COLS].join('\t'),
+      ...rowsToCopy.map((r, i) => [i + 1, ...r].join('\t')),
+    ].join('\n');
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html':  new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([text], { type: 'text/plain' }),
+        }),
+      ]);
+    } catch {
+      await navigator.clipboard.writeText(text);
+    }
+    setCopiedTable(true);
+    setTimeout(() => setCopiedTable(false), 2500);
+  };
+
+  return (
+    <div
+      className="cn-card rounded-xl overflow-hidden"
+      style={{
+        background:  (isOccupied || onLeave) ? `${highlightColor}08` : 'var(--cn-bg-card)',
+        borderLeft:  `3px solid ${highlightColor}`,
+        boxShadow:   (isOccupied || onLeave) ? `inset 0 0 0 1px ${highlightColor}22` : undefined,
+      }}
+    >
+      {/* Main row — entire row is clickable */}
+      <div
+        className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none"
+        onClick={visibleTasks.length > 0 ? onToggle : undefined}
+        style={{ cursor: visibleTasks.length > 0 ? 'pointer' : 'default' }}
+      >
+        {/* Avatar */}
+        {photo ? (
+          <div className="w-10 h-10 rounded-full p-[2px] shrink-0" style={{ background: `conic-gradient(${highlightColor}, #e5e7eb, ${highlightColor})` }}>
+            <img src={photo} alt={row.name} className="w-full h-full rounded-full object-cover"
+              onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+          </div>
+        ) : (
+          <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+            style={{ background: `linear-gradient(135deg, ${bg}cc, ${bg}66)` }}>
+            {initials}
+          </div>
+        )}
+
+        {/* Name + status badge + current project */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold truncate" style={{ color: 'var(--cn-text-primary)' }}>{row.name}</p>
+            <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: status.bg, color: status.text }}>
+              {status.label}
+            </span>
+          </div>
+          <p className="text-[11px] truncate mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>
+            {teamDesignation(row.name) || row.activeProject || '—'}
+          </p>
+        </div>
+
+        {/* Stat pills */}
+        <div className="hidden sm:flex items-center gap-3 shrink-0">
+          {row.todayTasks > 0 && (
+            <div className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shrink-0"
+              style={{ background: '#f59e0b22', color: '#f59e0b' }}
+              title="Today + Everyday Tasks & Hours">
+              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              {row.todayTasks} Tasks · {Math.round(row.todayHours * 10) / 10}h
+            </div>
+          )}
+          <div className="flex items-center gap-1.5 text-xs" title="In Progress">
+            {statusDot('#16a34a')}
+            <span style={{ color: 'var(--cn-text-primary)' }} className="font-semibold">{row.activeTasks}</span>
+            <span style={{ color: 'var(--cn-text-muted)' }}>in progress</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs" title="On Hold">
+            {statusDot('#7c3aed')}
+            <span style={{ color: 'var(--cn-text-primary)' }} className="font-semibold">{row.onHoldTasks}</span>
+            <span style={{ color: 'var(--cn-text-muted)' }}>on hold</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs" title="Pending PM Review">
+            {statusDot('#10b981')}
+            <span style={{ color: 'var(--cn-text-primary)' }} className="font-semibold">{row.pendingPM}</span>
+            <span style={{ color: 'var(--cn-text-muted)' }}>PM</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs" title="To Be Started">
+            {statusDot('#dc2626')}
+            <span style={{ color: 'var(--cn-text-primary)' }} className="font-semibold">{row.toBeStarted}</span>
+            <span style={{ color: 'var(--cn-text-muted)' }}>to be started</span>
+          </div>
+        </div>
+
+        {/* Total badge */}
+        <div className="px-2.5 py-1 rounded-full text-xs font-bold shrink-0" style={{ background: bg + '18', color: bg }}>
+          {row.activeTasks + row.onHoldTasks + row.pendingPM + row.toBeStarted}
+        </div>
+
+        {/* Copy table button */}
+        {canCopy && visibleTasks.length > 0 && (
+          <button
+            onClick={e => { e.stopPropagation(); copyTable(); }}
+            title="Copy table"
+            className="shrink-0 w-7 h-7 rounded-lg inline-flex items-center justify-center cursor-pointer transition-all"
+            style={copiedTable
+              ? { background: '#16a34a18', border: '1px solid #16a34a40', color: '#16a34a' }
+              : { background: 'var(--cn-bg-input)', border: '1px solid var(--cn-border)', color: 'var(--cn-text-muted)' }}
+          >
+            {copiedTable ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+          </button>
+        )}
+
+        {/* Expand indicator */}
+        {visibleTasks.length > 0 && (
+          <div
+            className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
+            style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}
+          >
+            {open ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </div>
+        )}
+      </div>
+
+      {/* Expanded task list */}
+      {open && visibleTasks.length > 0 && (
+        <div style={{ borderTop: '1px solid var(--cn-border)' }}>
+          <table className="w-full text-xs table-fixed">
+            <colgroup>
+              {canCopy && <col style={{ width: '5%' }} />}  {/* Copy */}
+              <col style={{ width: canEditStatus ? '13%' : '15%' }} />  {/* Project */}
+              <col style={{ width: canEditStatus ? '18%' : '22%' }} />  {/* Task */}
+              <col style={{ width: '6%' }} />   {/* Link */}
+              <col style={{ width: '6%' }} />   {/* Est. */}
+              <col style={{ width: canEditStatus ? '10%' : '11%' }} />  {/* Task Daily Bucket */}
+              <col style={{ width: canEditStatus ? '10%' : '11%' }} />  {/* Bucket Set */}
+              <col style={{ width: canEditStatus ? '12%' : '13%' }} />  {/* Status */}
+              {canEditStatus && <col style={{ width: '10%' }} />}  {/* Time Logged On AC */}
+              <col style={{ width: canEditStatus ? '15%' : '17%' }} />  {/* PM Status */}
+            </colgroup>
+            <thead>
+              <tr style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}>
+                {canCopy && <th className="px-2 py-2 w-10" />}
+                <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Project</th>
+                <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task</th>
+                <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Link</th>
+                <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Est.</th>
+                <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task Daily Bucket</th>
+                <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Bucket Set</th>
+                <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Status</th>
+                {canEditStatus && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Time Logged On AC</th>}
+                <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">PM Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleTasks.map((t, i) => {
+                const sColor  = STATUS_COLORS[t.status.toLowerCase()] ?? '#6b7280';
+                const pmColor: Record<string,string> = {
+                  'approved': '#16a34a', 'submitted to client': '#6d28d9',
+                  'changes': '#dc2626', 'no action taken': '#6b7280', 'n/a': '#6b7280', 'ticketclosed': '#7c3aed',
+                };
+                const pmC = pmColor[t.pmStatus.toLowerCase()] ?? '#6b7280';
+                const bucketColors: Record<string, string> = {
+                  today: '#16a34a', tomorrow: '#3b82f6', 'day after tomorrow': '#f59e0b',
+                };
+                const normBucket = (s: string) => {
+                  const l = s.trim().toLowerCase();
+                  if (l === 'tommorow' || l === 'tommorrow' || l === 'tomorow') return 'tomorrow';
+                  if (l === 'day after tommorow' || l === 'day after tommorrow') return 'day after tomorrow';
+                  return l;
+                };
+                const bColor = bucketColors[normBucket(t.bucket)] ?? '#6b7280';
+                const rowCanEditPmStatus = canEditPmStatus && (
+                  !pmEmailCol || !currentUserEmail ||
+                  String(t._raw[pmEmailCol] ?? '').trim().toLowerCase() === currentUserEmail.trim().toLowerCase()
+                );
+                return (
+                  <tr key={String(t._raw['__row'] ?? i)} style={{ borderTop: '1px solid var(--cn-border-light, var(--cn-border))' }}>
+                    {/* Copy row */}
+                    {canCopy && (
+                      <td className="px-2 py-2 text-center">
+                        <button
+                          onClick={() => copyRow(t, i)}
+                          title="Copy task info"
+                          className="w-7 h-7 rounded-lg inline-flex items-center justify-center cursor-pointer transition-all"
+                          style={{
+                            background: copiedRowIdx === i ? '#16a34a18' : 'var(--cn-bg-input)',
+                            color:      copiedRowIdx === i ? '#16a34a'   : 'var(--cn-text-muted)',
+                            border:     `1px solid ${copiedRowIdx === i ? '#16a34a40' : 'var(--cn-border)'}`,
+                          }}
+                        >
+                          {copiedRowIdx === i ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                        </button>
+                      </td>
+                    )}
+                    {/* Project */}
+                    <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
+                      <span className="truncate block">{t.project || '—'}</span>
+                    </td>
+                    {/* Task */}
+                    <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-primary)' }}>
+                      <span className="truncate block">{t.task || '—'}</span>
+                    </td>
+                    {/* Link */}
+                    <td className="px-4 py-2">
+                      {t.taskUrl ? (
+                        <a href={t.taskUrl} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                          style={{ color: 'var(--cn-accent)', background: 'var(--cn-accent)' + '15' }}
+                        >
+                          Open ↗
+                        </a>
+                      ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>}
+                    </td>
+                    {/* Est. */}
+                    <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
+                      {t.timeEst || '—'}
+                    </td>
+                    {/* Task Daily Bucket */}
+                    <td className="px-4 py-2">
+                      {t.bucket ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize" style={{ background: bColor + '20', color: bColor }}>
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: bColor }} />
+                          {normBucket(t.bucket)}
+                        </span>
+                      ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>}
+                    </td>
+                    {/* Bucket Set */}
+                    <td className="px-4 py-2">
+                      {t.bucketSet ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize" style={{ background: bColor + '20', color: bColor }}>
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: bColor }} />
+                          {t.bucketSet.toLowerCase() === 'tommorow' ? 'Tomorrow' : t.bucketSet}
+                        </span>
+                      ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>}
+                    </td>
+                    {/* Status */}
+                    <td className="px-4 py-2">
+                      {onStatusChange && statusColName && canEditStatus ? (
+                        <ResourceStatusSelect
+                          value={t.status || 'No Action Taken'}
+                          raw={t._raw}
+                          colName={statusColName}
+                          onStatusChange={onStatusChange}
+                        />
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize" style={{ background: sColor + '20', color: sColor }}>
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: sColor }} />
+                          {t.status}
+                        </span>
+                      )}
+                    </td>
+                    {/* Time Logged On AC */}
+                    {canEditStatus && (
+                      <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
+                        {onStatusChange && timeLoggedColName ? (
+                          <ResourceTimeLoggedEdit
+                            value={t.timeLogged}
+                            raw={t._raw}
+                            colName={timeLoggedColName}
+                            onStatusChange={onStatusChange}
+                          />
+                        ) : (t.timeLogged || '—')}
+                      </td>
+                    )}
+                    {/* PM Status */}
+                    <td className="px-4 py-2">
+                      {onStatusChange && pmStatusColName && rowCanEditPmStatus ? (
+                        <ResourcePmSelect
+                          value={t.pmStatus || 'No Action Taken'}
+                          raw={t._raw}
+                          colName={pmStatusColName}
+                          onStatusChange={onStatusChange}
+                        />
+                      ) : (
+                        t.pmStatus && t.pmStatus.toLowerCase() !== 'n/a' && t.pmStatus !== '' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize" style={{ background: pmC + '20', color: pmC }}>
+                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: pmC }} />
+                            {t.pmStatus}
+                          </span>
+                        ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ─── Flat Tasks Table (all resources' tasks in a single table, no grouping) ────
+function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus = true, statusColName, timeLoggedColName, canEditStatus = false, canCopy = false, currentUserName, pmEmailCol, currentUserEmail, vinayQaMode = false }: {
+  rows: ResourceRow[];
+  onStatusChange?: (row: SheetData, col: string, val: string) => Promise<void>;
+  pmStatusColName?: string;
+  canEditPmStatus?: boolean;
+  statusColName?: string;
+  timeLoggedColName?: string;
+  canEditStatus?: boolean;
+  canCopy?: boolean;
+  currentUserName?: string;
+  pmEmailCol?: string;
+  currentUserEmail?: string;
+  vinayQaMode?: boolean;
+}) {
+  const [copiedRowIdx, setCopiedRowIdx] = useState<number | null>(null);
+  const [copiedTable, setCopiedTable] = useState(false);
+
+  const allFlatTasks = rows.flatMap(row => row.pendingTasks.map(t => ({ ...t, person: row.name })));
+  // Vinay's QA view only shows tasks someone has flagged as "Testing"
+  const flatTasks = vinayQaMode
+    ? allFlatTasks.filter(t => t.status.trim().toLowerCase() === 'testing')
+    : allFlatTasks;
+
+  const copyRow = (t: typeof flatTasks[number], idx: number) => {
+    const text = `Project Name: ${t.project}\nTask URL: ${t.taskUrl}\nEst Time: `;
+    navigator.clipboard.writeText(text).catch(() => {});
+    setCopiedRowIdx(idx);
+    setTimeout(() => setCopiedRowIdx(null), 2000);
+  };
+
+  const COPY_COLS = vinayQaMode
+    ? ['Assigned Person', 'Project Name', 'Task Name', 'Task URL', 'Task Daily Bucket', 'Task Status']
+    : ['Assigned Person', 'Project Name', 'Task Name', 'Task URL', 'Time Estimation', 'Time Logged On AC', 'Task Status'];
+  const copyTable = async () => {
+    const rowsToCopy = vinayQaMode
+      ? flatTasks.map(t => [t.person, t.project, t.task, t.taskUrl, t.bucket, t.status])
+      : flatTasks.map(t => [t.person, t.project, t.task, t.taskUrl, t.timeEst, t.timeLogged, t.status]);
+    const html = `
+<table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;color:#111;">
+  <thead>
+    <tr style="background-color:#FE4A23;color:#ffffff;">
+      <th style="border:1px solid #555;padding:8px 12px;text-align:left;white-space:nowrap;">#</th>
+      ${COPY_COLS.map(h => `<th style="border:1px solid #555;padding:8px 12px;text-align:left;white-space:nowrap;">${h}</th>`).join('')}
+    </tr>
+  </thead>
+  <tbody>
+    ${rowsToCopy.map((r, i) => `
+    <tr style="background-color:${i % 2 === 0 ? '#ffffff' : '#fafafa'};">
+      <td style="border:1px solid #ddd;padding:6px 12px;color:#888;">${i + 1}</td>
+      ${r.map(v => `<td style="border:1px solid #ddd;padding:6px 12px;">${v ?? ''}</td>`).join('')}
+    </tr>`).join('')}
+  </tbody>
+</table>`;
+    const text = [
+      ['#', ...COPY_COLS].join('\t'),
+      ...rowsToCopy.map((r, i) => [i + 1, ...r].join('\t')),
+    ].join('\n');
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html':  new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([text], { type: 'text/plain' }),
+        }),
+      ]);
+    } catch {
+      await navigator.clipboard.writeText(text);
+    }
+    setCopiedTable(true);
+    setTimeout(() => setCopiedTable(false), 2500);
+  };
+
+  const normBucket = (s: string) => {
+    const l = s.trim().toLowerCase();
+    if (l === 'tommorow' || l === 'tommorrow' || l === 'tomorow') return 'tomorrow';
+    if (l === 'day after tommorow' || l === 'day after tommorrow') return 'day after tomorrow';
+    return l;
+  };
+  const bucketColors: Record<string, string> = {
+    today: '#16a34a', tomorrow: '#3b82f6', 'day after tomorrow': '#f59e0b',
+  };
+
+  if (flatTasks.length === 0) {
+    return (
+      <p className="text-center py-6 text-sm" style={{ color: 'var(--cn-text-muted)' }}>
+        {vinayQaMode ? 'No tasks marked "Testing" right now.' : 'No tasks found.'}
+      </p>
+    );
+  }
+
+  return (
+    <div className="cn-card rounded-xl overflow-hidden" style={{ background: 'var(--cn-bg-card)' }}>
+      {canCopy && (
+        <div className="flex items-center justify-end px-4 py-2" style={{ borderBottom: '1px solid var(--cn-border)' }}>
+          <button
+            onClick={copyTable}
+            title="Copy table"
+            className="w-7 h-7 inline-flex items-center justify-center rounded-lg cursor-pointer transition-all"
+            style={copiedTable
+              ? { background: '#16a34a18', border: '1px solid #16a34a40', color: '#16a34a' }
+              : { background: 'var(--cn-bg-input)', border: '1px solid var(--cn-border)', color: 'var(--cn-text-muted)' }}
+          >
+            {copiedTable ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+      )}
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs table-fixed">
+          <thead>
+            <tr style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}>
+              {canCopy && <th className="px-2 py-2 w-10" />}
+              <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Assigned Person</th>
+              <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Project</th>
+              <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task</th>
+              <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Link</th>
+              {!vinayQaMode && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Est.</th>}
+              <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task Daily Bucket</th>
+              {!vinayQaMode && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Bucket Set</th>}
+              <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Status</th>
+              {canEditStatus && !vinayQaMode && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Time Logged On AC</th>}
+              {!vinayQaMode && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">PM Status</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {flatTasks.map((t, i) => {
+              const sColor = STATUS_COLORS[t.status.toLowerCase()] ?? '#6b7280';
+              const pmColor: Record<string,string> = {
+                'approved': '#16a34a', 'submitted to client': '#6d28d9',
+                'changes': '#dc2626', 'no action taken': '#6b7280', 'n/a': '#6b7280', 'ticketclosed': '#7c3aed',
+              };
+              const pmC = pmColor[t.pmStatus.toLowerCase()] ?? '#6b7280';
+              const bColor = bucketColors[normBucket(t.bucket)] ?? '#6b7280';
+              const bg = memberColor(t.person);
+              const photo = teamPhoto(t.person);
+              const initials = t.person.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
+              const rowCanEditStatus = canEditStatus && (vinayQaMode || !currentUserName || t.person.trim().toLowerCase() === currentUserName.trim().toLowerCase());
+              const rowCanEditPmStatus = canEditPmStatus && (
+                !pmEmailCol || !currentUserEmail ||
+                String(t._raw[pmEmailCol] ?? '').trim().toLowerCase() === currentUserEmail.trim().toLowerCase()
+              );
+              return (
+                <tr key={String(t._raw['__row'] ?? i)} style={{ borderTop: '1px solid var(--cn-border-light, var(--cn-border))' }}>
+                  {canCopy && (
+                    <td className="px-2 py-2 text-center">
+                      <button
+                        onClick={() => copyRow(t, i)}
+                        title="Copy task info"
+                        className="w-7 h-7 rounded-lg inline-flex items-center justify-center cursor-pointer transition-all"
+                        style={{
+                          background: copiedRowIdx === i ? '#16a34a18' : 'var(--cn-bg-input)',
+                          color:      copiedRowIdx === i ? '#16a34a'   : 'var(--cn-text-muted)',
+                          border:     `1px solid ${copiedRowIdx === i ? '#16a34a40' : 'var(--cn-border)'}`,
+                        }}
+                      >
+                        {copiedRowIdx === i ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                      </button>
+                    </td>
+                  )}
+                  <td className="px-4 py-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {photo ? (
+                        <img src={photo} alt={t.person} className="w-5 h-5 rounded-full object-cover shrink-0" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                      ) : (
+                        <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold shrink-0" style={{ background: `linear-gradient(135deg, ${bg}cc, ${bg}66)` }}>{initials}</div>
+                      )}
+                      <span className="truncate" style={{ color: 'var(--cn-text-primary)' }}>{t.person}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
+                    <span className="truncate block">{t.project || '—'}</span>
+                  </td>
+                  <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-primary)' }}>
+                    <span className="truncate block">{t.task || '—'}</span>
+                  </td>
+                  <td className="px-4 py-2">
+                    {t.taskUrl ? (
+                      <a href={t.taskUrl} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                        style={{ color: 'var(--cn-accent)', background: 'var(--cn-accent)' + '15' }}
+                      >
+                        Open ↗
+                      </a>
+                    ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>}
+                  </td>
+                  {!vinayQaMode && (
+                    <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
+                      {t.timeEst || '—'}
+                    </td>
+                  )}
+                  <td className="px-4 py-2">
+                    {t.bucket ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize" style={{ background: bColor + '20', color: bColor }}>
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: bColor }} />
+                        {normBucket(t.bucket)}
+                      </span>
+                    ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>}
+                  </td>
+                  {!vinayQaMode && (
+                    <td className="px-4 py-2">
+                      {t.bucketSet ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize" style={{ background: bColor + '20', color: bColor }}>
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: bColor }} />
+                          {t.bucketSet.toLowerCase() === 'tommorow' ? 'Tomorrow' : t.bucketSet}
+                        </span>
+                      ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>}
+                    </td>
+                  )}
+                  <td className="px-4 py-2">
+                    {onStatusChange && statusColName && rowCanEditStatus ? (
+                      <ResourceStatusSelect value={t.status || 'No Action Taken'} raw={t._raw} colName={statusColName} onStatusChange={onStatusChange} />
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize" style={{ background: sColor + '20', color: sColor }}>
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: sColor }} />
+                        {t.status}
+                      </span>
+                    )}
+                  </td>
+                  {canEditStatus && !vinayQaMode && (
+                    <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
+                      {onStatusChange && timeLoggedColName && rowCanEditStatus ? (
+                        <ResourceTimeLoggedEdit value={t.timeLogged} raw={t._raw} colName={timeLoggedColName} onStatusChange={onStatusChange} />
+                      ) : (t.timeLogged || '—')}
+                    </td>
+                  )}
+                  {!vinayQaMode && (
+                  <td className="px-4 py-2">
+                    {onStatusChange && pmStatusColName && rowCanEditPmStatus ? (
+                      <ResourcePmSelect value={t.pmStatus || 'No Action Taken'} raw={t._raw} colName={pmStatusColName} onStatusChange={onStatusChange} />
+                    ) : (
+                      t.pmStatus && t.pmStatus.toLowerCase() !== 'n/a' && t.pmStatus !== '' ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize" style={{ background: pmC + '20', color: pmC }}>
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: pmC }} />
+                          {t.pmStatus}
+                        </span>
+                      ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>
+                    )}
+                  </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+export function ResourceOverview({ data, headers, availData = [], availHeaders = [], onStatusChange, pmStatusColName, currentUserName, currentUserEmail, showFilter, canEditPmStatus = true, canEditStatus = false, canCopy = false, restrictToMine = false, defaultFilter = 'all', restrictPmStatusToOwn = false, vinayQaMode = false, showQaTab = false, qaData = [], qaHeaders = [], onQaCellChange }: { data: SheetData[]; headers: string[]; availData?: SheetData[]; availHeaders?: string[]; onStatusChange?: (row: SheetData, col: string, val: string) => Promise<void>; pmStatusColName?: string; currentUserName?: string; currentUserEmail?: string; showFilter?: boolean; canEditPmStatus?: boolean; canEditStatus?: boolean; canCopy?: boolean; restrictToMine?: boolean; defaultFilter?: 'all' | 'me'; restrictPmStatusToOwn?: boolean; vinayQaMode?: boolean; showQaTab?: boolean; qaData?: SheetData[]; qaHeaders?: string[]; onQaCellChange?: (row: SheetData, colName: string, value: string) => Promise<void> }) {
+  const [openName, setOpenName] = useState<string | null>(null);
+  const [pmFilter, setPmFilter] = useState<'all' | 'me' | 'today' | 'me-today' | 'flat' | 'qa'>(restrictToMine ? 'me' : vinayQaMode ? 'flat' : defaultFilter);
+  const [search, setSearch] = useState('');
+
+  // Close all rows whenever the filter switches
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const handleFilterChange = (f: 'all' | 'me' | 'today' | 'me-today' | 'flat' | 'qa') => { setPmFilter(f); setOpenName(null); };
+
+  // Find the email column in the sheet (used to match tasks to the logged-in PM)
+  const emailCol = headers.find(h => h.toLowerCase().includes('email'));
+
+  // Build leave map from availability sheet
+  const availNameCol   = availHeaders.find(h => h.toLowerCase().includes('name'));
+  const availStatusCol = availHeaders.find(h => h.toLowerCase().includes('daily status'));
+  const availLeaveCol  = availHeaders.find(h => h.toLowerCase().includes('leave zone') || h.toLowerCase().includes('leave'));
+  const leaveSet = new Set<string>();
+  if (availData.length && (availStatusCol || availLeaveCol)) {
+    availData.forEach(r => {
+      const name   = availNameCol ? String(r[availNameCol] ?? '').trim().toLowerCase() : '';
+      const status = availStatusCol ? String(r[availStatusCol] ?? '').trim().toLowerCase() : '';
+      const leave  = availLeaveCol  ? String(r[availLeaveCol]  ?? '').trim().toLowerCase() : '';
+      if (name && (status.includes('leave') || leave === 'yes' || leave === 'true' || leave === '1')) {
+        leaveSet.add(name);
+      }
+    });
+  }
+
+  const resourceCol  = headers.find(h => h.toLowerCase().includes('assigned person'));
+  const statusCol    = headers.find(h => h.toLowerCase().includes('task status') || h.toLowerCase() === 'status');
+  const projectCol   = headers.find(h => h.toLowerCase().includes('project name') || h.toLowerCase().includes('project'));
+  const taskCol      = headers.find(h => h.toLowerCase().includes('task name') || h.toLowerCase().includes('task title') || h.toLowerCase().includes('task information'));
+  const pmStatusCol  = headers.find(h => h.toLowerCase().includes('pm status'));
+  const timeEstCol   = headers.find(h => h.toLowerCase().includes('time estimation') || h.toLowerCase().includes('time estimate') || h.toLowerCase().includes('estimation'));
+  const taskUrlCol   = headers.find(h => h.toLowerCase().includes('task url') || h.toLowerCase().includes('task link') || h.toLowerCase() === 'url');
+  const bucketSetCol = headers.find(h => h.toLowerCase().includes('today bucket set') || h.toLowerCase().includes('bucket set'));
+  const bucketCol    = headers.find(h => h.toLowerCase().includes('task daily bucket') || h.toLowerCase().includes('daily bucket'));
+  const timeLoggedCol = headers.find(h => h.toLowerCase().includes('time logged'));
+
+  if (!resourceCol || !statusCol) return null;
+
+  const names = [...new Set(data.map(r => String(r[resourceCol] ?? '').trim()).filter(Boolean))]
+    .filter(n => !EXCLUDED_PERSONS.includes(n.toLowerCase()))
+    .sort();
+
+  // Excluded from hours total (closed/submitted statuses inflate hours)
+  const NON_PENDING = ['task closed', 'submitted to client', 'submitted to pm', 'submitted to akash', 'n/a', ''];
+  // Excluded from the task table rows (truly done tasks only)
+  const HIDE_FROM_TABLE = ['task closed', 'submitted to client', 'n/a', ''];
+
+  const rows: ResourceRow[] = names.map(name => {
+    const myTasks = data.filter(r => String(r[resourceCol] ?? '').trim().toLowerCase() === name.toLowerCase());
+    const getStatus    = (r: SheetData) => String(r[statusCol!]   ?? '').trim().toLowerCase();
+    const getProject   = (r: SheetData) => projectCol   ? String(r[projectCol]   ?? '').trim() : '';
+    const getTask      = (r: SheetData) => taskCol      ? String(r[taskCol]      ?? '').trim() : '';
+    const getPmStatus  = (r: SheetData) => pmStatusCol  ? String(r[pmStatusCol]  ?? '').trim() : '';
+    const getTimeEst   = (r: SheetData) => timeEstCol   ? String(r[timeEstCol]   ?? '').trim() : '';
+    const getTaskUrl   = (r: SheetData) => taskUrlCol   ? String(r[taskUrlCol]   ?? '').trim() : '';
+    const getBucketSet = (r: SheetData) => bucketSetCol ? String(r[bucketSetCol] ?? '').trim() : '';
+    const getBucket    = (r: SheetData) => bucketCol    ? String(r[bucketCol]    ?? '').trim().toLowerCase() : '';
+    const getTimeLogged = (r: SheetData) => timeLoggedCol ? String(r[timeLoggedCol] ?? '').trim() : '';
+
+    const activeTasks  = myTasks.filter(r => getStatus(r) === 'in progress').length;
+    const onHoldTasks  = myTasks.filter(r => getStatus(r) === 'on hold').length;
+    const pendingPM    = myTasks.filter(r => ['submitted to pm', 'submitted to akash'].includes(getStatus(r))).length;
+    const toBeStarted  = myTasks.filter(r => getStatus(r) === 'to be started').length;
+    const testingTasks = myTasks.filter(r => getStatus(r) === 'testing').length;
+    // Sum time estimates for all non-closed tasks (mirrors sheet column C formula)
+    const totalHours = myTasks
+      .filter(r => !NON_PENDING.includes(getStatus(r)))
+      .reduce((sum, r) => sum + parseHours(getTimeEst(r)), 0);
+    // Sum hours + count for today + everyday tasks only
+    const todayFiltered = myTasks.filter(r => { const b = getBucket(r); return b === 'today' || b === 'everyday'; });
+    const todayHours = todayFiltered.reduce((sum, r) => sum + parseHours(getTimeEst(r)), 0);
+    const todayTasks = todayFiltered.length;
+
+    const inProgressTask = myTasks.find(r => getStatus(r) === 'in progress');
+    const activeProject  = inProgressTask ? getProject(inProgressTask) : '';
+
+    const pendingTasks = myTasks
+      .filter(r => !HIDE_FROM_TABLE.includes(getStatus(r)))
+      .map(r => ({
+        task: getTask(r), project: getProject(r),
+        status: String(r[statusCol!] ?? '').trim(),
+        pmStatus: getPmStatus(r), timeEst: getTimeEst(r),
+        taskUrl: getTaskUrl(r), bucketSet: getBucketSet(r), bucket: getBucket(r),
+        timeLogged: getTimeLogged(r),
+        _raw: r,
+      }))
+      .slice(0, 20);
+
+    return { name, activeProject, activeTasks, onHoldTasks, pendingPM, toBeStarted, testingTasks, totalHours, todayHours, todayTasks, pendingTasks };
+  }).filter(r => r.totalHours > 0 || r.activeTasks + r.onHoldTasks + r.pendingPM + r.toBeStarted + r.testingTasks > 0)
+    .sort((a, b) => (b.activeTasks + b.onHoldTasks) - (a.activeTasks + a.onHoldTasks));
+
+  // Show filter if caller forces it (PM role), we have email to match against, or the
+  // logged-in user's name matches one of the resource rows (resource role)
+  const myNameMatch = currentUserName && names.some(n => {
+    const nL = n.toLowerCase(), uL = currentUserName.trim().toLowerCase();
+    return nL === uL || nL.includes(uL) || uL.includes(nL);
+  });
+  const canFilterByMe = !!(showFilter || (emailCol && currentUserEmail) || myNameMatch);
+
+  const isMyRow = (row: ResourceRow) => {
+    if (!myNameMatch) return true;
+    const rL = row.name.toLowerCase(), uL = currentUserName!.trim().toLowerCase();
+    return rL === uL || rL.includes(uL) || uL.includes(rL);
+  };
+
+  const applyFilter = (row: ResourceRow) => {
+    const taskList = row.pendingTasks;
+    if (pmFilter === 'me' && emailCol && currentUserEmail)
+      return taskList.filter(t => String(t._raw[emailCol!] ?? '').trim().toLowerCase() === currentUserEmail!.toLowerCase());
+    if (pmFilter === 'me' && myNameMatch)
+      return isMyRow(row) ? taskList : [];
+    if (pmFilter === 'today') {
+      // Resource accounts (whose name matches one of the rows) only see their own today tasks;
+      // PM/admin viewing the team-wide list still see everyone's today tasks.
+      if (myNameMatch && !isMyRow(row)) return [];
+      return taskList.filter(t => { const b = t.bucket.toLowerCase(); return b === 'today' || b === 'everyday'; });
+    }
+    if (pmFilter === 'me-today') {
+      const isToday = (t: { bucket: string }) => { const b = t.bucket.toLowerCase(); return b === 'today' || b === 'everyday'; };
+      if (emailCol && currentUserEmail)
+        return taskList.filter(t => String(t._raw[emailCol!] ?? '').trim().toLowerCase() === currentUserEmail!.toLowerCase() && isToday(t));
+      return isMyRow(row) ? taskList.filter(isToday) : [];
+    }
+    return taskList;
+  };
+
+  const filteredRows = pmFilter !== 'all'
+    ? rows.map(row => {
+        const myTasks = applyFilter(row);
+        const activeTasks   = myTasks.filter(t => t.status.toLowerCase() === 'in progress').length;
+        const onHoldTasks   = myTasks.filter(t => t.status.toLowerCase() === 'on hold').length;
+        const pendingPM     = myTasks.filter(t => t.status.toLowerCase() === 'submitted to pm').length;
+        const toBeStarted   = myTasks.filter(t => t.status.toLowerCase() === 'to be started').length;
+        const activeProject = myTasks.find(t => t.status.toLowerCase() === 'in progress')?.project || row.activeProject;
+        const todayFiltered = myTasks.filter(r => { const b = r.bucket.toLowerCase(); return b === 'today' || b === 'everyday'; });
+        const todayHours = todayFiltered.reduce((sum, r) => sum + parseHours(r.timeEst), 0);
+        const todayTasks = todayFiltered.length;
+        return { ...row, pendingTasks: myTasks, activeTasks, onHoldTasks, pendingPM, toBeStarted, activeProject, todayHours, todayTasks };
+      }).filter(row => row.pendingTasks.length > 0)
+    : rows;
+
+  // Search by project, task name, status, PM status or bucket
+  const searchQ = search.trim().toLowerCase();
+  const matchesSearch = (t: ResourceRow['pendingTasks'][number], personName: string) =>
+    !searchQ || [personName, t.task, t.project, t.status, t.pmStatus, t.bucket, t.bucketSet]
+      .some(v => v.toLowerCase().includes(searchQ));
+
+  const searchedRows = searchQ
+    ? filteredRows
+        .map(row => ({ ...row, pendingTasks: row.pendingTasks.filter(t => matchesSearch(t, row.name)) }))
+        .filter(row => row.pendingTasks.length > 0)
+    : filteredRows;
+
+  const flatSearchedRows = searchQ
+    ? rows.map(row => ({ ...row, pendingTasks: row.pendingTasks.filter(t => matchesSearch(t, row.name)) }))
+    : rows;
+
+  if (!searchedRows.length && pmFilter === 'all' && !searchQ) return null;
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--cn-text-primary)' }}>
+            {restrictToMine ? 'My Tasks' : 'Tasks Overview'}
+          </h3>
+          <p className="text-[11px] mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>
+            {restrictToMine ? 'Your current workload and pending tasks' : 'Current workload and pending tasks per team member'}
+          </p>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-1 p-0.5 rounded-lg" style={{ background: 'var(--cn-bg-input)' }}>
+            {vinayQaMode ? (
+              <>
+                <button
+                  onClick={() => handleFilterChange('flat')}
+                  className="px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer"
+                  style={pmFilter === 'flat' ? { background: 'var(--cn-accent)', color: '#fff' } : { background: 'transparent', color: 'var(--cn-text-muted)' }}
+                >Tasks</button>
+                <button
+                  onClick={() => handleFilterChange('today')}
+                  className="px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer"
+                  style={pmFilter === 'today' ? { background: '#16a34a', color: '#fff' } : { background: 'transparent', color: 'var(--cn-text-muted)' }}
+                >Dev Tasks</button>
+                <button
+                  onClick={() => handleFilterChange('qa')}
+                  className="px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer"
+                  style={pmFilter === 'qa' ? { background: '#7c3aed', color: '#fff' } : { background: 'transparent', color: 'var(--cn-text-muted)' }}
+                >QA Testing</button>
+              </>
+            ) : restrictToMine ? (
+              <>
+                <button
+                  onClick={() => handleFilterChange('me')}
+                  className="px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer"
+                  style={pmFilter === 'me' ? { background: 'var(--cn-accent)', color: '#fff' } : { background: 'transparent', color: 'var(--cn-text-muted)' }}
+                >My Tasks</button>
+                <button
+                  onClick={() => handleFilterChange('me-today')}
+                  className="px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer"
+                  style={pmFilter === 'me-today' ? { background: '#16a34a', color: '#fff' } : { background: 'transparent', color: 'var(--cn-text-muted)' }}
+                >Today&apos;s Tasks</button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => handleFilterChange('all')}
+                  className="px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer"
+                  style={pmFilter === 'all' ? { background: 'var(--cn-accent)', color: '#fff' } : { background: 'transparent', color: 'var(--cn-text-muted)' }}
+                >Resources</button>
+                <button
+                  onClick={() => handleFilterChange('flat')}
+                  className="px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer"
+                  style={pmFilter === 'flat' ? { background: 'var(--cn-accent)', color: '#fff' } : { background: 'transparent', color: 'var(--cn-text-muted)' }}
+                >Tasks</button>
+                <button
+                  onClick={() => handleFilterChange('today')}
+                  className="px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer"
+                  style={pmFilter === 'today' ? { background: '#16a34a', color: '#fff' } : { background: 'transparent', color: 'var(--cn-text-muted)' }}
+                >Today&apos;s Tasks</button>
+                {canFilterByMe && (
+                  <button
+                    onClick={() => handleFilterChange('me')}
+                    className="px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer"
+                    style={pmFilter === 'me' ? { background: 'var(--cn-accent)', color: '#fff' } : { background: 'transparent', color: 'var(--cn-text-muted)' }}
+                  >My Tasks</button>
+                )}
+              </>
+            )}
+          </div>
+          <div className="flex items-center gap-4 text-[11px]" style={{ color: 'var(--cn-text-muted)' }}>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#16a34a] inline-block" />In Progress</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#7c3aed] inline-block" />On Hold</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#10b981] inline-block" />PM Review</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#dc2626] inline-block" />To Be Started</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Search — QA Testing has its own search bar, so skip this one for that tab */}
+      {pmFilter !== 'qa' && (
+      <div className="relative w-full">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: 'var(--cn-text-muted)' }} />
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search project, task, status..."
+          className="w-full pl-9 pr-8 py-2 rounded-lg text-xs focus:outline-none"
+          style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}
+        />
+        {search && (
+          <button
+            onClick={() => setSearch('')}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer"
+            style={{ color: 'var(--cn-text-muted)' }}
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+      )}
+
+      {/* Cards / flat table */}
+      {pmFilter === 'qa' ? (
+        <QATesting data={qaData} headers={qaHeaders} onCellChange={onQaCellChange ?? (async () => {})} canEdit={vinayQaMode} />
+      ) : pmFilter === 'flat' ? (
+        <FlatTasksTable
+          rows={flatSearchedRows}
+          onStatusChange={onStatusChange}
+          pmStatusColName={pmStatusColName}
+          canEditPmStatus={canEditPmStatus}
+          statusColName={statusCol}
+          timeLoggedColName={timeLoggedCol}
+          canEditStatus={canEditStatus}
+          canCopy={canCopy}
+          currentUserName={currentUserName}
+          pmEmailCol={restrictPmStatusToOwn ? emailCol : undefined}
+          currentUserEmail={currentUserEmail}
+          vinayQaMode={vinayQaMode}
+        />
+      ) : (
+        <div className="space-y-2">
+          {searchedRows.length === 0 && (
+            <p className="text-center py-6 text-sm" style={{ color: 'var(--cn-text-muted)' }}>
+              {searchQ ? 'No tasks match your search.' : 'No tasks assigned to you.'}
+            </p>
+          )}
+          {searchedRows.map(row => (
+            <ResourceCard
+              key={row.name}
+              row={row}
+              onLeave={leaveSet.has(row.name.toLowerCase())}
+              isOpen={pmFilter !== 'all' || !!searchQ || openName === row.name}
+              onToggle={() => pmFilter === 'all' && !searchQ && setOpenName(openName === row.name ? null : row.name)}
+              onStatusChange={onStatusChange}
+              pmStatusColName={pmStatusColName}
+              canEditPmStatus={canEditPmStatus}
+              statusColName={statusCol}
+              timeLoggedColName={timeLoggedCol}
+              canEditStatus={canEditStatus && isMyRow(row)}
+              canCopy={canCopy}
+              pmEmailCol={restrictPmStatusToOwn ? emailCol : undefined}
+              currentUserEmail={currentUserEmail}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── PM Status Overview (admin only) ───────────────────────────────────────────
+
+export function PmStatusOverview({ data, headers, pmUsers, layout = 'grid' }: {
+  data: SheetData[]; headers: string[]; pmUsers: { displayName: string; email?: string }[]; layout?: 'grid' | 'list';
+}) {
+  const emailCol     = headers.find(h => h.toLowerCase().includes('email'));
+  const pmStatusCol  = headers.find(h => h.toLowerCase().includes('pm status'));
+  const statusCol    = headers.find(h => h.toLowerCase().includes('task status') || h.toLowerCase() === 'status');
+  const projectCol   = headers.find(h => h.toLowerCase().includes('project name') || h.toLowerCase().includes('project'));
+  const bucketCol    = headers.find(h => h.toLowerCase().includes('task daily bucket') || h.toLowerCase().includes('daily bucket'));
+  const taskCol      = headers.find(h => h.toLowerCase().includes('task name') || h.toLowerCase().includes('task title') || h.toLowerCase().includes('task information'));
+  const taskUrlCol   = headers.find(h => h.toLowerCase().includes('task url') || h.toLowerCase().includes('task link') || h.toLowerCase() === 'url');
+  const timeEstCol   = headers.find(h => h.toLowerCase().includes('time estimation') || h.toLowerCase().includes('time estimate') || h.toLowerCase().includes('estimation'));
+  const bucketSetCol = headers.find(h => h.toLowerCase().includes('today bucket set') || h.toLowerCase().includes('bucket set'));
+
+  const validPms = pmUsers.filter(p => !!p.email);
+
+  const rows = validPms.map(pm => {
+    const myTasks = emailCol
+      ? data.filter(r => String(r[emailCol] ?? '').trim().toLowerCase() === pm.email!.trim().toLowerCase())
+      : [];
+    const noActionTaken = (pmStatusCol && statusCol) ? myTasks.filter(r =>
+      String(r[pmStatusCol] ?? '').trim().toLowerCase() === 'no action taken'
+      && String(r[statusCol] ?? '').trim().toLowerCase() === 'submitted to pm'
+    ).length : 0;
+    return { name: pm.displayName, email: pm.email!, noActionTaken, total: myTasks.length };
+  }).sort((a, b) => b.noActionTaken - a.noActionTaken);
+
+  const [selectedName, setSelectedName] = useState<string | null>(rows[0]?.name ?? null);
+  const selected = rows.find(r => r.name === selectedName);
+
+  if (!emailCol || !pmStatusCol) {
+    return (
+      <div className="cn-card rounded-xl p-6 text-center text-sm" style={{ background: 'var(--cn-bg-card)', color: 'var(--cn-text-muted)' }}>
+        Email or PM Status column not found in sheet.
+      </div>
+    );
+  }
+
+  const scopedData = selected
+    ? data.filter(r => String(r[emailCol] ?? '').trim().toLowerCase() === selected.email.trim().toLowerCase())
+    : [];
+
+  const getPmStatus = (r: SheetData) => pmStatusCol ? String(r[pmStatusCol] ?? '').trim().toLowerCase() : '';
+  const getTaskStatus = (r: SheetData) => statusCol ? String(r[statusCol] ?? '').trim().toLowerCase() : '';
+  const noActionTaken      = scopedData.filter(r => getPmStatus(r) === 'no action taken' && getTaskStatus(r) === 'submitted to pm').length;
+  const changes            = scopedData.filter(r => getPmStatus(r) === 'changes').length;
+  const approved           = scopedData.filter(r => getPmStatus(r) === 'approved').length;
+  const submittedToClient  = scopedData.filter(r => getPmStatus(r) === 'submitted to client').length;
+  const todayTasks         = bucketCol ? scopedData.filter(r => String(r[bucketCol] ?? '').trim().toLowerCase() === 'today').length : 0;
+  const scopedTotal        = scopedData.length;
+
+  const statusData    = (statusCol && timeEstCol)   ? sumHoursByCol(scopedData, statusCol,   timeEstCol) : [];
+  const pmStatusData  = (pmStatusCol && timeEstCol) ? sumHoursByCol(scopedData, pmStatusCol, timeEstCol) : [];
+  const tasksByProject = (projectCol && timeEstCol) ? sumHoursByCol(scopedData, projectCol, timeEstCol).slice(0, 15).map(d => ({ name: d.name, Hours: d.value })) : [];
+
+  const detailContent = selected && (
+    <div className="space-y-4">
+      <PmTasksTable
+        data={scopedData}
+        personName={selected.name}
+        projectCol={projectCol}
+        taskCol={taskCol}
+        taskUrlCol={taskUrlCol}
+        timeEstCol={timeEstCol}
+        bucketCol={bucketCol}
+        bucketSetCol={bucketSetCol}
+        statusCol={statusCol}
+        pmStatusCol={pmStatusCol}
+      />
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
+        <StatCard label="No Action Taken"     value={noActionTaken}      total={scopedTotal} color="#f59e0b" icon={<AlertTriangle className="w-4 h-4" />} adminStyle={true} />
+        <StatCard label="Changes"              value={changes}           total={scopedTotal} color="#7c3aed" icon={<RefreshCw     className="w-4 h-4" />} adminStyle={true} />
+        <StatCard label="Approved"             value={approved}          total={scopedTotal} color="#16a34a" icon={<ThumbsUp       className="w-4 h-4" />} adminStyle={true} />
+        <StatCard label="Submitted to Client"  value={submittedToClient} total={scopedTotal} color="#10b981" icon={<BadgeCheck     className="w-4 h-4" />} adminStyle={true} />
+        <StatCard label="Today's Tasks"        value={todayTasks}        total={scopedTotal} color="#FE4A23" icon={<CalendarCheck  className="w-4 h-4" />} adminStyle={true} />
+      </div>
+
+      <div className="grid grid-cols-12 gap-4">
+        <div className="col-span-12 lg:col-span-6">
+          <DonutCard title="Hours by Status" sub={`Estimated hours by task status — ${selected.name}`} data={statusData} colorMap={STATUS_COLORS} />
+        </div>
+        <div className="col-span-12 lg:col-span-6">
+          <DonutCard title="Hours by PM Status" sub="Estimated hours by PM approval stage" data={pmStatusData} colorMap={PM_STATUS_COLORS_MAP} />
+        </div>
+      </div>
+
+      <BarCard
+        title="Hours per Project"
+        sub={`Estimated hours per client / project — ${selected.name} (top 15)`}
+        data={tasksByProject}
+        dataKey="Hours"
+        color="#10b981"
+      />
+    </div>
+  );
+
+  if (layout === 'list') {
+    return (
+      <section className="flex gap-5 items-start">
+        <div className="w-1/5 shrink-0 space-y-1 cn-card rounded-xl p-2" style={{ background: 'var(--cn-bg-card)' }}>
+          {rows.map(row => {
+            const isSelected = selectedName === row.name;
+            const bg = memberColor(row.name);
+            const photo = teamPhoto(row.name);
+            const initials = row.name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
+            return (
+              <button
+                key={row.name}
+                onClick={() => setSelectedName(row.name)}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-all cursor-pointer"
+                style={{ background: isSelected ? `${bg}14` : 'transparent' }}
+              >
+                {photo ? (
+                  <img src={photo} alt={row.name} className="w-7 h-7 rounded-full object-cover shrink-0" />
+                ) : (
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+                    style={{ background: `linear-gradient(135deg, ${bg}cc, ${bg}66)` }}>
+                    {initials}
+                  </div>
+                )}
+                <span className="text-xs font-medium truncate flex-1 min-w-0" style={{ color: isSelected ? bg : 'var(--cn-text-primary)' }}>{row.name}</span>
+                {row.noActionTaken > 0 && (
+                  <span className="text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center shrink-0" style={{ background: '#ef444420', color: '#ef4444' }}>
+                    {row.noActionTaken}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex-1 min-w-0">
+          {detailContent}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* PM picker gallery */}
+      <div className="cn-card cn-card-static rounded-xl overflow-hidden" style={{ background: 'var(--cn-bg-card)' }}>
+        <div className="px-5 py-4" style={{ borderBottom: '1px solid var(--cn-border)' }}>
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--cn-text-primary)' }}>Project Managers</h3>
+          <p className="text-[11px] mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>
+            Select a PM to see their submission status and task breakdown
+          </p>
+        </div>
+        <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+          {rows.length === 0 && (
+            <p className="text-center py-6 text-sm col-span-full" style={{ color: 'var(--cn-text-muted)' }}>No PM data found.</p>
+          )}
+          {rows.map(row => {
+            const isSelected = selectedName === row.name;
+            const bg = memberColor(row.name);
+            const photo = teamPhoto(row.name);
+            const initials = row.name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
+            return (
+              <button
+                key={row.name}
+                onClick={() => setSelectedName(row.name)}
+                className="relative flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all cursor-pointer"
+                style={{
+                  background:  isSelected ? `${bg}12` : 'var(--cn-bg-card)',
+                  borderColor: isSelected ? bg : 'var(--cn-border)',
+                  borderLeft:  `3px solid ${row.noActionTaken > 0 ? '#ef4444' : bg}`,
+                }}
+              >
+                {photo ? (
+                  <img src={photo} alt={row.name} className="w-11 h-11 rounded-full object-cover shrink-0"
+                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                ) : (
+                  <div className="w-11 h-11 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
+                    style={{ background: `linear-gradient(135deg, ${bg}cc, ${bg}66)` }}>
+                    {initials}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm truncate" style={{ color: isSelected ? bg : 'var(--cn-text-primary)' }}>{row.name}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    {row.noActionTaken > 0 && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#ef444420', color: '#ef4444' }}>
+                        {row.noActionTaken} pending
+                      </span>
+                    )}
+                    <span className="text-[11px]" style={{ color: 'var(--cn-text-muted)' }}>{row.total} tasks</span>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Selected PM detail */}
+      {detailContent}
+    </div>
+  );
+}
+
+// ─── Tiny multi-select dropdown (checkbox list) ────────────────────────────────
+function MiniMultiSelect({ label, options, selected, onChange }: {
+  label: string; options: string[]; selected: string[]; onChange: (vals: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const toggle = (val: string) =>
+    onChange(selected.includes(val) ? selected.filter(v => v !== val) : [...selected, val]);
+
+  const btnLabel = selected.length === 0
+    ? `All ${label}`
+    : selected.length === 1
+    ? selected[0]
+    : `${selected.length} selected`;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1.5 text-xs rounded-lg border px-2.5 py-1.5 cursor-pointer"
+        style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', borderColor: 'var(--cn-border)' }}
+      >
+        <span className="truncate max-w-[120px]">{btnLabel}</span>
+        <ChevronDown className={`w-3 h-3 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div
+          className="absolute top-full left-0 mt-1 w-52 border rounded-lg z-50 max-h-64 overflow-y-auto"
+          style={{ background: 'var(--cn-bg-dropdown)', borderColor: 'var(--cn-border)', boxShadow: '0 8px 24px rgba(0,0,0,0.25)' }}
+        >
+          <div className="flex gap-3 px-3 py-2 border-b" style={{ borderColor: 'var(--cn-border)' }}>
+            <button onClick={() => onChange(options)} className="text-[11px] font-semibold" style={{ color: 'var(--cn-accent)' }}>Select all</button>
+            <button onClick={() => onChange([])} className="text-[11px]" style={{ color: 'var(--cn-text-muted)' }}>Clear</button>
+          </div>
+          {options.map(opt => (
+            <label key={opt} className="flex items-center gap-2 px-3 py-1.5 cursor-pointer text-xs"
+              style={{ color: 'var(--cn-text-primary)' }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--cn-bg-input)')}
+              onMouseLeave={e => (e.currentTarget.style.background = '')}
+            >
+              <input type="checkbox" checked={selected.includes(opt)} onChange={() => toggle(opt)} className="cursor-pointer" />
+              <span className="truncate">{opt}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── PM Tasks Table (all tasks assigned to the selected PM) ────────────────────
+function PmTasksTable({ data, personName, projectCol, taskCol, taskUrlCol, timeEstCol, bucketCol, bucketSetCol, statusCol, pmStatusCol }: {
+  data: SheetData[]; personName: string;
+  projectCol?: string; taskCol?: string; taskUrlCol?: string; timeEstCol?: string;
+  bucketCol?: string; bucketSetCol?: string; statusCol?: string; pmStatusCol?: string;
+}) {
+  const normBucket = (s: string) => {
+    const l = s.trim().toLowerCase();
+    if (l === 'tommorow' || l === 'tommorrow' || l === 'tomorow') return 'tomorrow';
+    if (l === 'day after tommorow' || l === 'day after tommorrow') return 'day after tomorrow';
+    return l;
+  };
+  const bucketColors: Record<string, string> = {
+    today: '#16a34a', tomorrow: '#3b82f6', 'day after tomorrow': '#f59e0b',
+  };
+  const pmColor: Record<string,string> = {
+    'approved': '#16a34a', 'submitted to client': '#6d28d9',
+    'changes': '#dc2626', 'no action taken': '#6b7280', 'n/a': '#6b7280', 'ticketclosed': '#7c3aed',
+  };
+
+  const [projectFilter, setProjectFilter] = useState<string[]>([]);
+  const [bucketFilter, setBucketFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [pmStatusFilter, setPmStatusFilter] = useState<string[]>([]);
+  const [statusDefaultApplied, setStatusDefaultApplied] = useState(false);
+
+  const uniq = (col?: string) => col
+    ? [...new Set(data.map(r => String(r[col] ?? '').trim()).filter(Boolean))].sort()
+    : [];
+  const projectOptions   = uniq(projectCol);
+  const bucketOptions    = uniq(bucketCol);
+  const statusOptions    = uniq(statusCol);
+  const pmStatusOptions  = uniq(pmStatusCol);
+
+  // By default exclude "Task Closed" — admin can re-include it via the Status filter
+  useEffect(() => {
+    if (!statusDefaultApplied && statusOptions.length > 0) {
+      setStatusFilter(statusOptions.filter(o => o.toLowerCase() !== 'task closed'));
+      setStatusDefaultApplied(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusOptions.join('|'), statusDefaultApplied]);
+
+  const filteredData = data.filter(r => {
+    if (projectFilter.length > 0 && projectCol && !projectFilter.includes(String(r[projectCol] ?? '').trim())) return false;
+    if (bucketFilter.length > 0 && bucketCol && !bucketFilter.includes(String(r[bucketCol] ?? '').trim())) return false;
+    if (statusFilter.length > 0 && statusCol && !statusFilter.includes(String(r[statusCol] ?? '').trim())) return false;
+    if (pmStatusFilter.length > 0 && pmStatusCol && !pmStatusFilter.includes(String(r[pmStatusCol] ?? '').trim())) return false;
+    return true;
+  });
+
+  return (
+    <div className="cn-card rounded-xl overflow-hidden" style={{ background: 'var(--cn-bg-card)' }}>
+      <div className="px-5 py-4 flex items-center justify-between gap-4 flex-wrap" style={{ borderBottom: '1px solid var(--cn-border)' }}>
+        <div>
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--cn-text-primary)' }}>All Tasks Assigned By {personName}</h3>
+          <p className="text-[11px] mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>
+            {filteredData.length} of {data.length} tasks
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <MiniMultiSelect label="Projects"    options={projectOptions}   selected={projectFilter}   onChange={setProjectFilter} />
+          <MiniMultiSelect label="Buckets"     options={bucketOptions}    selected={bucketFilter}    onChange={setBucketFilter} />
+          <MiniMultiSelect label="Statuses"    options={statusOptions}    selected={statusFilter}    onChange={setStatusFilter} />
+          <MiniMultiSelect label="PM Statuses" options={pmStatusOptions}  selected={pmStatusFilter}  onChange={setPmStatusFilter} />
+        </div>
+      </div>
+      {filteredData.length === 0 ? (
+        <p className="text-center py-6 text-sm" style={{ color: 'var(--cn-text-muted)' }}>No tasks match the selected filters.</p>
+      ) : (
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs table-fixed">
+          <thead>
+            <tr style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}>
+              <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Project Name</th>
+              <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task Name</th>
+              <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task URL</th>
+              <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Time Estimate</th>
+              <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task Daily Bucket</th>
+              <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Bucket Set</th>
+              <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Status</th>
+              <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">PM Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredData.map((r, i) => {
+              const project   = projectCol   ? String(r[projectCol]   ?? '').trim() : '';
+              const task      = taskCol      ? String(r[taskCol]      ?? '').trim() : '';
+              const taskUrl   = taskUrlCol   ? String(r[taskUrlCol]   ?? '').trim() : '';
+              const timeEst   = timeEstCol   ? String(r[timeEstCol]   ?? '').trim() : '';
+              const bucket    = bucketCol    ? String(r[bucketCol]    ?? '').trim() : '';
+              const bucketSet = bucketSetCol ? String(r[bucketSetCol] ?? '').trim() : '';
+              const status    = statusCol    ? String(r[statusCol]    ?? '').trim() : '';
+              const pmStatus  = pmStatusCol  ? String(r[pmStatusCol]  ?? '').trim() : '';
+              const sColor  = STATUS_COLORS[status.toLowerCase()] ?? '#6b7280';
+              const pmC     = pmColor[pmStatus.toLowerCase()] ?? '#6b7280';
+              const bColor  = bucketColors[normBucket(bucket)] ?? '#6b7280';
+              return (
+                <tr key={String(r['__row'] ?? i)} style={{ borderTop: '1px solid var(--cn-border-light, var(--cn-border))' }}>
+                  <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
+                    <span className="truncate block">{project || '—'}</span>
+                  </td>
+                  <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-primary)' }}>
+                    <span className="truncate block">{task || '—'}</span>
+                  </td>
+                  <td className="px-4 py-2">
+                    {taskUrl ? (
+                      <a href={taskUrl} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                        style={{ color: 'var(--cn-accent)', background: 'var(--cn-accent)' + '15' }}
+                      >
+                        Open ↗
+                      </a>
+                    ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>}
+                  </td>
+                  <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
+                    {timeEst || '—'}
+                  </td>
+                  <td className="px-4 py-2">
+                    {bucket ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize" style={{ background: bColor + '20', color: bColor }}>
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: bColor }} />
+                        {normBucket(bucket)}
+                      </span>
+                    ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>}
+                  </td>
+                  <td className="px-4 py-2">
+                    {bucketSet ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize" style={{ background: bColor + '20', color: bColor }}>
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: bColor }} />
+                        {bucketSet.toLowerCase() === 'tommorow' ? 'Tomorrow' : bucketSet}
+                      </span>
+                    ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>}
+                  </td>
+                  <td className="px-4 py-2">
+                    {status ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize" style={{ background: sColor + '20', color: sColor }}>
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: sColor }} />
+                        {status}
+                      </span>
+                    ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>}
+                  </td>
+                  <td className="px-4 py-2">
+                    {pmStatus && pmStatus.toLowerCase() !== 'n/a' ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize" style={{ background: pmC + '20', color: pmC }}>
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: pmC }} />
+                        {pmStatus}
+                      </span>
+                    ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Radial Progress ──────────────────────────────────────────────────────────
+function RadialProgress({ value, max, color, label }: {
+  value: number; max: number; color: string; label: string;
+}) {
+  const pct = max > 0 ? Math.min(value / max, 1) : 0;
+  const r = 28;
+  const circ = 2 * Math.PI * r;
+  const dash = pct * circ;
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <div className="relative">
+        <svg width={68} height={68} viewBox="0 0 68 68">
+          <circle cx={34} cy={34} r={r} fill="none" stroke="var(--cn-bg-input)" strokeWidth={6} />
+          <circle
+            cx={34} cy={34} r={r} fill="none" stroke={color} strokeWidth={6}
+            strokeDasharray={`${dash} ${circ - dash}`}
+            strokeLinecap="round"
+            transform="rotate(-90 34 34)"
+            style={{ transition: 'stroke-dasharray 0.8s ease' }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center leading-none">
+          <span className="text-base font-bold" style={{ color: 'var(--cn-text-primary)' }}>{value}</span>
+          <span className="text-[9px] mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>{Math.round(pct * 100)}%</span>
+        </div>
+      </div>
+      <span className="text-[11px] font-medium text-center leading-tight" style={{ color: 'var(--cn-text-muted)' }}>{label}</span>
+    </div>
+  );
+}
+
+// ─── Stat Card ────────────────────────────────────────────────────────────────
+function StatCard({ label, value, total, color, icon, adminStyle }: {
+  label: string; value: number; total: number; color: string; icon: React.ReactNode; adminStyle?: boolean;
+}) {
+  const pct = total > 0 ? Math.min((value / total) * 100, 100) : 0;
+
+  if (adminStyle) {
+    return (
+      <div
+        className="cn-card rounded-xl p-5 flex flex-col gap-2 cursor-default relative overflow-hidden"
+        style={{ background: 'var(--cn-bg-card)', borderLeft: `3px solid ${color}` }}
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>{label}</p>
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${color}15`, color }}>
+            {icon}
+          </div>
+        </div>
+        <p className="text-3xl font-bold tabular-nums leading-none mt-1" style={{ color: 'var(--cn-text-primary)' }}>{value}</p>
+        <div className="space-y-1 mt-1">
+          <div className="h-1 rounded-full overflow-hidden" style={{ background: 'var(--cn-bg-input)' }}>
+            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color, transition: 'width 0.8s ease' }} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="cn-card rounded-xl p-5 flex flex-col gap-3 cursor-default"
+      style={{ background: 'var(--cn-bg-card)' }}
+    >
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--cn-text-muted)' }}>{label}</p>
+        <div className="w-8 h-8 rounded-md flex items-center justify-center shrink-0" style={{ background: `${color}18`, color }}>
+          {icon}
+        </div>
+      </div>
+      <p className="text-4xl font-bold tabular-nums leading-none" style={{ color: 'var(--cn-text-primary)' }}>{value}</p>
+      <div className="space-y-1">
+        <div className="h-1 rounded-full overflow-hidden" style={{ background: 'var(--cn-bg-input)' }}>
+          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color, transition: 'width 0.8s ease' }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Distribution Card (replaces DonutCard) ──────────────────────────────────
+export function DonutCard({ title, sub, data, colorMap = {} }: {
+  title: string; sub?: string;
+  data: { name: string; value: number }[];
+  colorMap?: Record<string, string>;
+  adminStyle?: boolean;
+}) {
+  const total = data.reduce((s, d) => s + d.value, 0);
+  const sorted = [...data].sort((a, b) => b.value - a.value);
+  return (
+    <div className="cn-card rounded-xl p-4 sm:p-5 flex flex-col h-full" style={{ background: 'var(--cn-bg-card)' }}>
+      <div className="mb-4">
+        <h3 className="font-semibold text-sm" style={{ color: 'var(--cn-text-primary)' }}>{title}</h3>
+        {sub && <p className="text-xs mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>{sub}</p>}
+      </div>
+      {data.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center text-sm" style={{ color: 'var(--cn-text-muted)' }}>No data</div>
+      ) : (
+        <div className="flex-1 flex flex-col justify-center gap-3">
+          {sorted.map((entry, i) => {
+            const color = resolveColor(entry.name, colorMap, i);
+            const pct = total > 0 ? (entry.value / total) * 100 : 0;
+            return (
+              <div key={entry.name} className="space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
+                    <span className="text-xs truncate" style={{ color: 'var(--cn-text-muted)', maxWidth: 140 }}>{entry.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{entry.value}</span>
+                    <span className="text-[10px] w-7 text-right tabular-nums" style={{ color: 'var(--cn-text-muted)' }}>{pct.toFixed(0)}%</span>
+                  </div>
+                </div>
+                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--cn-bg-input)' }}>
+                  <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color, transition: 'width 0.8s ease' }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Bar Card ─────────────────────────────────────────────────────────────────
+export function BarCard({ title, sub, data, dataKey, color, unit = '' }: {
+  title: string; sub?: string;
+  data: Record<string, unknown>[];
+  dataKey: string; color: string; unit?: string;
+}) {
+  const barH = Math.max(220, data.length * 36);
+  return (
+    <div className="cn-card rounded-xl p-4 sm:p-5 h-full" style={{ background: 'var(--cn-bg-card)' }}>
+      <h3 className="font-semibold text-sm mb-0.5" style={{ color: 'var(--cn-text-primary)' }}>{title}</h3>
+      {sub && <p className="text-xs mb-3" style={{ color: 'var(--cn-text-muted)' }}>{sub}</p>}
+      {data.length === 0 ? (
+        <div className="flex items-center justify-center h-52 text-sm" style={{ color: 'var(--cn-text-muted)' }}>No data</div>
+      ) : (
+        <ResponsiveContainer width="100%" height={barH}>
+          <BarChart data={data} layout="vertical" margin={{ top: 4, right: 40, left: 0, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--cn-border)" horizontal={false} />
+            <XAxis type="number" tick={{ fill: 'var(--cn-text-muted)', fontSize: 11 }} allowDecimals={false} />
+            <YAxis type="category" dataKey="name" tick={{ fill: 'var(--cn-text-muted)', fontSize: 11 }} width={80} />
+            <Tooltip {...tooltipStyle} formatter={(val: unknown) => [`${val}${unit}`, dataKey]} />
+            <Bar dataKey={dataKey} fill={color} radius={[0, 4, 4, 0]} maxBarSize={28}
+              label={{ position: 'right', fill: 'var(--cn-text-muted)', fontSize: 11 }}
+            />
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+    </div>
+  );
+}
+
+// ─── Stacked Bar Card ─────────────────────────────────────────────────────────
+function StackedBarCard({ title, sub, data, statuses }: {
+  title: string; sub?: string;
+  data: Record<string, unknown>[];
+  statuses: string[];
+}) {
+  return (
+    <div className="cn-card rounded-xl p-4 sm:p-5 h-full" style={{ background: 'var(--cn-bg-card)' }}>
+      <h3 className="font-semibold text-sm mb-0.5" style={{ color: 'var(--cn-text-primary)' }}>{title}</h3>
+      {sub && <p className="text-xs mb-3" style={{ color: 'var(--cn-text-muted)' }}>{sub}</p>}
+      {data.length === 0 ? (
+        <div className="flex items-center justify-center h-52 text-sm" style={{ color: 'var(--cn-text-muted)' }}>No data</div>
+      ) : (
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 40 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--cn-border)" vertical={false} />
+            <XAxis dataKey="name" tick={{ fill: 'var(--cn-text-muted)', fontSize: 11 }} angle={-35} textAnchor="end" interval={0} />
+            <YAxis tick={{ fill: 'var(--cn-text-muted)', fontSize: 11 }} allowDecimals={false} />
+            <Tooltip {...tooltipStyle} />
+            <Legend wrapperStyle={{ color: 'var(--cn-text-muted)', fontSize: 11, paddingTop: 8 }} />
+            {statuses.map((s, i) => (
+              <Bar key={s} dataKey={s} stackId="a"
+                fill={STATUS_COLORS[s.toLowerCase()] ?? PALETTE[i % PALETTE.length]}
+                radius={i === statuses.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                maxBarSize={56}
+              />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+    </div>
+  );
+}
+
+// ─── Status Breakdown Panel (replaces RadialPanel) ───────────────────────────
+function StatusBreakdown({ title, sub, items }: {
+  title: string; sub?: string;
+  items: { label: string; value: number; max: number; color: string }[];
+}) {
+  return (
+    <div
+      className="cn-card rounded-xl p-4 sm:p-5 h-full flex flex-col"
+      style={{ background: 'var(--cn-bg-card)' }}
+    >
+      <div className="mb-4">
+        <h3 className="font-semibold text-sm" style={{ color: 'var(--cn-text-primary)' }}>{title}</h3>
+        {sub && <p className="text-xs mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>{sub}</p>}
+      </div>
+      <div className="flex-1 flex flex-col justify-center gap-4">
+        {items.map(({ label, value, max, color }) => {
+          const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
+          return (
+            <div key={label} className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
+                  <span className="text-xs font-medium" style={{ color: 'var(--cn-text-muted)' }}>{label}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{value}</span>
+                  <span className="text-[10px] w-8 text-right tabular-nums" style={{ color: 'var(--cn-text-muted)' }}>{pct.toFixed(0)}%</span>
+                </div>
+              </div>
+              <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--cn-bg-input)' }}>
+                <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color, transition: 'width 0.8s ease' }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Radial Panel (kept for compat) ──────────────────────────────────────────
+function RadialPanel({ title, sub, items }: {
+  title: string; sub?: string;
+  items: { label: string; value: number; max: number; color: string }[];
+}) {
+  return (
+    <div
+      className="cn-card border rounded-lg p-4 sm:p-5 h-full flex flex-col"
+      style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
+    >
+      <div className="mb-4">
+        <h3 className="font-semibold text-sm" style={{ color: 'var(--cn-text-primary)' }}>{title}</h3>
+        {sub && <p className="text-xs mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>{sub}</p>}
+      </div>
+      <div className="flex-1 grid grid-cols-2 gap-4 place-items-center py-2">
+        {items.map((item, i) => <RadialProgress key={i} {...item} />)}
+      </div>
+    </div>
+  );
+}
+
+const BUCKET_ORDER2 = ['today', 'everyday', 'inprogress', 'tomorrow', 'tobeexpected', 'submitted'] as const;
+const BUCKET_LABELS2: Record<string, string> = { today: 'Today', everyday: 'Everyday', inprogress: 'In Progress', tomorrow: 'Tomorrow', tobeexpected: 'To Be Expected', submitted: 'Submitted' };
+const BUCKET_COLORS2: Record<string, string> = { today: '#16a34a', everyday: '#f59e0b', inprogress: '#3b82f6', tomorrow: '#7c3aed', tobeexpected: '#d97706', submitted: '#10b981' };
+const SKIP_STATUSES = ['task closed', 'n/a', ''];
+const PM_COLOR: Record<string, string> = {
+  'approved': '#22c55e', 'no action taken': '#6b7280', 'rejected': '#ef4444',
+  'needs revision': '#f59e0b', 'in review': '#3b82f6', 'submitted to pm': '#8b5cf6',
+};
+
+// ─── Resource Status Grid (today workload summary for main dashboard) ──────────
+export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, availHeaders, onStatusChange, pmStatusColName, canEditPmStatus = false, isAdmin = false, currentUserEmail = '' }: {
+  sheet1Data: SheetData[]; sheet1Headers: string[];
+  availData?: SheetData[]; availHeaders?: string[];
+  onStatusChange?: (row: SheetData, colName: string, newValue: string) => Promise<void>;
+  pmStatusColName?: string;
+  canEditPmStatus?: boolean;
+  isAdmin?: boolean;
+  currentUserEmail?: string;
+}) {
+  const [openName, setOpenName] = useState<string | null>(null);
+  const [tab, setTab] = useState<'today' | 'tomorrow' | 'dayafter'>('today');
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  // Reset open state on mount (prevents stale open from preserved React tree)
+  useEffect(() => { setOpenName(null); }, []);
+
+
+  const resourceCol = findCol(sheet1Headers, 'assigned person', 'assigned to', 'resource');
+  const statusCol   = findCol(sheet1Headers, 'task status', 'status');
+  const bucketCol   = findCol(sheet1Headers, 'task daily bucket', 'bucket');
+  const timeEstCol  = findCol(sheet1Headers, 'time estimation', 'time estimate', 'estimation');
+  const taskCol      = findCol(sheet1Headers, 'task name', 'task title', 'task');
+  const projectCol   = findCol(sheet1Headers, 'project name', 'project');
+  const taskUrlCol   = findCol(sheet1Headers, 'task url', 'task link', 'link', 'url');
+  const bucketSetCol = sheet1Headers.find(h => h.toLowerCase().includes('today bucket set') || h.toLowerCase().includes('bucket set'));
+  const pmStatusCol2 = sheet1Headers.find(h => h.toLowerCase().includes('pm status'));
+  const pmEmailCol   = findCol(sheet1Headers, 'pm email', 'email');
+  const availNameCol   = availHeaders ? findCol(availHeaders, 'name', 'resource', 'person') : undefined;
+  const availStatusCol = availHeaders ? findCol(availHeaders, 'availability', 'status', 'leave') : undefined;
+
+  if (!sheet1Data.length || !resourceCol) return null;
+
+  const getStatus    = (r: SheetData) => statusCol    ? String(r[statusCol]    ?? '').trim() : '';
+  const getBucket    = (r: SheetData) => bucketCol    ? String(r[bucketCol]    ?? '').trim().toLowerCase() : '';
+  const getTask      = (r: SheetData) => taskCol      ? String(r[taskCol]      ?? '').trim() : '';
+  const getProj      = (r: SheetData) => projectCol   ? String(r[projectCol]   ?? '').trim() : '';
+  const getTime      = (r: SheetData) => timeEstCol   ? parseHours(String(r[timeEstCol]   ?? '').trim()) : 0;
+  const getTaskUrl   = (r: SheetData) => taskUrlCol   ? String(r[taskUrlCol]   ?? '').trim() : '';
+  const getBucketSet = (r: SheetData) => bucketSetCol ? String(r[bucketSetCol] ?? '').trim() : '';
+  const getPmStatus  = (r: SheetData) => pmStatusCol2 ? String(r[pmStatusCol2] ?? '').trim() : '';
+
+  const names = [...new Set(sheet1Data.map(r => String(r[resourceCol] ?? '').trim()).filter(Boolean))].sort();
+
+  // tab → which primary bucket to include (everyday always included)
+  const tabBucket = tab === 'today' ? 'today' : tab === 'tomorrow' ? 'tomorrow' : 'dayafter';
+
+  const rows = names.map(name => {
+    const myTasks = sheet1Data.filter(r => String(r[resourceCol] ?? '').trim() === name);
+    // Show tasks filtered by tab — exclude closed tasks and tomorrow/dayafter from Today's tab
+    const tabTasks = myTasks.filter(r => {
+      const st = getStatus(r).toLowerCase();
+      if (SKIP_STATUSES.includes(st)) return false; // never show closed/n/a
+      const b = getBucket(r);
+      // Exclude tomorrow/day-after tasks from Today's tab
+      if (tab === 'today' && (b === 'tomorrow' || b === 'tommorow' || b === 'day after tomorrow' || b === 'dayafter' || b === 'day after')) return false;
+      // Exclude today/everyday from Tomorrow tab (show only tomorrow + submitted-tomorrow)
+      if (tab === 'tomorrow') return (b === 'tomorrow' || b === 'tommorow');
+      // Exclude today/everyday from Day After tab
+      if (tab === 'dayafter') return (b === 'day after tomorrow' || b === 'dayafter' || b === 'day after');
+      return true;
+    });
+    // Hours = Today + Everyday bucket tasks only (for both status and header display)
+    const displayHours = myTasks
+      .filter(r => { const b = getBucket(r); return b === 'today' || b === 'everyday'; })
+      .reduce((s, r) => s + getTime(r), 0);
+    const tabHours = displayHours;
+    const tabCount = tabTasks.length;
+
+    let onLeave = false;
+    if (availData && availNameCol && availStatusCol) {
+      const av = availData.find(r => String(r[availNameCol] ?? '').trim().toLowerCase() === name.toLowerCase());
+      if (av) { const v = String(av[availStatusCol] ?? '').trim().toLowerCase(); onLeave = v.includes('leave') || v === 'absent'; }
+    }
+
+    const status = onLeave
+      ? { label: 'On Leave',           bg: '#ef4444' }
+      : displayHours === 0
+        ? { label: 'Available',          bg: '#22c55e' }
+        : displayHours <= 6.5
+          ? { label: 'Partially Occupied', bg: '#f59e0b' }
+          : displayHours <= 7.3
+            ? { label: 'Occupied',         bg: '#f97316' }
+            : { label: 'Occupied',         bg: '#ef4444' };
+
+    // Build grouped tasks for dropdown (tab-relevant tasks only, exclude task closed)
+    const grouped: Record<string, { task: string; project: string; status: string; hours: number; taskUrl: string; bucketSet: string; pmStatus: string; realBucket: string; _raw: SheetData }[]> = {};
+    tabTasks.forEach(r => {
+      const st = getStatus(r).toLowerCase();
+      if (SKIP_STATUSES.includes(st)) return;
+      const b = getBucket(r);
+      let bucket = b;
+      if (['submitted to pm', 'submitted to akash', 'submitted to client'].includes(st)) bucket = 'submitted';
+      else if (st === 'in progress') bucket = 'inprogress';
+      else if (b === 'tommorow') bucket = 'tomorrow';
+      else if (b === 'to be expected') bucket = 'tobeexpected';
+      if (!BUCKET_ORDER2.includes(bucket as typeof BUCKET_ORDER2[number])) bucket = 'everyday';
+      if (!grouped[bucket]) grouped[bucket] = [];
+      grouped[bucket].push({ task: getTask(r), project: getProj(r), status: getStatus(r), hours: getTime(r), taskUrl: getTaskUrl(r), bucketSet: getBucketSet(r), pmStatus: getPmStatus(r), realBucket: b, _raw: r });
+    });
+
+    return { name, tabHours, displayHours, tabCount, status, grouped };
+  });
+
+  const openRow = rows.find(r => r.name === openName);
+
+  // Team Current State summary from rows
+  const stateCount = (label: string) => rows.filter(r => r.status.label === label).length;
+  const stateSummary = [
+    { label: 'Available',          color: '#22c55e' },
+    { label: 'Partially Occupied', color: '#f59e0b' },
+    { label: 'Occupied',           color: '#ef4444' },
+    { label: 'On Leave',           color: '#8b5cf6' },
+  ];
+
+  return (
+    <div ref={gridRef} className="cn-card rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+      {/* Header with tabs + Team Current State summary */}
+      <div className="px-4 pt-4 pb-0">
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>Team Workload</p>
+          <div className="flex gap-1">
+            {([['today', "Today's"], ['tomorrow', 'Tomorrow'], ['dayafter', 'Day After']] as const).map(([t, label]) => (
+              <button key={t} onClick={() => { setTab(t); setOpenName(null); }}
+                className="px-3 py-1 text-[11px] font-semibold rounded-full transition-all cursor-pointer"
+                style={tab === t
+                  ? { background: 'var(--cn-accent)', color: '#fff', border: 'none' }
+                  : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)', border: '1px solid var(--cn-border)' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* Team Current State badges */}
+        <div className="flex items-center gap-3 pb-3 border-b flex-wrap" style={{ borderColor: 'var(--cn-border)' }}>
+          {stateSummary.map(({ label, color }) => (
+            <div key={label} className="flex items-center gap-1.5">
+              <span className="text-[11px] font-bold tabular-nums" style={{ color }}>{stateCount(label)}</span>
+              <span className="text-[11px]" style={{ color: 'var(--cn-text-muted)' }}>{label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="h-2" />
+
+      {/* Cards row */}
+      <div className="grid gap-px" style={{ background: 'var(--cn-border)', gridTemplateColumns: `repeat(${rows.length}, minmax(0, 1fr))` }}>
+        {rows.map(row => {
+          const bg    = memberColor(row.name);
+          const photo = teamPhoto(row.name);
+          const initials = row.name.split(' ').map((p: string) => p[0]).join('').slice(0, 2).toUpperCase();
+          const isOpen = openName === row.name;
+          return (
+            <div key={row.name}
+              className="flex flex-col items-center gap-2 p-3 text-center cursor-pointer select-none transition-colors"
+              style={{ background: isOpen ? row.status.bg + '10' : 'var(--cn-bg-card)' }}
+              onClick={() => setOpenName(isOpen ? null : row.name)}>
+              {photo ? (
+                <div className="w-11 h-11 rounded-full p-[2px]" style={{ background: `conic-gradient(${bg}, #e5e7eb, ${bg})` }}>
+                  <img src={photo} alt={row.name} className="w-full h-full rounded-full object-cover"
+                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                </div>
+              ) : (
+                <div className="w-11 h-11 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                  style={{ background: `linear-gradient(135deg, ${bg}cc, ${bg}66)` }}>{initials}</div>
+              )}
+              <p className="text-xs font-semibold leading-tight" style={{ color: 'var(--cn-text-primary)' }}>{row.name}</p>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                style={{ background: row.status.bg + '22', color: row.status.bg }}>{row.status.label}</span>
+              {row.tabCount > 0 && (
+                <div className="flex items-center gap-1 text-[10px] font-semibold" style={{ color: '#f59e0b' }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  {row.tabCount} Tasks · {Math.round(row.displayHours * 10) / 10}h
+                </div>
+              )}
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                style={{ color: 'var(--cn-text-muted)', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Full-width dropdown panel — table format */}
+      {openRow && (() => {
+        const allTasks: { task: string; project: string; status: string; hours: number; taskUrl: string; bucketSet: string; pmStatus: string; _raw: SheetData; bucket: string; realBucket?: string }[] = [];
+        BUCKET_ORDER2.forEach(bucket => {
+          (openRow.grouped[bucket] ?? []).forEach(t => allTasks.push({ ...t, bucket: t.realBucket ?? bucket }));
+        });
+        return (
+          <div className="border-t" style={{ borderColor: 'var(--cn-border)', background: 'var(--cn-bg-input)' }}>
+            <div className="px-4 py-3 flex items-center justify-between">
+              <p className="text-sm font-bold" style={{ color: 'var(--cn-text-primary)' }}>{openRow.name}'s Tasks</p>
+              <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: openRow.status.bg + '22', color: openRow.status.bg }}>{allTasks.length} tasks</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--cn-border)', background: 'var(--cn-bg-card)' }}>
+                    {['PROJECT', 'TASK', 'LINK', 'EST.', 'TASK DAILY BUCKET', 'BUCKET SET', 'STATUS', 'PM STATUS'].map(h => (
+                      <th key={h} className="text-left px-4 py-2 font-semibold tracking-wide whitespace-nowrap" style={{ color: 'var(--cn-text-muted)', fontSize: '11px' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {allTasks.length === 0 ? (
+                    <tr><td colSpan={8} className="px-4 py-6 text-center" style={{ color: 'var(--cn-text-faint)' }}>No active tasks</td></tr>
+                  ) : allTasks.map((t, i) => {
+                    const pmC = PM_COLOR[(t.pmStatus || '').toLowerCase()] ?? '#6b7280';
+                    return (
+                      <tr key={i} style={{ borderBottom: '1px solid var(--cn-border)' }}
+                        className="transition-colors hover:bg-[var(--cn-bg-card)]">
+                        <td className="px-4 py-2.5" style={{ color: 'var(--cn-text-muted)', minWidth: 100 }}>{t.project || '—'}</td>
+                        <td className="px-4 py-2.5 font-medium" style={{ color: 'var(--cn-text-primary)', minWidth: 180 }}>{t.task || '—'}</td>
+                        <td className="px-4 py-2.5" style={{ minWidth: 60 }}>
+                          {t.taskUrl
+                            ? <a href={t.taskUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-[11px]" style={{ color: '#ef4444' }}>Open ↗</a>
+                            : <span style={{ color: 'var(--cn-text-faint)' }}>—</span>}
+                        </td>
+                        <td className="px-4 py-2.5" style={{ minWidth: 60 }}>
+                          {!!t.hours && t.hours > 0
+                            ? <span className="font-bold px-1.5 py-0.5 rounded-full text-[11px]" style={{ background: '#f59e0b22', color: '#f59e0b' }}>{Math.round(t.hours * 10) / 10}h</span>
+                            : <span style={{ color: 'var(--cn-text-faint)' }}>—</span>}
+                        </td>
+                        <td className="px-4 py-2.5" style={{ minWidth: 110 }}>
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold"
+                            style={{ background: BUCKET_COLORS2[t.bucket] + '22', color: BUCKET_COLORS2[t.bucket] }}>
+                            {BUCKET_LABELS2[t.bucket]}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5" style={{ minWidth: 80 }}>
+                          {t.bucketSet
+                            ? <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>{t.bucketSet}</span>
+                            : <span style={{ color: 'var(--cn-text-faint)' }}>—</span>}
+                        </td>
+                        <td className="px-4 py-2.5" style={{ minWidth: 120 }}>
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold"
+                            style={{ background: 'var(--cn-bg-card)', color: 'var(--cn-text-muted)', border: '1px solid var(--cn-border)' }}>
+                            {t.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5" style={{ minWidth: 150 }}>
+                          {(() => {
+                            const rowEmail = pmEmailCol ? String(t._raw[pmEmailCol] ?? '').trim().toLowerCase() : '';
+                            const rowCanEdit = canEditPmStatus && onStatusChange && (pmStatusColName || pmStatusCol2) &&
+                              (isAdmin || !currentUserEmail || !rowEmail || rowEmail === currentUserEmail.trim().toLowerCase());
+                            return rowCanEdit ? (
+                              <ResourcePmSelect
+                                value={t.pmStatus || 'No Action Taken'}
+                                raw={t._raw}
+                                colName={pmStatusColName ?? pmStatusCol2 ?? ''}
+                                onStatusChange={onStatusChange}
+                              />
+                            ) : t.pmStatus ? (
+                            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold"
+                              style={{ background: pmC + '22', color: pmC }}>
+                              {t.pmStatus}
+                            </span>
+                          ) : <span style={{ color: 'var(--cn-text-faint)' }}>—</span>;
+                          })()}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+// ─── Insight Cards (Resource Health / Project Health / Trends) ────────────────
+export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeaders, mode, personFilter }: {
+  sheet1Data: SheetData[]; sheet1Headers: string[];
+  availData?: SheetData[]; availHeaders?: string[];
+  mode?: 'all' | 'team' | 'project' | 'project-cards';
+  personFilter?: string;
+}) {
+  const [filter, setFilter] = useState<DateFilter>('all');
+  const statusCol   = findCol(sheet1Headers, 'task status', 'status');
+  const bucketCol   = findCol(sheet1Headers, 'task daily bucket', 'bucket');
+  const resourceCol = findCol(sheet1Headers, 'assigned person', 'assigned to', 'resource');
+  const scopedData  = personFilter && resourceCol
+    ? sheet1Data.filter(r => String(r[resourceCol] ?? '').trim().toLowerCase() === personFilter.trim().toLowerCase())
+    : sheet1Data;
+  const data = filterByDate(scopedData, sheet1Headers, filter);
+  if (!sheet1Data.length) return null;
+  const timeEstCol  = findCol(sheet1Headers, 'time estimation', 'time estimate', 'estimation');
+  const projectCol  = findCol(sheet1Headers, 'project name', 'project');
+  const availNameCol   = availHeaders ? findCol(availHeaders, 'name', 'resource', 'person') : undefined;
+  const availStatusCol = availHeaders ? findCol(availHeaders, 'availability', 'status', 'leave') : undefined;
+
+  const getStatus  = (r: SheetData) => statusCol   ? String(r[statusCol]   ?? '').trim().toLowerCase() : '';
+  const getBucket  = (r: SheetData) => bucketCol   ? String(r[bucketCol]   ?? '').trim().toLowerCase() : '';
+  const getProject = (r: SheetData) => projectCol  ? String(r[projectCol]  ?? '').trim() : '';
+  const getHours   = (r: SheetData) => timeEstCol  ? parseHours(String(r[timeEstCol] ?? '').trim()) : 0;
+  const getPerson  = (r: SheetData) => resourceCol ? String(r[resourceCol] ?? '').trim() : '';
+
+  // ── Team Current State ──
+  const allNames = [...new Set(sheet1Data.map(getPerson).filter(Boolean))];
+  let available = 0, partiallyAvailable = 0, occupied = 0, onLeave = 0;
+  allNames.forEach(name => {
+    const isLeave = (() => {
+      if (!availData || !availNameCol || !availStatusCol) return false;
+      const av = availData.find(r => String(r[availNameCol] ?? '').trim().toLowerCase() === name.toLowerCase());
+      if (!av) return false;
+      const v = String(av[availStatusCol] ?? '').trim().toLowerCase();
+      return v.includes('leave') || v === 'absent';
+    })();
+    if (isLeave) { onLeave++; return; }
+    const todayH = sheet1Data
+      .filter(r => getPerson(r) === name && (getBucket(r) === 'today' || getBucket(r) === 'everyday'))
+      .reduce((s, r) => s + getHours(r), 0);
+    if (todayH === 0) available++;
+    else if (todayH <= 4) partiallyAvailable++;
+    else occupied++;
+  });
+
+  // ── Project State ──
+  const closedStatuses = ['task closed', 'n/a', ''];
+  const activeProjects = new Set(data.filter(r => !closedStatuses.includes(getStatus(r))).map(getProject).filter(Boolean)).size;
+  const internalKeywords = ['cybernext', 'internal', 'cn internal'];
+  const totalH  = data.reduce((s, r) => s + getHours(r), 0);
+  const clientH = data.filter(r => !internalKeywords.some(k => getProject(r).toLowerCase().includes(k))).reduce((s, r) => s + getHours(r), 0);
+  const clientPct = totalH > 0 ? Math.round((clientH / totalH) * 100) : 0;
+  const internalPct = 100 - clientPct;
+  const everydayCount      = bucketCol  ? data.filter(r => String(r[bucketCol]  ?? '').trim().toLowerCase() === 'everyday').length : 0;
+  const todayCount         = bucketCol  ? data.filter(r => String(r[bucketCol]  ?? '').trim().toLowerCase() === 'today').length : 0;
+  const inProgressCount      = statusCol ? data.filter(r => getStatus(r) === 'in progress').length : 0;
+  const submittedClientCount = statusCol ? data.filter(r => { const s = getStatus(r); return s === 'submitted to client' || s === 'submitted to approval' || s === 'submitted'; }).length : 0;
+  const submittedAkashCount  = statusCol ? data.filter(r => getStatus(r) === 'submitted to akash').length : 0;
+  const submittedPMCount     = statusCol ? data.filter(r => getStatus(r) === 'submitted to pm').length : 0;
+  const onHoldCount          = statusCol ? data.filter(r => getStatus(r) === 'on hold').length : 0;
+  const toBeExpectedCount    = bucketCol ? data.filter(r => String(r[bucketCol] ?? '').trim().toLowerCase() === 'to be expected').length : 0;
+
+  const IC = ({ label, value, sub, color, icon, badge }: { label: string; value: string | number; sub?: string; color: string; icon: React.ReactNode; badge?: React.ReactNode }) => (
+    <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl border" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: color + '18' }}>
+        <span style={{ color }}>{icon}</span>
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-semibold uppercase tracking-wide truncate leading-tight" style={{ color: 'var(--cn-text-muted)' }}>{label}</p>
+        <div className="flex items-baseline gap-1.5 mt-0.5">
+          <p className="text-base font-bold leading-tight" style={{ color: 'var(--cn-text-primary)' }}>{value}</p>
+          {badge}
+        </div>
+        {sub && <p className="text-[10px] leading-tight truncate" style={{ color: 'var(--cn-text-faint)' }}>{sub}</p>}
+      </div>
+    </div>
+  );
+
+  const TrendBadge = ({ diff }: { diff: number }) => diff === 0 ? null : (
+    <span className="text-[10px] font-bold px-1 py-0.5 rounded-full" style={{ background: diff > 0 ? '#22c55e18' : '#ef444418', color: diff > 0 ? '#22c55e' : '#ef4444' }}>
+      {diff > 0 ? '↑' : '↓'}{Math.abs(Math.round(diff * 10) / 10)}h
+    </span>
+  );
+
+  const Section = ({ title, children, showFilter }: { title: string; children: React.ReactNode; showFilter?: boolean }) => (
+    <div className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b" style={{ borderColor: 'var(--cn-border)', background: 'var(--cn-bg-input)' }}>
+        <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>{title}</p>
+        {showFilter && <DateFilterPills value={filter} onChange={setFilter} />}
+      </div>
+      <div className="divide-y" style={{ borderColor: 'var(--cn-border)' }}>{children}</div>
+    </div>
+  );
+
+  const showTeam    = !mode || mode === 'all' || mode === 'team';
+  const showProject = !mode || mode === 'all' || mode === 'project';
+
+  // ── Project Cards (horizontal KPI style) ────────────────────────────────────
+  if (mode === 'project-cards') {
+    const cards = [
+      { label: "Today's Tasks",        value: todayCount,                       color: '#FE4A23', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
+      { label: 'In Progress',          value: inProgressCount,                  color: '#16a34a', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> },
+      { label: 'On Hold',              value: onHoldCount,                      color: '#7c3aed', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/></svg> },
+      { label: 'Everyday Tasks',       value: everydayCount,                    color: '#06b6d4', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> },
+      { label: 'Submitted to Akash',   value: submittedAkashCount,              color: '#d97706', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.84 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.77 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8 8.09a16 16 0 0 0 6 6l1.06-1.06a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg> },
+      { label: 'Submitted to PM',      value: submittedPMCount,                 color: '#10b981', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
+      { label: 'To Be Expected',       value: toBeExpectedCount,                color: '#d97706', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> },
+    ];
+    return (
+      <div className="cn-card rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+        <div className="flex items-center justify-between gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--cn-border)', background: 'var(--cn-bg-input)' }}>
+          <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>Project State</p>
+          <DateFilterPills value={filter} onChange={setFilter} />
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-px" style={{ background: 'var(--cn-border)' }}>
+          {cards.map(({ label, value, color, icon }) => (
+            <div key={label} className="flex flex-col gap-1.5 p-4" style={{ background: 'var(--cn-bg-card)' }}>
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-semibold uppercase tracking-wide leading-tight" style={{ color: 'var(--cn-text-muted)' }}>{label}</p>
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: color + '18', color }}>{icon}</div>
+              </div>
+              <p className="text-2xl font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={showTeam && showProject ? 'flex gap-3' : ''}>
+      {/* Team Current State */}
+      {showTeam && <div className="flex-1 min-w-0">
+      <Section title="Team Current State">
+        <IC label="Available" value={available} sub={`of ${allNames.length} members · 0h today`} color="#22c55e"
+          icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>} />
+        <IC label="Partially Available" value={partiallyAvailable} sub="≤4h today" color="#f59e0b"
+          icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>} />
+        <IC label="Occupied" value={occupied} sub=">4h today" color="#ef4444"
+          icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>} />
+        <IC label="On Leave" value={onLeave} sub="from availability sheet" color="#8b5cf6"
+          icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>} />
+      </Section>
+      </div>}
+
+      {/* Project State */}
+      {showProject && <div className="flex-1 min-w-0">
+      <Section title="Project State" showFilter>
+        <IC label="Active Projects" value={activeProjects} sub="non-closed tasks" color="#3b82f6"
+          icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>} />
+        <IC label="Everyday" value={everydayCount} sub="recurring daily tasks" color="#06b6d4"
+          icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>} />
+        <IC label="Today's Tasks" value={todayCount} sub="bucket = today" color="#FE4A23"
+          icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>} />
+        <IC label="Submitted to Client / Approval" value={submittedClientCount} sub="awaiting client review" color="#10b981"
+          icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>} />
+        <IC label="Submitted to Akash" value={submittedAkashCount} sub="pending akash review" color="#d97706"
+          icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.84 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.77 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8 8.09a16 16 0 0 0 6 6l1.06-1.06a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>} />
+        <IC label="On Hold" value={onHoldCount} sub="paused tasks" color="#7c3aed"
+          icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/></svg>} />
+        <IC label="Client vs Internal" value={`${clientPct}% / ${internalPct}%`} sub={`${Math.round(clientH*10)/10}h client · ${Math.round((totalH-clientH)*10)/10}h internal`} color="#8b5cf6"
+          icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><line x1="2" y1="12" x2="22" y2="12"/></svg>} />
+      </Section>
+      </div>}
+
+    </div>
+  );
+}
+
+// ─── KPI Cards (full-width row, rendered above charts flex in Dashboard) ──────
+export function KpiCards({ sheet1Data, sheet1Headers, pmView = false, resourceView = false, resourceName = '', currentUserEmail = '' }: Pick<Props, 'sheet1Data' | 'sheet1Headers' | 'pmView' | 'resourceView' | 'resourceName' | 'currentUserEmail'>) {
+  const statusCol  = findCol(sheet1Headers, 'status');
+  const bucketCol  = findCol(sheet1Headers, 'task daily bucket', 'bucket');
+  const resourceCol = findCol(sheet1Headers, 'assigned person', 'assigned to', 'resource');
+  const emailCol   = findCol(sheet1Headers, 'email');
+  const pmStatusCol = findCol(sheet1Headers, 'pm status');
+
+  if (!sheet1Data.length) return null;
+
+  if (resourceView && resourceName) {
+    const myData = resourceCol
+      ? sheet1Data.filter(r => String(r[resourceCol] ?? '').trim().toLowerCase() === resourceName.trim().toLowerCase())
+      : sheet1Data;
+    const myTotal       = myData.length;
+    const myInProgress  = statusCol ? myData.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'in progress').length : 0;
+    const myOnHold      = statusCol ? myData.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'on hold').length : 0;
+    const myToday       = bucketCol ? myData.filter(r => String(r[bucketCol] ?? '').trim().toLowerCase() === 'today').length : 0;
+    const mySubmittedPM = statusCol ? myData.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'submitted to pm').length : 0;
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
+        <StatCard label="My Tasks"        value={myTotal}       total={myTotal} color="var(--cn-accent)" icon={<LayoutGrid    className="w-4 h-4" />} adminStyle />
+        <StatCard label="In Progress"     value={myInProgress}  total={myTotal} color="#16a34a"          icon={<CheckCircle2  className="w-4 h-4" />} adminStyle />
+        <StatCard label="On Hold"         value={myOnHold}      total={myTotal} color="#7c3aed"          icon={<PauseCircle   className="w-4 h-4" />} adminStyle />
+        <StatCard label="Today's Tasks"   value={myToday}       total={myTotal} color="#FE4A23"          icon={<CalendarCheck className="w-4 h-4" />} adminStyle />
+        <StatCard label="Submitted to PM" value={mySubmittedPM} total={myTotal} color="#10b981"          icon={<UserCheck     className="w-4 h-4" />} adminStyle />
+      </div>
+    );
+  }
+
+  const pmScopedData = (pmView && emailCol && currentUserEmail)
+    ? sheet1Data.filter(r => String(r[emailCol] ?? '').trim().toLowerCase() === currentUserEmail.trim().toLowerCase())
+    : sheet1Data;
+  const pmScopedTotal = pmScopedData.length;
+  const totalTasks     = pmScopedData.length;
+  const inProgress     = statusCol ? pmScopedData.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'in progress').length : 0;
+  const onHold         = statusCol ? pmScopedData.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'on hold').length : 0;
+  const submittedAkash = statusCol ? pmScopedData.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'submitted to akash').length : 0;
+  const submittedPM    = statusCol ? pmScopedData.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'submitted to pm').length : 0;
+  const todayTasks     = bucketCol ? pmScopedData.filter(r => String(r[bucketCol] ?? '').trim().toLowerCase() === 'today').length : 0;
+
+  if (pmView && pmStatusCol) {
+    const pmNoAction       = pmStatusCol ? pmScopedData.filter(r => String(r[pmStatusCol] ?? '').trim().toLowerCase() === 'no action taken').length : 0;
+    const pmChanges        = pmStatusCol ? pmScopedData.filter(r => String(r[pmStatusCol] ?? '').trim().toLowerCase() === 'changes').length : 0;
+    const pmApproved       = pmStatusCol ? pmScopedData.filter(r => String(r[pmStatusCol] ?? '').trim().toLowerCase() === 'approved').length : 0;
+    const pmSubmittedClient = pmStatusCol ? pmScopedData.filter(r => String(r[pmStatusCol] ?? '').trim().toLowerCase() === 'submitted to client').length : 0;
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
+        <StatCard label="No Action Taken"    value={pmNoAction}         total={pmScopedTotal} color="#f59e0b" icon={<AlertTriangle className="w-4 h-4" />} adminStyle />
+        <StatCard label="Changes"             value={pmChanges}          total={pmScopedTotal} color="#7c3aed" icon={<RefreshCw     className="w-4 h-4" />} adminStyle />
+        <StatCard label="Approved"            value={pmApproved}         total={pmScopedTotal} color="#16a34a" icon={<ThumbsUp       className="w-4 h-4" />} adminStyle />
+        <StatCard label="Submitted to Client" value={pmSubmittedClient}  total={pmScopedTotal} color="#10b981" icon={<BadgeCheck     className="w-4 h-4" />} adminStyle />
+        <StatCard label="Today's Tasks"       value={todayTasks}         total={pmScopedTotal} color="#FE4A23" icon={<CalendarCheck className="w-4 h-4" />} adminStyle />
+      </div>
+    );
+  }
+
+  const everydayTasks = bucketCol ? pmScopedData.filter(r => String(r[bucketCol] ?? '').trim().toLowerCase() === 'everyday').length : 0;
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
+      <StatCard label="Everyday Tasks"     value={everydayTasks}  total={totalTasks} color="var(--cn-accent)" icon={<LayoutGrid    className="w-4 h-4" />} adminStyle />
+      <StatCard label="In Progress"        value={inProgress}     total={totalTasks} color="#16a34a"          icon={<CheckCircle2  className="w-4 h-4" />} adminStyle />
+      <StatCard label="On Hold"            value={onHold}         total={totalTasks} color="#7c3aed"          icon={<PauseCircle   className="w-4 h-4" />} adminStyle />
+      <StatCard label="Submitted to Akash" value={submittedAkash} total={totalTasks} color="#d97706"          icon={<Send          className="w-4 h-4" />} adminStyle />
+      <StatCard label="Submitted to PM"    value={submittedPM}    total={totalTasks} color="#10b981"          icon={<UserCheck     className="w-4 h-4" />} adminStyle />
+      <StatCard label="Today's Tasks"      value={todayTasks}     total={totalTasks} color="#FE4A23"          icon={<CalendarCheck className="w-4 h-4" />} adminStyle />
+    </div>
+  );
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
+export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = false, resourceView = false, resourceName = '', isAdmin = false, availData = [], availHeaders = [], onStatusChange, pmStatusColName, currentUserName, currentUserEmail, showFilter, hideKpi = false, hidePmStatus = false }: Props) {
+  const [pmStatusFilter, setPmStatusFilter]   = useState<DateFilter>('all');
+  const [projectFilter,  setProjectFilter]    = useState<DateFilter>('all');
+  const [breakdownFilter, setBreakdownFilter] = useState<DateFilter>('all');
+  const priorityCol  = findCol(sheet1Headers, 'priority');
+  const teamCol      = findCol(sheet1Headers, 'team required', 'team');
+  const taskInfoCol  = findCol(sheet1Headers, 'task information', 'task info', 'information');
+  const resourceCol  = findCol(sheet1Headers, 'assigned person', 'assigned to', 'resource');
+  const statusCol    = findCol(sheet1Headers, 'task status', 'status');
+  const bucketCol    = findCol(sheet1Headers, 'task daily bucket', 'bucket');
+  const projectCol   = findCol(sheet1Headers, 'project name', 'project');
+  const pmStatusCol  = findCol(sheet1Headers, 'pm status');
+  const timeEstCol   = findCol(sheet1Headers, 'time estimation', 'time estimate', 'estimation');
+
+  if (!sheet1Data.length) return null;
+
+  // ── Resource personal view ────────────────────────────────────────────────
+  if (resourceView && resourceName) {
+    const myData = resourceCol
+      ? sheet1Data.filter(r =>
+          String(r[resourceCol] ?? '').trim().toLowerCase() === resourceName.trim().toLowerCase()
+        )
+      : sheet1Data;
+
+    const myTotal       = myData.length;
+    const myInProgress  = statusCol ? myData.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'in progress').length : 0;
+    const myOnHold      = statusCol ? myData.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'on hold').length : 0;
+    const myToday       = bucketCol ? myData.filter(r => String(r[bucketCol] ?? '').trim().toLowerCase() === 'today').length : 0;
+    const mySubmittedPM = statusCol ? myData.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'submitted to pm').length : 0;
+
+    const myStatusData   = (statusCol && timeEstCol)   ? sumHoursByCol(myData, statusCol,   timeEstCol) : [];
+    const myPriorityData = (priorityCol && timeEstCol) ? sumHoursByCol(myData, priorityCol, timeEstCol) : [];
+    const myProjectData  = (projectCol && timeEstCol)
+      ? sumHoursByCol(myData, projectCol, timeEstCol).slice(0, 15).map(d => ({ name: d.name, Hours: d.value }))
+      : [];
+
+    return (
+      <section className="space-y-4">
+        {/* ── KPI Row ── */}
+        {!hideKpi && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
+          <StatCard label="My Tasks"          value={myTotal}       total={myTotal} color="var(--cn-accent)" icon={<LayoutGrid    className="w-4 h-4" />} adminStyle={true} />
+          <StatCard label="In Progress"       value={myInProgress}  total={myTotal} color="#16a34a"          icon={<CheckCircle2  className="w-4 h-4" />} adminStyle={true} />
+          <StatCard label="On Hold"           value={myOnHold}      total={myTotal} color="#7c3aed"          icon={<PauseCircle   className="w-4 h-4" />} adminStyle={true} />
+          <StatCard label="Today's Tasks"     value={myToday}       total={myTotal} color="#FE4A23"          icon={<CalendarCheck className="w-4 h-4" />} adminStyle={true} />
+          <StatCard label="Submitted to PM"   value={mySubmittedPM} total={myTotal} color="#10b981"          icon={<UserCheck     className="w-4 h-4" />} adminStyle={true} />
+        </div>
+        )}
+
+        {/* ── Hours by Status + Hours by Priority ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <DonutCard title="My Hours by Status"    sub="Estimated hours by task status"            data={myStatusData}   colorMap={STATUS_COLORS} adminStyle />
+          <DonutCard title="My Hours by Priority"  sub="Estimated hours by task priority"          data={myPriorityData} colorMap={PRIORITY_COLORS} adminStyle />
+        </div>
+
+        {/* ── Hours per Project bar (full width) ── */}
+        <BarCard
+          title="My Hours per Project"
+          sub="Estimated hours per client / project"
+          data={myProjectData}
+          dataKey="Hours"
+          color="#10b981"
+        />
+      </section>
+    );
+  }
+
+  // ── Scope all charts/tables to the logged-in PM's own tasks when viewing as PM ──
+  const emailCol = findCol(sheet1Headers, 'email');
+  const pmScopedData = (pmView && emailCol && currentUserEmail)
+    ? sheet1Data.filter(r => String(r[emailCol] ?? '').trim().toLowerCase() === currentUserEmail.trim().toLowerCase())
+    : sheet1Data;
+  const pmScopedTotal = pmScopedData.length;
+
+  // ── KPI values ──────────────────────────────────────────────────────────────
+  const totalTasks      = pmScopedData.length;
+  const inProgress      = statusCol ? pmScopedData.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'in progress').length : 0;
+  const onHold          = statusCol ? pmScopedData.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'on hold').length : 0;
+  const submittedAkash  = statusCol ? pmScopedData.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'submitted to akash').length : 0;
+  const submittedPM     = statusCol ? pmScopedData.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'submitted to pm').length : 0;
+  const todayTasks      = bucketCol ? pmScopedData.filter(r => String(r[bucketCol] ?? '').trim().toLowerCase() === 'today').length : 0;
+  const tomorrowTasks   = bucketCol ? pmScopedData.filter(r => { const v = String(r[bucketCol] ?? '').trim().toLowerCase(); return v === 'tomorrow' || v === 'tommorow'; }).length : 0;
+
+  // ── PM Status counts ─────────────────────────────────────────────────────────
+  // "No Action Taken" only matters once a task has actually been submitted to PM —
+  // tasks still in progress/to be started shouldn't count as pending PM action.
+  const pmNoAction       = (pmStatusCol && statusCol) ? pmScopedData.filter(r =>
+    String(r[pmStatusCol] ?? '').trim().toLowerCase() === 'no action taken'
+    && String(r[statusCol] ?? '').trim().toLowerCase() === 'submitted to pm'
+  ).length : 0;
+  const pmChanges        = pmStatusCol ? pmScopedData.filter(r => String(r[pmStatusCol] ?? '').trim().toLowerCase() === 'changes').length : 0;
+  const pmApproved       = pmStatusCol ? pmScopedData.filter(r => String(r[pmStatusCol] ?? '').trim().toLowerCase() === 'approved').length : 0;
+  const pmSubmittedClient = pmStatusCol ? pmScopedData.filter(r => String(r[pmStatusCol] ?? '').trim().toLowerCase() === 'submitted to client').length : 0;
+
+  // ── Hours helpers ─────────────────────────────────────────────────────────────
+  const getHours = (r: SheetData) => timeEstCol ? parseHours(String(r[timeEstCol] ?? '').trim()) : 0;
+  const totalHoursAll = pmScopedData.reduce((s, r) => s + getHours(r), 0);
+
+  // ── Pie/donut data — hours-based ─────────────────────────────────────────────
+  const priorityData  = (priorityCol && timeEstCol)  ? sumHoursByCol(pmScopedData, priorityCol,  timeEstCol) : [];
+  const teamData      = (teamCol && timeEstCol)      ? sumHoursByCol(pmScopedData, teamCol,      timeEstCol) : [];
+  const taskInfoData  = (taskInfoCol && timeEstCol)  ? sumHoursByCol(pmScopedData, taskInfoCol,  timeEstCol) : [];
+  const statusData    = (statusCol && timeEstCol)    ? sumHoursByCol(pmScopedData, statusCol,    timeEstCol) : [];
+  const pmStatusData  = (pmStatusCol && timeEstCol)  ? sumHoursByCol(pmScopedData, pmStatusCol,  timeEstCol) : [];
+
+  // ── Bar: hours per person ────────────────────────────────────────────────────
+  const tasksByPerson = (resourceCol && timeEstCol)
+    ? sumHoursByCol(pmScopedData, resourceCol, timeEstCol).map(d => ({ name: d.name, Hours: d.value }))
+    : [];
+
+  // ── Bar: hours per project ────────────────────────────────────────────────────
+  const tasksByProject = (projectCol && timeEstCol)
+    ? sumHoursByCol(pmScopedData, projectCol, timeEstCol).slice(0, 15).map(d => ({ name: d.name, Hours: d.value }))
+    : [];
+
+  // ── Stacked bar: hours by status per person ───────────────────────────────────
+  const statusPerPerson: Record<string, Record<string, number>> = {};
+  const statusSet = new Set<string>();
+  if (resourceCol && statusCol && timeEstCol) {
+    pmScopedData.forEach(row => {
+      const person = String(row[resourceCol] ?? '').trim();
+      const status = String(row[statusCol] ?? '').trim();
+      if (!person || !status) return;
+      statusSet.add(status);
+      if (!statusPerPerson[person]) statusPerPerson[person] = {};
+      statusPerPerson[person][status] = (statusPerPerson[person][status] ?? 0) + getHours(row);
+    });
+  }
+  const allStatuses = [...statusSet].sort();
+  const statusPerPersonData = Object.entries(statusPerPerson)
+    .map(([name, counts]) => ({ name, ...Object.fromEntries(Object.entries(counts).map(([k, v]) => [k, Math.round(v * 10) / 10])) }))
+    .sort((a, b) => {
+      const sum = (o: Record<string, unknown>) =>
+        Object.values(o).filter(v => typeof v === 'number').reduce((s, v) => s + (v as number), 0);
+      return sum(b) - sum(a);
+    });
+
+  // ── Radial items — hours-based ────────────────────────────────────────────────
+  const inProgressHours  = timeEstCol ? pmScopedData.filter(r => String(r[statusCol!] ?? '').trim().toLowerCase() === 'in progress').reduce((s, r) => s + getHours(r), 0) : 0;
+  const onHoldHours      = timeEstCol ? pmScopedData.filter(r => String(r[statusCol!] ?? '').trim().toLowerCase() === 'on hold').reduce((s, r) => s + getHours(r), 0) : 0;
+  const completedHours   = timeEstCol ? pmScopedData.filter(r => { const s = String(r[statusCol!] ?? '').trim().toLowerCase(); return s.includes('submitted') || s === 'testing'; }).reduce((s, r) => s + getHours(r), 0) : 0;
+  const toBeStartedHours = timeEstCol ? pmScopedData.filter(r => String(r[statusCol!] ?? '').trim().toLowerCase() === 'to be started').reduce((s, r) => s + getHours(r), 0) : 0;
+  const radialItems = [
+    { label: 'In Progress',   value: Math.round(inProgressHours  * 10) / 10, max: totalHoursAll, color: '#16a34a' },
+    { label: 'On Hold',       value: Math.round(onHoldHours      * 10) / 10, max: totalHoursAll, color: '#7c3aed' },
+    { label: 'Completed',     value: Math.round(completedHours   * 10) / 10, max: totalHoursAll, color: '#2563eb' },
+    { label: 'To Be Started', value: Math.round(toBeStartedHours * 10) / 10, max: totalHoursAll, color: '#f59e0b' },
+  ];
+
+  // ── Per-chart filtered datasets ──────────────────────────────────────────────
+  const pmStatusFiltered   = filterByDate(pmScopedData, sheet1Headers, pmStatusFilter);
+  const projectFiltered    = filterByDate(pmScopedData, sheet1Headers, projectFilter);
+  const breakdownFiltered  = filterByDate(pmScopedData, sheet1Headers, breakdownFilter);
+
+  const pmStatusDataFiltered = (pmStatusCol && timeEstCol) ? sumHoursByCol(pmStatusFiltered, pmStatusCol, timeEstCol) : [];
+  const tasksByProjectFiltered = (projectCol && timeEstCol)
+    ? sumHoursByCol(projectFiltered, projectCol, timeEstCol).slice(0, 15).map(d => ({ name: d.name, Hours: d.value })) : [];
+  const statusPerPersonFiltered: Record<string, Record<string, number>> = {};
+  const statusSetFiltered = new Set<string>();
+  if (resourceCol && statusCol && timeEstCol) {
+    breakdownFiltered.forEach(row => {
+      const person = String(row[resourceCol] ?? '').trim();
+      const status = String(row[statusCol] ?? '').trim();
+      if (!person || !status) return;
+      statusSetFiltered.add(status);
+      if (!statusPerPersonFiltered[person]) statusPerPersonFiltered[person] = {};
+      statusPerPersonFiltered[person][status] = (statusPerPersonFiltered[person][status] ?? 0) + getHours(row);
+    });
+  }
+  const allStatusesFiltered = [...statusSetFiltered].sort();
+  const statusPerPersonDataFiltered = Object.entries(statusPerPersonFiltered)
+    .map(([name, counts]) => ({ name, ...Object.fromEntries(Object.entries(counts).map(([k, v]) => [k, Math.round(v * 10) / 10])) }))
+    .sort((a, b) => {
+      const sum = (o: Record<string, unknown>) => Object.values(o).filter(v => typeof v === 'number').reduce((s, v) => s + (v as number), 0);
+      return sum(b) - sum(a);
+    });
+
+
+  return (
+    <section className="space-y-4">
+
+      {/* ── Row 1: All KPI Cards in one row (admin only) ─────────────────────── */}
+      {!hideKpi && !pmView && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
+          <StatCard label="Total Tasks"         value={totalTasks}     total={totalTasks} color="var(--cn-accent)" icon={<LayoutGrid    className="w-4 h-4" />} adminStyle={true} />
+          <StatCard label="In Progress"         value={inProgress}     total={totalTasks} color="#16a34a"          icon={<CheckCircle2  className="w-4 h-4" />} adminStyle={true} />
+          <StatCard label="On Hold"             value={onHold}         total={totalTasks} color="#7c3aed"          icon={<PauseCircle   className="w-4 h-4" />} adminStyle={true} />
+          <StatCard label="Submitted to Akash"  value={submittedAkash} total={totalTasks} color="#d97706"         icon={<Send          className="w-4 h-4" />} adminStyle={true} />
+          <StatCard label="Submitted to PM"     value={submittedPM}    total={totalTasks} color="#10b981"         icon={<UserCheck     className="w-4 h-4" />} adminStyle={true} />
+          <StatCard label="Today's Tasks"       value={todayTasks}     total={totalTasks} color="#FE4A23"         icon={<CalendarCheck className="w-4 h-4" />} adminStyle={true} />
+        </div>
+      )}
+
+      {/* ── PM Status overview (PM only) ─────────────────────────────────────── */}
+      {!hideKpi && pmView && pmStatusCol && (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
+            <StatCard label="No Action Taken"     value={pmNoAction}         total={pmScopedTotal} color="#f59e0b" icon={<AlertTriangle className="w-4 h-4" />} adminStyle={true} />
+            <StatCard label="Changes"              value={pmChanges}          total={pmScopedTotal} color="#7c3aed" icon={<RefreshCw     className="w-4 h-4" />} adminStyle={true} />
+            <StatCard label="Approved"             value={pmApproved}         total={pmScopedTotal} color="#16a34a" icon={<ThumbsUp       className="w-4 h-4" />} adminStyle={true} />
+            <StatCard label="Submitted to Client"  value={pmSubmittedClient}  total={pmScopedTotal} color="#10b981" icon={<BadgeCheck     className="w-4 h-4" />} adminStyle={true} />
+            <StatCard label="Today's Tasks"        value={todayTasks}         total={pmScopedTotal} color="#FE4A23" icon={<CalendarCheck className="w-4 h-4" />} adminStyle={true} />
+          </div>
+        </>
+      )}
+
+      {/* ── Hours Breakdown per Person ───────────────────────────────────────── */}
+      <ChartShell title="Hours Breakdown per Person" sub="Stacked view of each team member's hours by task status" filter={breakdownFilter} onFilter={setBreakdownFilter}>
+        <StackedBarCard title="" data={statusPerPersonDataFiltered} statuses={allStatusesFiltered} />
+      </ChartShell>
+
+      {/* ── Hours per Project ────────────────────────────────────────────────── */}
+      <ChartShell title="Hours per Project" sub="Estimated hours per client / project (top 15)" filter={projectFilter} onFilter={setProjectFilter}>
+        <BarCard title="" data={tasksByProjectFiltered} dataKey="Hours" color="#10b981" />
+      </ChartShell>
+
+      {/* ── Hours by PM Status ───────────────────────────────────────────────── */}
+      {!hidePmStatus && (
+        <ChartShell title="Hours by PM Status" sub="Estimated hours by PM approval stage" filter={pmStatusFilter} onFilter={setPmStatusFilter}>
+          <DonutCard title="" data={pmStatusDataFiltered} colorMap={PM_STATUS_COLORS_MAP} adminStyle />
+        </ChartShell>
+      )}
+
+    </section>
+  );
+}
+
+// ─── Standalone Hours by PM Status chart (used alongside InsightCards) ────────
+export function PmStatusChart({ sheet1Data, sheet1Headers, pmView = false, resourceView = false, resourceName = '', currentUserEmail = '' }: Pick<Props, 'sheet1Data' | 'sheet1Headers' | 'pmView' | 'resourceView' | 'resourceName' | 'currentUserEmail'>) {
+  const [filter, setFilter] = useState<DateFilter>('all');
+  const statusCol   = findCol(sheet1Headers, 'task status', 'status');
+  const resourceCol = findCol(sheet1Headers, 'assigned person', 'assigned to', 'resource');
+  const emailCol    = findCol(sheet1Headers, 'email');
+  const pmStatusCol = findCol(sheet1Headers, 'pm status');
+  const timeEstCol  = findCol(sheet1Headers, 'time estimation', 'time estimate', 'estimation');
+
+  const pmScopedData = (() => {
+    let d = statusCol ? sheet1Data.filter(r => !SKIP_STATUSES.includes(String(r[statusCol] ?? '').trim().toLowerCase())) : sheet1Data;
+    if (resourceView && resourceName && resourceCol) d = d.filter(r => String(r[resourceCol] ?? '').trim().toLowerCase() === resourceName.trim().toLowerCase());
+    else if (pmView && currentUserEmail && emailCol) d = d.filter(r => String(r[emailCol] ?? '').trim().toLowerCase() === currentUserEmail.trim().toLowerCase());
+    return d;
+  })();
+
+  const filtered = filterByDate(pmScopedData, sheet1Headers, filter);
+  const data = (pmStatusCol && timeEstCol) ? sumHoursByCol(filtered, pmStatusCol, timeEstCol) : [];
+
+  return (
+    <div className="cn-card rounded-xl overflow-hidden h-full flex flex-col" style={{ background: 'var(--cn-bg-card)' }}>
+      <div className="flex items-center justify-between gap-3 px-4 sm:px-5 pt-4 pb-3 border-b" style={{ borderColor: 'var(--cn-border)' }}>
+        <div>
+          <h3 className="font-semibold text-sm" style={{ color: 'var(--cn-text-primary)' }}>Hours by PM Status</h3>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>Estimated hours by PM approval stage</p>
+        </div>
+        <DateFilterPills value={filter} onChange={setFilter} />
+      </div>
+      <div className="p-4 sm:p-5 flex-1"><DonutCard title="" data={data} colorMap={PM_STATUS_COLORS_MAP} adminStyle /></div>
+    </div>
+  );
+}
