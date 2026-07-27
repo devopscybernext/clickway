@@ -612,6 +612,14 @@ const normalizeBucket = (v: string) => {
 };
 const TODAY_BUCKET_SET_OPTIONS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'URGENT'];
 
+// Sheet timestamps are "DD/MM/YYYY[ HH:MM:SS]" — parse to epoch ms, NaN if unparseable
+function parseTimestamp(v: string): number {
+  const m = v.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}):(\d{2}))?$/);
+  if (!m) return NaN;
+  const [, d, mo, y, h = '0', mi = '0', s = '0'] = m;
+  return new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s)).getTime();
+}
+
 export default function FilteredDataTable({ data, headers, sheetNum, onStatusChange, readOnlyStatus, readOnlyPmStatus, showCopy, defaultPersonFilter, editPersonBucket, readOnlyBucket, readOnlyAssigned, rowCopy, restrictToBucketEdit, editStatusUpdation, hiddenCols, onlyColTerms, hiddenFilterTerms }: Props) {
   const [copiedRow, setCopiedRow] = useState<number | null>(null);
 
@@ -655,6 +663,14 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
     [headers]
   );
   const bucketOptions = BUCKET_OPTIONS;
+
+  // Timestamp column — used to default-sort newest entries first, regardless of
+  // where a row physically lives in the sheet (entries aren't reliably appended
+  // at the bottom; some get inserted near the top instead)
+  const timestampCol = useMemo(
+    () => headers.find(h => h.toLowerCase().includes('timestamp')),
+    [headers]
+  );
 
   const [page, setPage] = useState(1);
   const [sortCol, setSortCol] = useState('');
@@ -788,9 +804,21 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
     [data, filters, filterCols]
   );
 
-  // Sort — default (no column picked) shows newest sheet entries first
+  // Sort — default (no column picked) shows newest entries first, by actual
+  // Timestamp value (falls back to sheet row position if unavailable/unparseable)
   const sorted = useMemo(() => {
-    if (!sortCol) return [...filtered].sort((a, b) => Number(b['__row'] ?? 0) - Number(a['__row'] ?? 0));
+    if (!sortCol) {
+      return [...filtered].sort((a, b) => {
+        if (timestampCol) {
+          const at = parseTimestamp(String(a[timestampCol] ?? ''));
+          const bt = parseTimestamp(String(b[timestampCol] ?? ''));
+          if (!isNaN(at) && !isNaN(bt)) return bt - at;
+          if (!isNaN(bt)) return 1;
+          if (!isNaN(at)) return -1;
+        }
+        return Number(b['__row'] ?? 0) - Number(a['__row'] ?? 0);
+      });
+    }
     return [...filtered].sort((a, b) => {
       const av = a[sortCol] ?? '';
       const bv = b[sortCol] ?? '';
@@ -800,7 +828,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
         ? String(av).localeCompare(String(bv))
         : String(bv).localeCompare(String(av));
     });
-  }, [filtered, sortCol, sortDir]);
+  }, [filtered, sortCol, sortDir, timestampCol]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
