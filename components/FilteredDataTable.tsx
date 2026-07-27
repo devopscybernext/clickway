@@ -788,9 +788,9 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
     [data, filters, filterCols]
   );
 
-  // Sort
+  // Sort — default (no column picked) shows newest sheet entries first
   const sorted = useMemo(() => {
-    if (!sortCol) return filtered;
+    if (!sortCol) return [...filtered].sort((a, b) => Number(b['__row'] ?? 0) - Number(a['__row'] ?? 0));
     return [...filtered].sort((a, b) => {
       const av = a[sortCol] ?? '';
       const bv = b[sortCol] ?? '';
