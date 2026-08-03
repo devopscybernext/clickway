@@ -2245,7 +2245,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
             {allTasks.length === 0 ? (
               <p className="px-4 pb-6 text-center text-xs" style={{ color: 'var(--cn-text-faint)' }}>No active tasks</p>
             ) : (
-              <div className="px-4 pb-4 grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
+              <div className="px-4 pb-4 flex flex-col gap-3">
                 {projectEntries.map(([project, tasks]) => (
                   <div key={project} className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--cn-border)', background: 'var(--cn-bg-card)' }}>
                     <div className="px-3 py-2 flex items-center justify-between" style={{ borderBottom: '1px solid var(--cn-border)', background: 'var(--cn-bg-input)' }}>
