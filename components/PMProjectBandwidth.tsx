@@ -124,58 +124,72 @@ const STATUS_OPTIONS = [
 ];
 const PHASE_OPTIONS = ['Initial Setup', 'Design', 'Development', 'Testing', 'Maintenance', 'Ongoing Optimization', 'Need Based Support'];
 
+const CHEVRON_WHITE = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`;
+const CHEVRON_MUTED = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`;
+
 // Dropdown cell — for known enum-ish columns (Department, Year, Month,
-// Status, Phase). Options are the union of values seen across every PM's
-// rows so far, plus the cell's own current value as a safety net.
+// Status, Phase). Always shows an editable select directly (matching the
+// Tasks Assigned table's Task Status/PM Status dropdowns), not a
+// click-to-reveal control. Options are the sheet's canonical list plus
+// anything else already in the data.
 function SelectCell({ value, colored, editable, options, onSave }: {
   value: string; colored: boolean; editable: boolean; options: string[]; onSave: (v: string) => Promise<void>;
 }) {
-  const [editing, setEditing] = useState(false);
+  const [current, setCurrent] = useState(value);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
-  const commit = async (newVal: string) => {
-    setEditing(false);
-    if (newVal === value) return;
-    setSaving(true);
-    try { await onSave(newVal); } finally { setSaving(false); }
-  };
+  useEffect(() => { if (!saving) setCurrent(value); }, [value, saving]);
 
-  if (editing) {
-    const opts = options.includes(value) || !value ? options : [value, ...options];
-    return (
-      <select
-        autoFocus
-        defaultValue={value}
-        onChange={e => commit(e.target.value)}
-        onBlur={() => setEditing(false)}
-        className="w-full text-xs rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#FE4A23]"
-        style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}
-      >
-        {!value && <option value="">—</option>}
-        {opts.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
+  if (!editable) {
+    return colored ? (
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: statusColor(value), color: '#fff' }}>
+        {value || 'No Action Taken'}
+      </span>
+    ) : (
+      <span style={{ color: 'var(--cn-text-secondary)' }}>{value || '—'}</span>
     );
   }
 
-  const badge = colored ? (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: statusColor(value), color: '#fff' }}>
-      {value || 'No Action Taken'}
-    </span>
-  ) : (
-    <span style={{ color: 'var(--cn-text-secondary)' }}>{value || '—'}</span>
-  );
+  const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newVal = e.target.value;
+    setCurrent(newVal);
+    setSaving(true);
+    setSaved(false);
+    try {
+      await onSave(newVal);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      setCurrent(value);
+    } finally {
+      setSaving(false);
+    }
+  };
 
-  if (!editable) return badge;
+  const opts = options.includes(current) || !current ? options : [current, ...options];
 
   return (
-    <button
-      onClick={() => setEditing(true)}
-      title="Click to edit"
-      className="text-left w-full rounded px-1 py-0.5 -mx-1 transition-colors hover:bg-[var(--cn-bg-hover)] cursor-pointer"
-    >
-      {badge}
-      {saving && <span className="ml-1 text-[10px] opacity-60">saving…</span>}
-    </button>
+    <div className="flex items-center gap-1.5">
+      <select
+        value={current}
+        onChange={handleChange}
+        disabled={saving}
+        className={colored
+          ? 'text-xs font-semibold rounded-full pl-2.5 pr-7 py-1 border-0 focus:outline-none cursor-pointer disabled:opacity-60 transition-colors appearance-none'
+          : 'text-xs font-medium rounded-full pl-2.5 pr-7 py-1 border focus:outline-none cursor-pointer disabled:opacity-60 transition-colors appearance-none'}
+        style={colored
+          ? { backgroundColor: statusColor(current), color: '#fff', minWidth: '110px', backgroundImage: CHEVRON_WHITE, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center' }
+          : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', borderColor: 'var(--cn-border)', minWidth: '100px', backgroundImage: CHEVRON_MUTED, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center' }}
+      >
+        {!current && <option value="">—</option>}
+        {opts.map(o => (
+          <option key={o} value={o} style={colored ? { background: '#1a1a1a', color: '#fff' } : undefined}>{o}</option>
+        ))}
+      </select>
+      {saving && <span className="w-3 h-3 border border-t-transparent rounded-full animate-spin shrink-0" style={{ borderColor: 'var(--cn-accent)' }} />}
+      {saved && <span className="text-xs shrink-0" style={{ color: '#22c55e' }}>✓</span>}
+    </div>
   );
 }
 
