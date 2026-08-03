@@ -20,8 +20,16 @@ function parseTimestamp(v: string): number {
 
 // Keyword → color for status-like fields (Status, Payment Status, Upcoming
 // Milestones, Upsell/Cross-Sell) — mirrors STATUS_COLORS used elsewhere in
-// the app, extended with a couple of PM-Bandwidth-specific keywords
+// the app. Ordered most-specific first since matching stops at the first hit.
 const STATUS_KEYWORD_COLORS: [string, string][] = [
+  ['closed: good feedback', '#16a34a'],
+  ['closed: bad feedback', '#dc2626'],
+  ['closed: without feedback', '#6b7280'],
+  ['paused', '#7c3aed'],
+  ['escalated', '#dc2626'],
+  ['yet to start', '#dc2626'],
+  ['move to next month', '#f59e0b'],
+  ['initial setup', '#2563eb'],
   ['no action taken', '#6b7280'],
   ['n/a', '#6b7280'],
   ['to be started', '#dc2626'],
@@ -103,6 +111,18 @@ function EditableCell({ value, colored, editable, onSave }: {
 }
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+// Canonical dropdown lists, matching the sheet's actual data-validation
+// options — unioned with whatever's already in the data as a safety net
+// for values outside the current list (older entries, list not updated yet, etc.)
+const DEPARTMENT_OPTIONS = ['Web', 'Marketing'];
+const YEAR_OPTIONS = ['2026', '2025'];
+const STATUS_OPTIONS = [
+  'Yet to Start', 'In Progress', 'Initial setup', 'On Going', 'Paused by client',
+  'Paused by Cybernext', 'Escalated', 'Completed', 'Submitted - waiting for feedback',
+  'Closed: Without feedback', 'Closed: Good Feedback', 'Closed: Bad Feedback', 'Move to Next Month',
+];
+const PHASE_OPTIONS = ['Initial Setup', 'Design', 'Development', 'Testing', 'Maintenance', 'Ongoing Optimization', 'Need Based Support'];
 
 // Dropdown cell — for known enum-ish columns (Department, Year, Month,
 // Status, Phase). Options are the union of values seen across every PM's
@@ -188,19 +208,22 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const phaseCol = headers.find(h => h.toLowerCase() === 'phase');
   const showPmCol = data.some(r => r['__pm']);
 
-  // Dropdown columns — Department/Status/Phase options are the union of
-  // values seen across every PM so far; Year adds the current year; Month
-  // is always the fixed 12-name list
+  // Dropdown columns — canonical lists (matching the sheet's actual data
+  // validation) unioned with anything already in the data, so a value that
+  // predates or falls outside the current list still shows up
   const dropdownOptions = useMemo(() => {
-    const distinct = (col?: string) => col
-      ? [...new Set(optionSourceData.map(r => String(r[col] ?? '').trim()).filter(Boolean))].sort()
-      : [];
+    const withExtras = (col: string | undefined, canonical: string[]) => {
+      if (!col) return canonical;
+      const extras = [...new Set(optionSourceData.map(r => String(r[col] ?? '').trim()).filter(Boolean))]
+        .filter(v => !canonical.includes(v));
+      return [...canonical, ...extras.sort()];
+    };
     const opts: Record<string, string[]> = {};
-    if (departmentCol) opts[departmentCol] = distinct(departmentCol);
-    if (statusCol) opts[statusCol] = distinct(statusCol);
-    if (phaseCol) opts[phaseCol] = distinct(phaseCol);
+    if (departmentCol) opts[departmentCol] = withExtras(departmentCol, DEPARTMENT_OPTIONS);
+    if (statusCol) opts[statusCol] = withExtras(statusCol, STATUS_OPTIONS);
+    if (phaseCol) opts[phaseCol] = withExtras(phaseCol, PHASE_OPTIONS);
     if (yearCol) {
-      const years = new Set(distinct(yearCol));
+      const years = new Set([...YEAR_OPTIONS, ...withExtras(yearCol, YEAR_OPTIONS)]);
       years.add(String(new Date().getFullYear()));
       opts[yearCol] = [...years].sort((a, b) => Number(b) - Number(a));
     }
