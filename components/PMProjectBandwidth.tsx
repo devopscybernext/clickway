@@ -115,6 +115,8 @@ export default function PMProjectBandwidth({ data, headers }: Props) {
   const clearAll = () => { setFilters({}); setPage(1); };
 
   const showPmCol = data.some(r => r['__pm']);
+  // Timestamp/Email stay usable for sorting & filtering but aren't shown as table columns
+  const visibleHeaders = headers.filter(h => h !== timestampCol && h !== emailCol);
 
   if (!headers.length) {
     return <div className="text-center py-12 text-sm" style={{ color: 'var(--cn-text-muted)' }}>No data available</div>;
@@ -167,7 +169,7 @@ export default function PMProjectBandwidth({ data, headers }: Props) {
               {showPmCol && (
                 <th style={{ color: 'var(--cn-text-muted)' }} className="px-4 py-2 font-semibold uppercase tracking-wide text-[10px] min-w-[100px]">PM</th>
               )}
-              {headers.map(h => (
+              {visibleHeaders.map(h => (
                 <th
                   key={h}
                   onClick={() => handleSort(h)}
@@ -191,7 +193,7 @@ export default function PMProjectBandwidth({ data, headers }: Props) {
           <tbody>
             {pageData.length === 0 ? (
               <tr>
-                <td colSpan={headers.length + (showPmCol ? 2 : 1)} style={{ color: 'var(--cn-text-muted)' }} className="text-center py-12">
+                <td colSpan={visibleHeaders.length + (showPmCol ? 2 : 1)} style={{ color: 'var(--cn-text-muted)' }} className="text-center py-12">
                   No records found
                 </td>
               </tr>
@@ -210,7 +212,7 @@ export default function PMProjectBandwidth({ data, headers }: Props) {
                       {String(row['__pm'] ?? '')}
                     </td>
                   )}
-                  {headers.map(h => {
+                  {visibleHeaders.map(h => {
                     const val = String(row[h] ?? '');
                     const isUrl = h.toLowerCase().includes('url') || h.toLowerCase().includes('link');
                     return (
