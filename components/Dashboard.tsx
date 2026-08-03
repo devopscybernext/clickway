@@ -1016,6 +1016,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     canEditPmStatus={isAdmin || user.role === 'pm'}
                     isAdmin={isAdmin}
                     currentUserEmail={user.email}
+                    autoOpenFirst
                   />
                 ) : MARKETING_TEAM.length === 0 ? (
                   <div className="text-center py-16 text-sm" style={{ color: 'var(--cn-text-muted)' }}>
@@ -1033,6 +1034,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     canEditPmStatus={isAdmin || user.role === 'pm'}
                     isAdmin={isAdmin}
                     currentUserEmail={user.email}
+                    autoOpenFirst
                   />
                 )}
               </div>
