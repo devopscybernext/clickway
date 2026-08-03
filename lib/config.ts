@@ -2,6 +2,13 @@ export const SHEET_IDS = {
   '1': '14w9WOL3f29A9IweNJHGjZ-ohQrTbNnT0SOm22NZeHK0',
 } as const;
 
+// Dashboard Tools spreadsheet — houses News, AI Tools, Holiday tabs separately
+// from the main Sheet 1 spreadsheet
+export const TOOLS_SHEET_ID = '1LKlUqf6ZTqivv3Bf8iYqDzJO7B_fLT22ZO2oB0f-nRs';
+
+// UserDetails spreadsheet — login credentials, kept separate from Sheet 1
+export const USER_DETAILS_SHEET_ID = '1OFJyXJ89MTi7sFH4L0or-wGtrZi3a7zRFVtFMOCItI4';
+
 // Tab names inside the Sheet 1 spreadsheet
 export const TAB_BANDWIDTH    = 'Bandwidth Allocation';
 export const TAB_AVAILABILITY = 'Resource Availability';
@@ -14,19 +21,19 @@ export const RANGE_AVAILABILITY = `'${TAB_AVAILABILITY}'!A2:Z1000`;
 export const TAB_LEADERBOARD   = 'Leaderboard';
 export const RANGE_LEADERBOARD = `'${TAB_LEADERBOARD}'!A1:Z1000`;
 
-// AI News ticker tab (inside Sheet 1 spreadsheet) — columns: Title, Date
+// AI News ticker tab (inside the Dashboard Tools spreadsheet) — columns: Company, Title, Description
 export const TAB_NEWS   = 'News';
 export const RANGE_NEWS = `'${TAB_NEWS}'!A1:Z1000`;
 
-// Holiday Calendar tab (inside Sheet 1 spreadsheet) — columns: Name, Date, Day
+// Holiday Calendar tab (inside the Dashboard Tools spreadsheet) — columns: Name, Date, Day
 export const TAB_HOLIDAY   = 'Holiday';
 export const RANGE_HOLIDAY = `'${TAB_HOLIDAY}'!A1:Z1000`;
 
-// AI Tools directory tab (inside Sheet 1 spreadsheet) — columns: Tool Name, Short Description, Price, Categories, URL, PM Focus, Resource Focus
+// AI Tools directory tab (inside the Dashboard Tools spreadsheet) — columns: Tool Name, Short Description, Price, Categories, URL, PM Focus, Resource Focus
 export const TAB_AI_TOOLS   = 'AI Tools';
 export const RANGE_AI_TOOLS = `'${TAB_AI_TOOLS}'!A1:Z1000`;
 
-// User credentials tab (inside Sheet 1 spreadsheet) — columns: Username, Password Hash, Role, Display Name, Email
+// User credentials tab (inside the separate UserDetails spreadsheet) — columns: Username, Password Hash, Role, Display Name, Email
 // Server-only: never fetched through the generic /api/data proxy.
 export const TAB_USERS   = 'UserDetails';
 export const RANGE_USERS = `'${TAB_USERS}'!A1:Z200`;

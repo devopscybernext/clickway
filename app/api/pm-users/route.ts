@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySession, COOKIE_NAME } from '@/lib/session';
 import { fetchSheetData } from '@/lib/googleSheets';
-import { SHEET_IDS, RANGE_USERS } from '@/lib/config';
+import { USER_DETAILS_SHEET_ID, RANGE_USERS } from '@/lib/config';
 import { isDirectBrowserNavigation } from '@/lib/blockDirectAccess';
 
 // Returns the PM roster (username/displayName/email only — never the password
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { data } = await fetchSheetData(SHEET_IDS['1'], RANGE_USERS);
+  const { data } = await fetchSheetData(USER_DETAILS_SHEET_ID, RANGE_USERS);
   const pmUsers = data
     .filter(r => String(r['Role'] ?? '').trim() === 'pm' && r['Email'] && String(r['Username'] ?? '').trim() !== 'pmteam')
     .map(r => ({

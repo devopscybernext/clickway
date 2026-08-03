@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { fetchSheetData } from '@/lib/googleSheets';
-import { SHEET_IDS, RANGE_USERS } from '@/lib/config';
+import { USER_DETAILS_SHEET_ID, RANGE_USERS } from '@/lib/config';
 import { signSession, COOKIE_NAME } from '@/lib/session';
 import { MOD_ENABLED, Role, AuthUser } from '@/lib/auth';
 
@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Username and password are required' }, { status: 400 });
     }
 
-    const { data } = await fetchSheetData(SHEET_IDS['1'], RANGE_USERS);
+    const { data } = await fetchSheetData(USER_DETAILS_SHEET_ID, RANGE_USERS);
     const row = data.find(
       r => String(r['Username'] ?? '').trim().toLowerCase() === username.trim().toLowerCase()
     );

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SheetData } from '@/lib/googleSheets';
-import { SHEET_IDS, RANGE_BANDWIDTH, RANGE_AVAILABILITY, TAB_AVAILABILITY, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
+import { SHEET_IDS, TOOLS_SHEET_ID, RANGE_BANDWIDTH, RANGE_AVAILABILITY, TAB_AVAILABILITY, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
 
 import { AuthUser, SheetId, getAllowedSheets } from '@/lib/auth';
 import Sidebar from './Sidebar';
@@ -322,7 +322,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   // News ticker data: once on load, then every 30 minutes
   const fetchNews = useCallback(async () => {
     try {
-      const news = await fetchSheet(SHEET_IDS['1'], RANGE_NEWS);
+      const news = await fetchSheet(TOOLS_SHEET_ID, RANGE_NEWS);
       setNewsData(news.data);
     } catch { /* non-critical — silently ignore */ }
   }, []);
@@ -336,7 +336,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   // Holiday calendar data: once on load, then every 30 minutes
   const fetchHolidays = useCallback(async () => {
     try {
-      const holidays = await fetchSheet(SHEET_IDS['1'], RANGE_HOLIDAY);
+      const holidays = await fetchSheet(TOOLS_SHEET_ID, RANGE_HOLIDAY);
       setHolidayData(holidays.data);
     } catch { /* non-critical — silently ignore */ }
   }, []);
@@ -350,7 +350,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   // AI Tools directory data: once on load, then every 30 minutes
   const fetchAiTools = useCallback(async () => {
     try {
-      const tools = await fetchSheet(SHEET_IDS['1'], RANGE_AI_TOOLS);
+      const tools = await fetchSheet(TOOLS_SHEET_ID, RANGE_AI_TOOLS);
       setAiToolsData(tools.data);
     } catch { /* non-critical — silently ignore */ }
   }, []);
