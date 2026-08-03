@@ -220,6 +220,9 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const departmentCol = headers.find(h => h.toLowerCase() === 'department');
   const statusCol = headers.find(h => h.toLowerCase() === 'status');
   const phaseCol = headers.find(h => h.toLowerCase() === 'phase');
+  const milestonesCol = headers.find(h => h.toLowerCase().includes('upcoming milestones'));
+  const upsellCol = headers.find(h => h.toLowerCase().includes('upsell'));
+  const paymentStatusCol = headers.find(h => h.toLowerCase().includes('payment status'));
   const showPmCol = data.some(r => r['__pm']);
 
   // Dropdown columns — canonical lists (matching the sheet's actual data
@@ -242,9 +245,15 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
       opts[yearCol] = [...years].sort((a, b) => Number(b) - Number(a));
     }
     if (monthCol) opts[monthCol] = MONTH_NAMES;
+    // No canonical sheet list known yet for these three — just the values seen so far
+    if (milestonesCol) opts[milestonesCol] = withExtras(milestonesCol, []);
+    if (upsellCol) opts[upsellCol] = withExtras(upsellCol, []);
+    if (paymentStatusCol) opts[paymentStatusCol] = withExtras(paymentStatusCol, []);
     return opts;
-  }, [optionSourceData, departmentCol, statusCol, phaseCol, yearCol, monthCol]);
-  const isDropdownCol = (h: string) => h === departmentCol || h === yearCol || h === monthCol || h === statusCol || h === phaseCol;
+  }, [optionSourceData, departmentCol, statusCol, phaseCol, yearCol, monthCol, milestonesCol, upsellCol, paymentStatusCol]);
+  const isDropdownCol = (h: string) =>
+    h === departmentCol || h === yearCol || h === monthCol || h === statusCol || h === phaseCol ||
+    h === milestonesCol || h === upsellCol || h === paymentStatusCol;
 
   const filterCols = useMemo(
     () => ([
