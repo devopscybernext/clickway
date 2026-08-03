@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { MultiSelect } from './FilteredDataTable';
@@ -36,22 +36,34 @@ export default function PMProjectBandwidth({ data, headers }: Props) {
   const monthCol = headers.find(h => h.toLowerCase() === 'month');
   const emailCol = headers.find(h => h.toLowerCase().includes('email'));
   const timestampCol = headers.find(h => h.toLowerCase().includes('timestamp'));
+  const showPmCol = data.some(r => r['__pm']);
 
   const filterCols = useMemo(
     () => ([
+      showPmCol ? { col: '__pm', label: 'PM' } : null,
       projectCol ? { col: projectCol, label: 'Project' } : null,
       clientCol ? { col: clientCol, label: 'Client' } : null,
       yearCol ? { col: yearCol, label: 'Year' } : null,
       monthCol ? { col: monthCol, label: 'Month' } : null,
-      emailCol ? { col: emailCol, label: 'Email' } : null,
     ].filter((c): c is { col: string; label: string } => c !== null)),
-    [projectCol, clientCol, yearCol, monthCol, emailCol]
+    [showPmCol, projectCol, clientCol, yearCol, monthCol]
   );
 
+  // Faceted: each dropdown's options reflect rows matching every OTHER active
+  // filter, so e.g. picking Year 2026 narrows Month/Project/Client to values
+  // that actually occur in 2026
   const filterOptions = useMemo(() => {
     const opts: Record<string, string[]> = {};
     filterCols.forEach(({ col }) => {
-      const vals = [...new Set(data.map(r => String(r[col] ?? '').trim()).filter(Boolean))];
+      const rows = data.filter(r =>
+        filterCols.every(({ col: otherCol }) => {
+          if (otherCol === col) return true;
+          const selected = filters[otherCol] ?? [];
+          if (selected.length === 0) return true;
+          return selected.includes(String(r[otherCol] ?? '').trim());
+        })
+      );
+      const vals = [...new Set(rows.map(r => String(r[col] ?? '').trim()).filter(Boolean))];
       opts[col] = col === yearCol
         ? vals.sort((a, b) => Number(b) - Number(a))
         : col === monthCol
@@ -59,7 +71,20 @@ export default function PMProjectBandwidth({ data, headers }: Props) {
         : vals.sort();
     });
     return opts;
-  }, [data, filterCols, yearCol, monthCol]);
+  }, [data, filterCols, filters, yearCol, monthCol]);
+
+  // Default to the current Year/Month once, when they're available as filter columns
+  const defaultsApplied = useRef(false);
+  useEffect(() => {
+    if (defaultsApplied.current || !yearCol || !monthCol) return;
+    defaultsApplied.current = true;
+    const now = new Date();
+    setFilters(prev => ({
+      ...prev,
+      [yearCol]: [String(now.getFullYear())],
+      [monthCol]: [now.toLocaleString('en-US', { month: 'long' })],
+    }));
+  }, [yearCol, monthCol]);
 
   const filtered = useMemo(() => {
     let rows = data;
@@ -114,7 +139,6 @@ export default function PMProjectBandwidth({ data, headers }: Props) {
   const activeFilterCount = Object.values(filters).filter(v => v.length > 0).length;
   const clearAll = () => { setFilters({}); setPage(1); };
 
-  const showPmCol = data.some(r => r['__pm']);
   // Timestamp/Email stay usable for sorting & filtering but aren't shown as table columns
   const visibleHeaders = headers.filter(h => h !== timestampCol && h !== emailCol);
 
