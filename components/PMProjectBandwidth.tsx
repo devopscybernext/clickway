@@ -102,14 +102,75 @@ function EditableCell({ value, colored, editable, onSave }: {
   );
 }
 
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+// Dropdown cell — for known enum-ish columns (Department, Year, Month,
+// Status, Phase). Options are the union of values seen across every PM's
+// rows so far, plus the cell's own current value as a safety net.
+function SelectCell({ value, colored, editable, options, onSave }: {
+  value: string; colored: boolean; editable: boolean; options: string[]; onSave: (v: string) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const commit = async (newVal: string) => {
+    setEditing(false);
+    if (newVal === value) return;
+    setSaving(true);
+    try { await onSave(newVal); } finally { setSaving(false); }
+  };
+
+  if (editing) {
+    const opts = options.includes(value) || !value ? options : [value, ...options];
+    return (
+      <select
+        autoFocus
+        defaultValue={value}
+        onChange={e => commit(e.target.value)}
+        onBlur={() => setEditing(false)}
+        className="w-full text-xs rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#FE4A23]"
+        style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}
+      >
+        {!value && <option value="">—</option>}
+        {opts.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+    );
+  }
+
+  const badge = colored ? (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: statusColor(value), color: '#fff' }}>
+      {value || 'No Action Taken'}
+    </span>
+  ) : (
+    <span style={{ color: 'var(--cn-text-secondary)' }}>{value || '—'}</span>
+  );
+
+  if (!editable) return badge;
+
+  return (
+    <button
+      onClick={() => setEditing(true)}
+      title="Click to edit"
+      className="text-left w-full rounded px-1 py-0.5 -mx-1 transition-colors hover:bg-[var(--cn-bg-hover)] cursor-pointer"
+    >
+      {badge}
+      {saving && <span className="ml-1 text-[10px] opacity-60">saving…</span>}
+    </button>
+  );
+}
+
 interface Props {
   data: SheetData[];
   headers: string[];
   canEdit?: boolean;
   onCellChange?: (row: SheetData, colName: string, value: string) => Promise<void>;
+  // Full unfiltered dataset (across every PM) used to build dropdown option
+  // lists for Department/Year/Month/Status/Phase — falls back to `data`.
+  allData?: SheetData[];
 }
 
-export default function PMProjectBandwidth({ data, headers, canEdit = false, onCellChange }: Props) {
+export default function PMProjectBandwidth({ data, headers, canEdit = false, onCellChange, allData }: Props) {
+  const optionSourceData = allData ?? data;
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   const [sortCol, setSortCol] = useState('');
@@ -122,7 +183,31 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const monthCol = headers.find(h => h.toLowerCase() === 'month');
   const emailCol = headers.find(h => h.toLowerCase().includes('email'));
   const timestampCol = headers.find(h => h.toLowerCase().includes('timestamp'));
+  const departmentCol = headers.find(h => h.toLowerCase() === 'department');
+  const statusCol = headers.find(h => h.toLowerCase() === 'status');
+  const phaseCol = headers.find(h => h.toLowerCase() === 'phase');
   const showPmCol = data.some(r => r['__pm']);
+
+  // Dropdown columns — Department/Status/Phase options are the union of
+  // values seen across every PM so far; Year adds the current year; Month
+  // is always the fixed 12-name list
+  const dropdownOptions = useMemo(() => {
+    const distinct = (col?: string) => col
+      ? [...new Set(optionSourceData.map(r => String(r[col] ?? '').trim()).filter(Boolean))].sort()
+      : [];
+    const opts: Record<string, string[]> = {};
+    if (departmentCol) opts[departmentCol] = distinct(departmentCol);
+    if (statusCol) opts[statusCol] = distinct(statusCol);
+    if (phaseCol) opts[phaseCol] = distinct(phaseCol);
+    if (yearCol) {
+      const years = new Set(distinct(yearCol));
+      years.add(String(new Date().getFullYear()));
+      opts[yearCol] = [...years].sort((a, b) => Number(b) - Number(a));
+    }
+    if (monthCol) opts[monthCol] = MONTH_NAMES;
+    return opts;
+  }, [optionSourceData, departmentCol, statusCol, phaseCol, yearCol, monthCol]);
+  const isDropdownCol = (h: string) => h === departmentCol || h === yearCol || h === monthCol || h === statusCol || h === phaseCol;
 
   const filterCols = useMemo(
     () => ([
@@ -329,6 +414,14 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                       <td key={h} className="px-4 py-2 break-words min-w-[120px] max-w-xs">
                         {isUrl && val && !canEdit ? (
                           <a href={val} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: 'var(--cn-accent)' }}>{val}</a>
+                        ) : isDropdownCol(h) ? (
+                          <SelectCell
+                            value={val}
+                            colored={isStatusLikeCol(h)}
+                            editable={canEdit && !!onCellChange}
+                            options={dropdownOptions[h] ?? []}
+                            onSave={async v => { if (onCellChange) await onCellChange(row, h, v); }}
+                          />
                         ) : (
                           <EditableCell
                             value={val}

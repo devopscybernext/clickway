@@ -972,6 +972,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   headers={pmBandwidthHeaders}
                   canEdit={pmBandwidthSubTab === 'mine'}
                   onCellChange={pmBandwidthSubTab === 'mine' ? handlePmBandwidthChange : undefined}
+                  allData={pmBandwidthData}
                 />
               </div>
             </section>
