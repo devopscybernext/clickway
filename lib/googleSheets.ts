@@ -58,3 +58,28 @@ export async function fetchSheetData(
   cache.set(cacheKey, { data, headers, timestamp: Date.now() });
   return { data, headers };
 }
+
+interface TabListCacheEntry {
+  tabs: string[];
+  timestamp: number;
+}
+const tabListCache = new Map<string, TabListCacheEntry>();
+
+// Lists tab (sheet) names within a spreadsheet — used where each tab holds a
+// different slice of data (e.g. one tab per PM) and the set of tabs grows
+// over time without code changes.
+export async function fetchSheetTabNames(sheetId: string): Promise<string[]> {
+  const cached = tabListCache.get(sheetId);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.tabs;
+  }
+
+  const sheets = google.sheets({ version: 'v4', auth: getAuth() });
+  const res = await sheets.spreadsheets.get({ spreadsheetId: sheetId, fields: 'sheets.properties.title' });
+  const tabs = (res.data.sheets ?? [])
+    .map(s => s.properties?.title)
+    .filter((t): t is string => !!t);
+
+  tabListCache.set(sheetId, { tabs, timestamp: Date.now() });
+  return tabs;
+}

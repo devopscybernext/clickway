@@ -9,6 +9,15 @@ export const TOOLS_SHEET_ID = '1LKlUqf6ZTqivv3Bf8iYqDzJO7B_fLT22ZO2oB0f-nRs';
 // UserDetails spreadsheet — login credentials, kept separate from Sheet 1
 export const USER_DETAILS_SHEET_ID = '1OFJyXJ89MTi7sFH4L0or-wGtrZi3a7zRFVtFMOCItI4';
 
+// PM Sheet Bandwidth spreadsheet — one tab per PM (e.g. "Muskan"), discovered
+// dynamically at fetch time rather than hardcoded, since more PM tabs get
+// added over time. Columns: Timestamp, Email Address, Department, Year,
+// Month, Project Name, Client Name, Communication Channel, Tech, Total
+// Hours, Payment Details, Assigned, Status, Phase, Milestone, Current Month
+// Hours, Upcoming Milestones, Upsell/Cross-Sell, Project Start Date, Target
+// End Date, Payment Status, Last (Project) Follow-up Date, Comments
+export const PM_BANDWIDTH_SHEET_ID = '1WBzXb7xfCtzlzeVzxYB6ZtkSCyN4FUzz1Eg9McgPbLM';
+
 // Tab names inside the Sheet 1 spreadsheet
 export const TAB_BANDWIDTH    = 'Bandwidth Allocation';
 export const TAB_AVAILABILITY = 'Resource Availability';

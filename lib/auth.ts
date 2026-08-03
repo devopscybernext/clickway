@@ -1,4 +1,4 @@
-export type SheetId = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | '14';
+export type SheetId = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | '11' | '14';
 export type Role = 'pm' | 'resource' | 'akash' | 'admin' | 'high' | 'mod';
 
 export interface AuthUser {
@@ -18,12 +18,12 @@ export const MOD_ENABLED = false;
 // shipped to the browser. See lib/session.ts and app/api/login/route.ts.
 
 export const ROLE_SHEETS: Record<Role, SheetId[]> = {
-  pm:       ['3', '6', '9', '10', '7', '14'],
+  pm:       ['3', '6', '9', '10', '11', '7', '14'],
   resource: ['3', '9', '7', '14'],
-  akash:    ['3', '6', '1', '9', '10', '7', '14'],
-  admin:    ['3', '6', '1', '9', '10', '7', '14'],
-  high:     ['3', '6', '1', '9', '10', '7', '14'],
-  mod:      ['3', '6', '1', '9', '10', '7', '14'],
+  akash:    ['3', '6', '1', '9', '10', '11', '7', '14'],
+  admin:    ['3', '6', '1', '9', '10', '11', '7', '14'],
+  high:     ['3', '6', '1', '9', '10', '11', '7', '14'],
+  mod:      ['3', '6', '1', '9', '10', '11', '7', '14'],
 };
 
 export const SHEET_LABELS: Record<SheetId, string> = {
@@ -37,6 +37,7 @@ export const SHEET_LABELS: Record<SheetId, string> = {
   '8': 'QA Testing',
   '9': 'Tasks Overview',
   '10': 'Individual Analysis',
+  '11': 'PM Project Bandwidth',
   '14': 'Tools',
 };
 

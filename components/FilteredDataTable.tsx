@@ -129,7 +129,7 @@ interface MultiSelectProps {
   accent?: boolean;
 }
 
-function MultiSelect({ label, options, selected, onChange, accent = false }: MultiSelectProps) {
+export function MultiSelect({ label, options, selected, onChange, accent = false }: MultiSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const ref = useRef<HTMLDivElement>(null);

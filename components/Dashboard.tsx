@@ -15,6 +15,7 @@ import ClockRoom from './ClockRoom';
 import HolidayCalendar from './HolidayCalendar';
 import AITools from './AITools';
 import Leaderboard, { calcLeaderboard, PersonStats } from './Leaderboard';
+import PMProjectBandwidth from './PMProjectBandwidth';
 import { AlertCircle, Sparkles, ChevronUp, ChevronDown, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 const REFRESH_INTERVAL    = 300_000;       // 5 min — core data (tasks, availability)
@@ -231,6 +232,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [qaData, setQaData] = useState<SheetData[]>([]);
   const [qaHeaders, setQaHeaders] = useState<string[]>([]);
   const [pmUsers, setPmUsers] = useState<AuthUser[]>([]);
+  const [pmBandwidthData, setPmBandwidthData] = useState<SheetData[]>([]);
+  const [pmBandwidthHeaders, setPmBandwidthHeaders] = useState<string[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [lbLoading, setLbLoading] = useState(false);
@@ -241,6 +244,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [analysisSubTab, setAnalysisSubTab] = useState<'resources' | 'pm'>('resources');
   const [toolsSubTab, setToolsSubTab] = useState<'clock' | 'holiday' | 'ai'>('clock');
+  const [pmBandwidthSubTab, setPmBandwidthSubTab] = useState<'all' | 'mine'>('all');
   const [analysisDateFilter, setAnalysisDateFilter] = useState<'all' | 'daily' | 'weekly' | 'monthly'>('all');
   const [topFilter, setTopFilter] = useState<'monthly' | 'alltime'>('monthly');
   const iframeLoadCount = useRef(0);
@@ -371,6 +375,22 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
       .catch(() => {});
   }, [isAdmin]);
 
+  // PM Project Bandwidth — one tab per PM in a separate spreadsheet, merged
+  // server-side via /api/pm-bandwidth (each row tagged with its PM's tab name)
+  const canSeePmBandwidth = isAdmin || user.role === 'pm';
+  useEffect(() => {
+    if (!canSeePmBandwidth) return;
+    const fetchPmBandwidth = () => {
+      fetch('/api/pm-bandwidth')
+        .then(res => res.json())
+        .then(json => { if (json.success) { setPmBandwidthData(json.data); setPmBandwidthHeaders(json.headers); } })
+        .catch(() => {});
+    };
+    fetchPmBandwidth();
+    const id = setInterval(fetchPmBandwidth, REFRESH_INTERVAL);
+    return () => clearInterval(id);
+  }, [canSeePmBandwidth]);
+
   // QA Testing data (Vinay's dedicated tab) — once on load, then every 160s.
   // Vinay, admin, and PM can see this tab (admin/PM read-only), so only fetch for them.
   const isVinay = user.role === 'resource' && user.username === 'vinay';
@@ -439,6 +459,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const isLeaderboard      = selectedSheet === '7';
   const isResourceOverview = selectedSheet === '9';
   const isIndividualAnalysis = selectedSheet === '10';
+  const isPmBandwidth       = selectedSheet === '11';
   const isTools             = selectedSheet === '14';
 
   // ── Date filter for analytics ─────────────────────────────────────────────
@@ -883,6 +904,45 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     <AITools data={aiToolsData} headers={Object.keys(aiToolsData[0] ?? {})} />
                   </>
                 )}
+              </div>
+            </section>
+          )}
+
+          {/* ── PM Project Bandwidth: All Projects / My Projects ── */}
+          {isPmBandwidth && (
+            <section
+              className="cn-card rounded-lg border transition-colors"
+              style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
+            >
+              <div className="flex items-center gap-3 px-4 sm:px-6 pt-4 sm:pt-5 pb-0 flex-wrap">
+                {([
+                  { key: 'all', label: 'All Projects' },
+                  { key: 'mine', label: 'My Projects' },
+                ] as const).map(tab => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setPmBandwidthSubTab(tab.key)}
+                    className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
+                    style={{
+                      borderColor: pmBandwidthSubTab === tab.key ? 'var(--cn-accent)' : 'transparent',
+                      color: pmBandwidthSubTab === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
+                      background: 'transparent',
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              <div style={{ borderTop: '1px solid var(--cn-border)' }} />
+              <div className="p-3 sm:p-6">
+                <PMProjectBandwidth
+                  data={
+                    pmBandwidthSubTab === 'mine'
+                      ? pmBandwidthData.filter(r => String(r['__pm'] ?? '').trim().toLowerCase() === user.displayName.trim().toLowerCase())
+                      : pmBandwidthData
+                  }
+                  headers={pmBandwidthHeaders}
+                />
               </div>
             </section>
           )}
