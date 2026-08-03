@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { BarChart3, Users, Layers, Menu, X, UsersRound, CalendarDays, ClipboardPlus, Trophy, ListChecks, LayoutDashboard, BarChart2, Wrench, Briefcase } from 'lucide-react';
+import { BarChart3, Users, Layers, Menu, X, UsersRound, CalendarDays, ClipboardPlus, Trophy, ListChecks, LayoutDashboard, BarChart2, Wrench, Briefcase, Building2 } from 'lucide-react';
 import { AuthUser, SheetId, getSheetLabel } from '@/lib/auth';
 import { memberPhoto } from '@/lib/memberColors';
 
@@ -26,6 +26,7 @@ const NAV_ICONS: Record<SheetId, React.ReactNode> = {
   '9': <LayoutDashboard  className="w-4 h-4 shrink-0" />,
   '10': <BarChart2       className="w-4 h-4 shrink-0" />,
   '11': <Briefcase       className="w-4 h-4 shrink-0" />,
+  '12': <Building2       className="w-4 h-4 shrink-0" />,
   '14': <Wrench          className="w-4 h-4 shrink-0" />,
 };
 

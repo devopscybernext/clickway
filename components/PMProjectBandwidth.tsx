@@ -18,12 +18,98 @@ function parseTimestamp(v: string): number {
   return isNaN(d.getTime()) ? 0 : d.getTime();
 }
 
+// Keyword → color for status-like fields (Status, Payment Status, Upcoming
+// Milestones, Upsell/Cross-Sell) — mirrors STATUS_COLORS used elsewhere in
+// the app, extended with a couple of PM-Bandwidth-specific keywords
+const STATUS_KEYWORD_COLORS: [string, string][] = [
+  ['no action taken', '#6b7280'],
+  ['n/a', '#6b7280'],
+  ['to be started', '#dc2626'],
+  ['on going', '#16a34a'],
+  ['in progress', '#16a34a'],
+  ['on hold', '#7c3aed'],
+  ['approved', '#16a34a'],
+  ['completed', '#16a34a'],
+  ['done', '#16a34a'],
+  ['submitted', '#10b981'],
+  ['pending', '#f59e0b'],
+  ['urgent', '#dc2626'],
+];
+function statusColor(value: string): string {
+  const lower = value.trim().toLowerCase();
+  if (!lower) return '#6b7280';
+  return STATUS_KEYWORD_COLORS.find(([kw]) => lower.includes(kw))?.[1] ?? '#6b7280';
+}
+const isStatusLikeCol = (h: string) => {
+  const l = h.toLowerCase();
+  return l.includes('status') || l.includes('upcoming milestones') || l.includes('upsell');
+};
+
+// Click-to-edit cell — shows a colored pill for status-like columns, plain
+// text otherwise; becomes a text input on click, saves on blur/Enter
+function EditableCell({ value, colored, editable, onSave }: {
+  value: string; colored: boolean; editable: boolean; onSave: (v: string) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { if (!editing) setDraft(value); }, [value, editing]);
+
+  const commit = async () => {
+    setEditing(false);
+    if (draft === value) return;
+    setSaving(true);
+    try { await onSave(draft); } catch { setDraft(value); } finally { setSaving(false); }
+  };
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+          if (e.key === 'Escape') { setDraft(value); setEditing(false); }
+        }}
+        className="w-full text-xs rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#FE4A23]"
+        style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}
+      />
+    );
+  }
+
+  const badge = colored ? (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: statusColor(value), color: '#fff' }}>
+      {value || 'No Action Taken'}
+    </span>
+  ) : (
+    <span style={{ color: 'var(--cn-text-secondary)' }}>{value || '—'}</span>
+  );
+
+  if (!editable) return badge;
+
+  return (
+    <button
+      onClick={() => setEditing(true)}
+      title="Click to edit"
+      className="text-left w-full rounded px-1 py-0.5 -mx-1 transition-colors hover:bg-[var(--cn-bg-hover)] cursor-text"
+    >
+      {badge}
+      {saving && <span className="ml-1 text-[10px] opacity-60">saving…</span>}
+    </button>
+  );
+}
+
 interface Props {
   data: SheetData[];
   headers: string[];
+  canEdit?: boolean;
+  onCellChange?: (row: SheetData, colName: string, value: string) => Promise<void>;
 }
 
-export default function PMProjectBandwidth({ data, headers }: Props) {
+export default function PMProjectBandwidth({ data, headers, canEdit = false, onCellChange }: Props) {
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   const [sortCol, setSortCol] = useState('');
@@ -240,10 +326,17 @@ export default function PMProjectBandwidth({ data, headers }: Props) {
                     const val = String(row[h] ?? '');
                     const isUrl = h.toLowerCase().includes('url') || h.toLowerCase().includes('link');
                     return (
-                      <td key={h} style={{ color: 'var(--cn-text-secondary)' }} className="px-4 py-2 break-words min-w-[120px] max-w-xs">
-                        {isUrl && val ? (
+                      <td key={h} className="px-4 py-2 break-words min-w-[120px] max-w-xs">
+                        {isUrl && val && !canEdit ? (
                           <a href={val} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: 'var(--cn-accent)' }}>{val}</a>
-                        ) : val}
+                        ) : (
+                          <EditableCell
+                            value={val}
+                            colored={isStatusLikeCol(h)}
+                            editable={canEdit && !!onCellChange}
+                            onSave={async v => { if (onCellChange) await onCellChange(row, h, v); }}
+                          />
+                        )}
                       </td>
                     );
                   })}

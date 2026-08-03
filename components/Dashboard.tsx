@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SheetData } from '@/lib/googleSheets';
-import { SHEET_IDS, TOOLS_SHEET_ID, RANGE_BANDWIDTH, RANGE_AVAILABILITY, TAB_AVAILABILITY, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
+import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, WEB_TEAM, MARKETING_TEAM, RANGE_BANDWIDTH, RANGE_AVAILABILITY, TAB_AVAILABILITY, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
 
 import { AuthUser, SheetId, getAllowedSheets } from '@/lib/auth';
 import Sidebar from './Sidebar';
@@ -245,6 +245,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [analysisSubTab, setAnalysisSubTab] = useState<'resources' | 'pm'>('resources');
   const [toolsSubTab, setToolsSubTab] = useState<'clock' | 'holiday' | 'ai'>('clock');
   const [pmBandwidthSubTab, setPmBandwidthSubTab] = useState<'all' | 'mine'>('all');
+  const [teamBandwidthSubTab, setTeamBandwidthSubTab] = useState<'web' | 'marketing'>('web');
+  const [tasksOverviewTeam, setTasksOverviewTeam] = useState<'web' | 'marketing'>('web');
   const [analysisDateFilter, setAnalysisDateFilter] = useState<'all' | 'daily' | 'weekly' | 'monthly'>('all');
   const [topFilter, setTopFilter] = useState<'monthly' | 'alltime'>('monthly');
   const iframeLoadCount = useRef(0);
@@ -446,6 +448,19 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     setBandwidthData(prev => prev.map(r => r['__row'] === rowNum ? { ...r, [colName]: newValue } : r));
   };
 
+  const handlePmBandwidthChange = async (row: SheetData, colName: string, newValue: string) => {
+    const rowNum = Number(row['__row']);
+    const pmTab = String(row['__pm'] ?? '');
+    const colIndex = pmBandwidthHeaders.indexOf(colName);
+    if (!rowNum || !pmTab || colIndex === -1) return;
+    await fetch('/api/update-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spreadsheetId: PM_BANDWIDTH_SHEET_ID, sheetName: pmTab, row: rowNum, colIndex, value: newValue }),
+    });
+    setPmBandwidthData(prev => prev.map(r => r['__id'] === row['__id'] ? { ...r, [colName]: newValue } : r));
+  };
+
   const handleSheetChange = (sheet: SheetId) => {
     setSelectedSheet(sheet);
     setSearchTerm('');
@@ -460,7 +475,20 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const isResourceOverview = selectedSheet === '9';
   const isIndividualAnalysis = selectedSheet === '10';
   const isPmBandwidth       = selectedSheet === '11';
+  const isTeamBandwidth     = selectedSheet === '12';
   const isTools             = selectedSheet === '14';
+
+  // ── Team roster filtering (Web/Marketing split for Team Bandwidth & Tasks Overview) ──
+  const filterByRoster = (rows: SheetData[], rowHeaders: string[], roster: string[]) => {
+    const col = rowHeaders.find(h => h.toLowerCase().includes('assigned person') || h.toLowerCase().includes('assigned to') || h.toLowerCase() === 'name');
+    if (!col || roster.length === 0) return [];
+    const rosterLower = roster.map(r => r.toLowerCase());
+    return rows.filter(r => rosterLower.includes(String(r[col] ?? '').trim().toLowerCase()));
+  };
+  const webBandwidthData = filterByRoster(activeBandwidthData, bandwidthHeaders, WEB_TEAM);
+  const webAvailData     = filterByRoster(availData, availHeaders, WEB_TEAM);
+  const marketingBandwidthData = filterByRoster(activeBandwidthData, bandwidthHeaders, MARKETING_TEAM);
+  const marketingAvailData     = filterByRoster(availData, availHeaders, MARKETING_TEAM);
 
   // ── Date filter for analytics ─────────────────────────────────────────────
   const filterBandwidthByDate = (
@@ -942,36 +970,148 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                       : pmBandwidthData
                   }
                   headers={pmBandwidthHeaders}
+                  canEdit={pmBandwidthSubTab === 'mine'}
+                  onCellChange={pmBandwidthSubTab === 'mine' ? handlePmBandwidthChange : undefined}
                 />
               </div>
             </section>
           )}
 
-          {/* ── Resource Overview ──────────────────────────────────────────────── */}
+          {/* ── Team Bandwidth: Web / Marketing team workload ── */}
+          {isTeamBandwidth && (
+            <section
+              className="cn-card rounded-lg border transition-colors"
+              style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
+            >
+              <div className="flex items-center gap-3 px-4 sm:px-6 pt-4 sm:pt-5 pb-0 flex-wrap">
+                {([
+                  { key: 'web', label: 'Web' },
+                  { key: 'marketing', label: 'Marketing' },
+                ] as const).map(tab => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setTeamBandwidthSubTab(tab.key)}
+                    className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
+                    style={{
+                      borderColor: teamBandwidthSubTab === tab.key ? 'var(--cn-accent)' : 'transparent',
+                      color: teamBandwidthSubTab === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
+                      background: 'transparent',
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              <div style={{ borderTop: '1px solid var(--cn-border)' }} />
+              <div className="p-3 sm:p-6">
+                {teamBandwidthSubTab === 'web' ? (
+                  <ResourceStatusGrid
+                    key="team-bandwidth-web"
+                    sheet1Data={webBandwidthData}
+                    sheet1Headers={bandwidthHeaders}
+                    availData={webAvailData}
+                    availHeaders={availHeaders}
+                    onStatusChange={handleBandwidthStatusChange}
+                    pmStatusColName={bandwidthHeaders.find(h => h.toLowerCase().includes('pm status'))}
+                    canEditPmStatus={isAdmin || user.role === 'pm'}
+                    isAdmin={isAdmin}
+                    currentUserEmail={user.email}
+                  />
+                ) : MARKETING_TEAM.length === 0 ? (
+                  <div className="text-center py-16 text-sm" style={{ color: 'var(--cn-text-muted)' }}>
+                    Marketing team roster hasn&apos;t been set up yet — check back once it&apos;s added.
+                  </div>
+                ) : (
+                  <ResourceStatusGrid
+                    key="team-bandwidth-marketing"
+                    sheet1Data={marketingBandwidthData}
+                    sheet1Headers={bandwidthHeaders}
+                    availData={marketingAvailData}
+                    availHeaders={availHeaders}
+                    onStatusChange={handleBandwidthStatusChange}
+                    pmStatusColName={bandwidthHeaders.find(h => h.toLowerCase().includes('pm status'))}
+                    canEditPmStatus={isAdmin || user.role === 'pm'}
+                    isAdmin={isAdmin}
+                    currentUserEmail={user.email}
+                  />
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* ── Tasks Overview (Web / Marketing) ──────────────────────────────────── */}
           {isResourceOverview && (
             <section className="cn-card rounded-lg border transition-colors" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+              <div className="flex items-center gap-3 px-4 sm:px-6 pt-4 sm:pt-5 pb-0 flex-wrap">
+                {([
+                  { key: 'web', label: 'Web' },
+                  { key: 'marketing', label: 'Marketing' },
+                ] as const).map(tab => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setTasksOverviewTeam(tab.key)}
+                    className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
+                    style={{
+                      borderColor: tasksOverviewTeam === tab.key ? 'var(--cn-accent)' : 'transparent',
+                      color: tasksOverviewTeam === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
+                      background: 'transparent',
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              <div style={{ borderTop: '1px solid var(--cn-border)' }} />
               <div className="p-3 sm:p-6">
-                <ResourceOverview
-                  data={activeBandwidthData}
-                  headers={bandwidthHeaders}
-                  availData={availData}
-                  availHeaders={availHeaders}
-                  onStatusChange={handleBandwidthStatusChange}
-                  pmStatusColName={bandwidthHeaders.find(h => h.toLowerCase().includes('pm status'))}
-                  currentUserName={user.displayName}
-                  currentUserEmail={user.email}
-                  showFilter={user.role === 'pm' || isAdmin}
-                  canEditPmStatus={user.role !== 'resource'}
-                  canEditStatus={user.role === 'resource'}
-                  canCopy={user.role === 'resource'}
-                  defaultFilter="me"
-                  restrictPmStatusToOwn={user.role === 'pm'}
-                  vinayQaMode={isVinay}
-                  showQaTab={isAdmin || user.role === 'pm'}
-                  qaData={qaData}
-                  qaHeaders={qaHeaders}
-                  onQaCellChange={handleQaChange}
-                />
+                {tasksOverviewTeam === 'web' ? (
+                  <ResourceOverview
+                    data={webBandwidthData}
+                    headers={bandwidthHeaders}
+                    availData={webAvailData}
+                    availHeaders={availHeaders}
+                    onStatusChange={handleBandwidthStatusChange}
+                    pmStatusColName={bandwidthHeaders.find(h => h.toLowerCase().includes('pm status'))}
+                    currentUserName={user.displayName}
+                    currentUserEmail={user.email}
+                    showFilter={user.role === 'pm' || isAdmin}
+                    canEditPmStatus={user.role !== 'resource'}
+                    canEditStatus={user.role === 'resource'}
+                    canCopy={user.role === 'resource'}
+                    defaultFilter="me"
+                    restrictPmStatusToOwn={user.role === 'pm'}
+                    vinayQaMode={isVinay}
+                    showQaTab={isAdmin || user.role === 'pm'}
+                    qaData={qaData}
+                    qaHeaders={qaHeaders}
+                    onQaCellChange={handleQaChange}
+                  />
+                ) : MARKETING_TEAM.length === 0 ? (
+                  <div className="text-center py-16 text-sm" style={{ color: 'var(--cn-text-muted)' }}>
+                    Marketing team roster hasn&apos;t been set up yet — check back once it&apos;s added.
+                  </div>
+                ) : (
+                  <ResourceOverview
+                    data={marketingBandwidthData}
+                    headers={bandwidthHeaders}
+                    availData={marketingAvailData}
+                    availHeaders={availHeaders}
+                    onStatusChange={handleBandwidthStatusChange}
+                    pmStatusColName={bandwidthHeaders.find(h => h.toLowerCase().includes('pm status'))}
+                    currentUserName={user.displayName}
+                    currentUserEmail={user.email}
+                    showFilter={user.role === 'pm' || isAdmin}
+                    canEditPmStatus={user.role !== 'resource'}
+                    canEditStatus={user.role === 'resource'}
+                    canCopy={user.role === 'resource'}
+                    defaultFilter="me"
+                    restrictPmStatusToOwn={user.role === 'pm'}
+                    vinayQaMode={isVinay}
+                    showQaTab={isAdmin || user.role === 'pm'}
+                    qaData={qaData}
+                    qaHeaders={qaHeaders}
+                    onQaCellChange={handleQaChange}
+                  />
+                )}
               </div>
             </section>
           )}

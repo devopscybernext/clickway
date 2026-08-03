@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     tabs.forEach((tab, i) => {
       const { data: tabData, headers: tabHeaders } = results[i];
       if (tabHeaders.length > headers.length) headers = tabHeaders;
-      tabData.forEach((row, idx) => data.push({ ...row, __pm: tab, __id: `${tab}:${idx}` }));
+      tabData.forEach((row, idx) => data.push({ ...row, __pm: tab, __id: `${tab}:${idx}`, __row: idx + 2 }));
     });
 
     return NextResponse.json({ success: true, data, headers });

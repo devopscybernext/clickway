@@ -51,3 +51,10 @@ export const RANGE_USERS = `'${TAB_USERS}'!A1:Z200`;
 // Columns: Project Name, Task Name, Task URL, Time Logged On Ac, Task Status Updation, Today Bucket Set
 export const TAB_QA_TESTING   = 'QATesting';
 export const RANGE_QA_TESTING = `'${TAB_QA_TESTING}'!A1:Z1000`;
+
+// Team rosters — used to split "Team Bandwidth" and "Tasks Overview" by team.
+// Matched case-insensitively against the "Assigned Person" (Bandwidth
+// Allocation) / "Name" (Resource Availability) columns.
+export const WEB_TEAM = ['Akash', 'Dhruv', 'Shubham', 'Lovepreet', 'Pawan', 'Robin'];
+// Marketing roster not finalized yet — populate once provided.
+export const MARKETING_TEAM: string[] = [];
