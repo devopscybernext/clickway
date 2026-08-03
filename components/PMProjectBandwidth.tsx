@@ -27,9 +27,13 @@ const STATUS_KEYWORD_COLORS: [string, string][] = [
   ['closed: without feedback', '#6b7280'],
   ['paused', '#7c3aed'],
   ['escalated', '#dc2626'],
+  ['not started yet', '#dc2626'],
   ['yet to start', '#dc2626'],
   ['move to next month', '#f59e0b'],
   ['initial setup', '#2563eb'],
+  ['automated payment', '#0d9488'],
+  ['cross-sell', '#2563eb'],
+  ['upsell', '#0d9488'],
   ['no action taken', '#6b7280'],
   ['n/a', '#6b7280'],
   ['to be started', '#dc2626'],
@@ -123,6 +127,9 @@ const STATUS_OPTIONS = [
   'Closed: Without feedback', 'Closed: Good Feedback', 'Closed: Bad Feedback', 'Move to Next Month',
 ];
 const PHASE_OPTIONS = ['Initial Setup', 'Design', 'Development', 'Testing', 'Maintenance', 'Ongoing Optimization', 'Need Based Support'];
+const MILESTONES_OPTIONS = ['No Action Taken'];
+const UPSELL_OPTIONS = ['No Action Taken', 'Upsell', 'Cross-Sell'];
+const PAYMENT_STATUS_OPTIONS = ['No Action Taken', 'Pending', 'Done', 'On Hold', 'QA_Done', 'Not Started Yet', 'In Progress', 'Automated Payment'];
 
 const CHEVRON_WHITE = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`;
 const CHEVRON_MUTED = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`;
@@ -245,10 +252,9 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
       opts[yearCol] = [...years].sort((a, b) => Number(b) - Number(a));
     }
     if (monthCol) opts[monthCol] = MONTH_NAMES;
-    // No canonical sheet list known yet for these three — just the values seen so far
-    if (milestonesCol) opts[milestonesCol] = withExtras(milestonesCol, []);
-    if (upsellCol) opts[upsellCol] = withExtras(upsellCol, []);
-    if (paymentStatusCol) opts[paymentStatusCol] = withExtras(paymentStatusCol, []);
+    if (milestonesCol) opts[milestonesCol] = withExtras(milestonesCol, MILESTONES_OPTIONS);
+    if (upsellCol) opts[upsellCol] = withExtras(upsellCol, UPSELL_OPTIONS);
+    if (paymentStatusCol) opts[paymentStatusCol] = withExtras(paymentStatusCol, PAYMENT_STATUS_OPTIONS);
     return opts;
   }, [optionSourceData, departmentCol, statusCol, phaseCol, yearCol, monthCol, milestonesCol, upsellCol, paymentStatusCol]);
   const isDropdownCol = (h: string) =>
