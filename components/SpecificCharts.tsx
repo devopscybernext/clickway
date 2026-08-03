@@ -2252,7 +2252,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
                       <p className="text-xs font-bold truncate" style={{ color: 'var(--cn-text-primary)' }}>{project}</p>
                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'var(--cn-bg-card)', color: 'var(--cn-text-muted)' }}>{tasks.length}</span>
                     </div>
-                    <div className="divide-y" style={{ borderColor: 'var(--cn-border)' }}>
+                    <div className="divide-y divide-[var(--cn-border-light,var(--cn-border))]">
                       {tasks.map((t, i) => {
                         const pmC = PM_COLOR[(t.pmStatus || '').toLowerCase()] ?? '#6b7280';
                         return (
