@@ -93,11 +93,11 @@ function EditableCell({ value, colored, editable, onSave }: {
   }
 
   const badge = colored ? (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: statusColor(value), color: '#fff' }}>
+    <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: statusColor(value), color: '#fff' }}>
       {value || 'No Action Taken'}
     </span>
   ) : (
-    <span style={{ color: 'var(--cn-text-secondary)' }}>{value || '—'}</span>
+    <span className="whitespace-nowrap" style={{ color: 'var(--cn-text-secondary)' }}>{value || '—'}</span>
   );
 
   if (!editable) return badge;
@@ -150,11 +150,11 @@ function SelectCell({ value, colored, editable, options, onSave }: {
 
   if (!editable) {
     return colored ? (
-      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: statusColor(value), color: '#fff' }}>
+      <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: statusColor(value), color: '#fff' }}>
         {value || 'No Action Taken'}
       </span>
     ) : (
-      <span style={{ color: 'var(--cn-text-secondary)' }}>{value || '—'}</span>
+      <span className="whitespace-nowrap" style={{ color: 'var(--cn-text-secondary)' }}>{value || '—'}</span>
     );
   }
 
@@ -463,7 +463,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                     const val = String(row[h] ?? '');
                     const isUrl = h.toLowerCase().includes('url') || h.toLowerCase().includes('link');
                     return (
-                      <td key={h} className="px-4 py-2 break-words min-w-[120px] max-w-xs">
+                      <td key={h} className={`px-4 py-2 ${isDropdownCol(h) || isStatusLikeCol(h) ? 'whitespace-nowrap' : 'break-words min-w-[120px] max-w-xs'}`}>
                         {isUrl && val && !canEdit ? (
                           <a href={val} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: 'var(--cn-accent)' }}>{val}</a>
                         ) : isDropdownCol(h) ? (
