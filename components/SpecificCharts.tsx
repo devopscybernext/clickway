@@ -1240,20 +1240,10 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
             ) : (
               <>
                 <button
-                  onClick={() => handleFilterChange('all')}
-                  className="px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer"
-                  style={pmFilter === 'all' ? { background: 'var(--cn-accent)', color: '#fff' } : { background: 'transparent', color: 'var(--cn-text-muted)' }}
-                >Resources</button>
-                <button
                   onClick={() => handleFilterChange('flat')}
                   className="px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer"
                   style={pmFilter === 'flat' ? { background: 'var(--cn-accent)', color: '#fff' } : { background: 'transparent', color: 'var(--cn-text-muted)' }}
-                >Tasks</button>
-                <button
-                  onClick={() => handleFilterChange('today')}
-                  className="px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer"
-                  style={pmFilter === 'today' ? { background: '#16a34a', color: '#fff' } : { background: 'transparent', color: 'var(--cn-text-muted)' }}
-                >Today&apos;s Tasks</button>
+                >All Tasks</button>
                 {canFilterByMe && (
                   <button
                     onClick={() => handleFilterChange('me')}
