@@ -2238,7 +2238,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
         const statusDot = (color: string) => <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ background: color }} />;
 
         return (
-          <div className="border-t" style={{ borderColor: 'var(--cn-border)', background: 'var(--cn-bg-input)' }}>
+          <div className="border-t" style={{ borderColor: 'var(--cn-border)', background: 'var(--cn-bg-card)' }}>
             {/* Header — avatar, status badge, designation, stat pills, total badge */}
             <div className="flex items-center gap-3 px-4 py-3 flex-wrap">
               {photo ? (
