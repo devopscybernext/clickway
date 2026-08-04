@@ -2252,54 +2252,73 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
                       <p className="text-xs font-bold truncate" style={{ color: 'var(--cn-text-primary)' }}>{project}</p>
                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'var(--cn-bg-card)', color: 'var(--cn-text-muted)' }}>{tasks.length}</span>
                     </div>
-                    <div className="divide-y divide-[var(--cn-border-light,var(--cn-border))]">
-                      {tasks.map((t, i) => {
-                        const pmC = PM_COLOR[(t.pmStatus || '').toLowerCase()] ?? '#6b7280';
-                        return (
-                          <div key={i} className="px-3 py-2.5 space-y-1.5">
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="text-xs font-medium truncate" style={{ color: 'var(--cn-text-primary)' }}>{t.task || '—'}</p>
-                              {t.taskUrl && (
-                                <a href={t.taskUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-[11px] shrink-0" style={{ color: '#ef4444' }}>Open ↗</a>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {!!t.hours && t.hours > 0 && (
-                                <span className="font-bold px-1.5 py-0.5 rounded-full text-[10px]" style={{ background: '#f59e0b22', color: '#f59e0b' }}>{Math.round(t.hours * 10) / 10}h</span>
-                              )}
-                              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold"
-                                style={{ background: BUCKET_COLORS2[t.bucket] + '22', color: BUCKET_COLORS2[t.bucket] }}>
-                                {BUCKET_LABELS2[t.bucket]}
-                              </span>
-                              {t.bucketSet && (
-                                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>{t.bucketSet}</span>
-                              )}
-                              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold"
-                                style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)', border: '1px solid var(--cn-border)' }}>
-                                {t.status}
-                              </span>
-                              {(() => {
-                                const rowEmail = pmEmailCol ? String(t._raw[pmEmailCol] ?? '').trim().toLowerCase() : '';
-                                const rowCanEdit = canEditPmStatus && onStatusChange && (pmStatusColName || pmStatusCol2) &&
-                                  (isAdmin || !currentUserEmail || !rowEmail || rowEmail === currentUserEmail.trim().toLowerCase());
-                                return rowCanEdit ? (
-                                  <ResourcePmSelect
-                                    value={t.pmStatus || 'No Action Taken'}
-                                    raw={t._raw}
-                                    colName={pmStatusColName ?? pmStatusCol2 ?? ''}
-                                    onStatusChange={onStatusChange}
-                                  />
-                                ) : t.pmStatus ? (
-                                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold"
-                                    style={{ background: pmC + '22', color: pmC }}>
-                                    {t.pmStatus}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs border-collapse">
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid var(--cn-border)', background: 'var(--cn-bg-input)' }}>
+                            {['TASK', 'LINK', 'EST.', 'TASK DAILY BUCKET', 'BUCKET SET', 'STATUS', 'PM STATUS'].map(h => (
+                              <th key={h} className="text-left px-3 py-2 font-semibold tracking-wide whitespace-nowrap" style={{ color: 'var(--cn-text-muted)', fontSize: '11px' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {tasks.map((t, i) => {
+                            const pmC = PM_COLOR[(t.pmStatus || '').toLowerCase()] ?? '#6b7280';
+                            return (
+                              <tr key={i} style={{ borderBottom: '1px solid var(--cn-border-light, var(--cn-border))' }} className="transition-colors hover:bg-[var(--cn-bg-input)]">
+                                <td className="px-3 py-2.5 font-medium" style={{ color: 'var(--cn-text-primary)', minWidth: 160 }}>{t.task || '—'}</td>
+                                <td className="px-3 py-2.5" style={{ minWidth: 60 }}>
+                                  {t.taskUrl
+                                    ? <a href={t.taskUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-[11px]" style={{ color: '#ef4444' }}>Open ↗</a>
+                                    : <span style={{ color: 'var(--cn-text-faint)' }}>—</span>}
+                                </td>
+                                <td className="px-3 py-2.5" style={{ minWidth: 60 }}>
+                                  {!!t.hours && t.hours > 0
+                                    ? <span className="font-bold px-1.5 py-0.5 rounded-full text-[11px]" style={{ background: '#f59e0b22', color: '#f59e0b' }}>{Math.round(t.hours * 10) / 10}h</span>
+                                    : <span style={{ color: 'var(--cn-text-faint)' }}>—</span>}
+                                </td>
+                                <td className="px-3 py-2.5" style={{ minWidth: 110 }}>
+                                  <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold"
+                                    style={{ background: BUCKET_COLORS2[t.bucket] + '22', color: BUCKET_COLORS2[t.bucket] }}>
+                                    {BUCKET_LABELS2[t.bucket]}
                                   </span>
-                                ) : null;
-                              })()}
-                            </div>
-                          </div>
-                        );
-                      })}
+                                </td>
+                                <td className="px-3 py-2.5" style={{ minWidth: 80 }}>
+                                  {t.bucketSet
+                                    ? <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>{t.bucketSet}</span>
+                                    : <span style={{ color: 'var(--cn-text-faint)' }}>—</span>}
+                                </td>
+                                <td className="px-3 py-2.5" style={{ minWidth: 120 }}>
+                                  <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold"
+                                    style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)', border: '1px solid var(--cn-border)' }}>
+                                    {t.status}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2.5" style={{ minWidth: 150 }}>
+                                  {(() => {
+                                    const rowEmail = pmEmailCol ? String(t._raw[pmEmailCol] ?? '').trim().toLowerCase() : '';
+                                    const rowCanEdit = canEditPmStatus && onStatusChange && (pmStatusColName || pmStatusCol2) &&
+                                      (isAdmin || !currentUserEmail || !rowEmail || rowEmail === currentUserEmail.trim().toLowerCase());
+                                    return rowCanEdit ? (
+                                      <ResourcePmSelect
+                                        value={t.pmStatus || 'No Action Taken'}
+                                        raw={t._raw}
+                                        colName={pmStatusColName ?? pmStatusCol2 ?? ''}
+                                        onStatusChange={onStatusChange}
+                                      />
+                                    ) : t.pmStatus ? (
+                                      <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold"
+                                        style={{ background: pmC + '22', color: pmC }}>
+                                        {t.pmStatus}
+                                      </span>
+                                    ) : <span style={{ color: 'var(--cn-text-faint)' }}>—</span>;
+                                  })()}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 ))}

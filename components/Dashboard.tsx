@@ -247,6 +247,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [pmBandwidthSubTab, setPmBandwidthSubTab] = useState<'all' | 'mine'>('all');
   const [teamBandwidthSubTab, setTeamBandwidthSubTab] = useState<'web' | 'marketing'>('web');
   const [tasksOverviewTeam, setTasksOverviewTeam] = useState<'web' | 'marketing'>('web');
+  const [tasksAssignedTeam, setTasksAssignedTeam] = useState<'web' | 'marketing'>('web');
+  const [addTaskTeam, setAddTaskTeam] = useState<'web' | 'marketing'>('web');
+  const [leaderboardTeam, setLeaderboardTeam] = useState<'web' | 'marketing'>('web');
   const [analysisDateFilter, setAnalysisDateFilter] = useState<'all' | 'daily' | 'weekly' | 'monthly'>('all');
   const [topFilter, setTopFilter] = useState<'monthly' | 'alltime'>('monthly');
   const iframeLoadCount = useRef(0);
@@ -489,6 +492,15 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const webAvailData     = filterByRoster(availData, availHeaders, WEB_TEAM);
   const marketingBandwidthData = filterByRoster(activeBandwidthData, bandwidthHeaders, MARKETING_TEAM);
   const marketingAvailData     = filterByRoster(availData, availHeaders, MARKETING_TEAM);
+
+  // Tasks Assigned — same sort/search pipeline as searchFiltered, scoped to the selected team
+  const tasksAssignedTeamData = tasksAssignedTeam === 'web' ? webBandwidthData : marketingBandwidthData;
+  const tasksAssignedSorted = isNewestFirst
+    ? [...tasksAssignedTeamData].sort((a, b) => Number(b['__row']) - Number(a['__row']))
+    : tasksAssignedTeamData;
+  const tasksAssignedSearchFiltered = searchTerm.trim()
+    ? tasksAssignedSorted.filter(row => Object.values(row).some(v => String(v).toLowerCase().includes(searchTerm.toLowerCase())))
+    : tasksAssignedSorted;
 
   // ── Date filter for analytics ─────────────────────────────────────────────
   const filterBandwidthByDate = (
@@ -789,10 +801,29 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               <h2 className="font-semibold text-base" style={{ color: 'var(--cn-text-primary)' }}>Tasks Assigned</h2>
               <p className="text-xs mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>Active task assignments across all team members and projects</p>
             </div>
+            <div className="flex items-center gap-3 flex-wrap -mt-1">
+              {([
+                { key: 'web', label: 'Web' },
+                { key: 'marketing', label: 'Marketing' },
+              ] as const).map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setTasksAssignedTeam(tab.key)}
+                  className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
+                  style={{
+                    borderColor: tasksAssignedTeam === tab.key ? 'var(--cn-accent)' : 'transparent',
+                    color: tasksAssignedTeam === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
+                    background: 'transparent',
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
             <SearchFilter
               searchTerm={searchTerm}
-              totalCount={bandwidthData.length}
-              filteredCount={searchFiltered.length}
+              totalCount={tasksAssignedTeamData.length}
+              filteredCount={tasksAssignedSearchFiltered.length}
               onChange={setSearchTerm}
             />
             {loading && !bandwidthData.length ? (
@@ -801,9 +832,14 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   <div key={i} className="h-10 rounded" style={{ background: 'var(--cn-bg-input)' }} />
                 ))}
               </div>
+            ) : tasksAssignedTeam === 'marketing' && MARKETING_TEAM.length === 0 ? (
+              <div className="text-center py-16 text-sm" style={{ color: 'var(--cn-text-muted)' }}>
+                Marketing team roster hasn&apos;t been set up yet — check back once it&apos;s added.
+              </div>
             ) : (
               <FilteredDataTable
-                data={searchFiltered}
+                key={tasksAssignedTeam}
+                data={tasksAssignedSearchFiltered}
                 headers={bandwidthHeaders}
                 sheetNum="1"
                 onStatusChange={handleBandwidthStatusChange}
@@ -1125,6 +1161,31 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               className="cn-card rounded-lg p-3 sm:p-6 border transition-colors space-y-4"
               style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
             >
+              <div className="flex items-center gap-3 flex-wrap">
+                {([
+                  { key: 'web', label: 'Web' },
+                  { key: 'marketing', label: 'Marketing' },
+                ] as const).map(tab => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setAddTaskTeam(tab.key)}
+                    className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
+                    style={{
+                      borderColor: addTaskTeam === tab.key ? 'var(--cn-accent)' : 'transparent',
+                      color: addTaskTeam === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
+                      background: 'transparent',
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              {addTaskTeam === 'marketing' ? (
+                <div className="text-center py-16 text-sm" style={{ color: 'var(--cn-text-muted)' }}>
+                  Marketing task submission form hasn&apos;t been set up yet — check back once it&apos;s added.
+                </div>
+              ) : (
+              <>
               {/* ── Success banner ── */}
               {formSubmitted && (
                 <div className="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium animate-pulse"
@@ -1243,23 +1304,51 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   </iframe>
                 </div>
               </div>
+              </>
+              )}
             </section>
           )}
 
           {/* ── Leaderboard ─────────────────────────────────────────────────────── */}
           {isLeaderboard && (
             <section
-              className="cn-card rounded-lg p-4 sm:p-8 border transition-colors"
+              className="cn-card rounded-lg p-4 sm:p-8 border transition-colors space-y-4"
               style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
             >
-              <Leaderboard
-                bandwidthData={activeBandwidthData}
-                bandwidthHeaders={bandwidthHeaders}
-                leaderboardData={lbData}
-                user={user}
-                onRefreshLb={fetchLb}
-                lbLoading={lbLoading}
-              />
+              <div className="flex items-center gap-3 flex-wrap">
+                {([
+                  { key: 'web', label: 'Web' },
+                  { key: 'marketing', label: 'Marketing' },
+                ] as const).map(tab => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setLeaderboardTeam(tab.key)}
+                    className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
+                    style={{
+                      borderColor: leaderboardTeam === tab.key ? 'var(--cn-accent)' : 'transparent',
+                      color: leaderboardTeam === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
+                      background: 'transparent',
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              {leaderboardTeam === 'marketing' && MARKETING_TEAM.length === 0 ? (
+                <div className="text-center py-16 text-sm" style={{ color: 'var(--cn-text-muted)' }}>
+                  Marketing team roster hasn&apos;t been set up yet — check back once it&apos;s added.
+                </div>
+              ) : (
+                <Leaderboard
+                  key={leaderboardTeam}
+                  bandwidthData={leaderboardTeam === 'web' ? webBandwidthData : marketingBandwidthData}
+                  bandwidthHeaders={bandwidthHeaders}
+                  leaderboardData={lbData}
+                  user={user}
+                  onRefreshLb={fetchLb}
+                  lbLoading={lbLoading}
+                />
+              )}
             </section>
           )}
         </main>
