@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SheetData } from '@/lib/googleSheets';
-import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, WEB_TEAM, MARKETING_TEAM, SEO_TEAM, PPC_TEAM, SMM_TEAM, RANGE_BANDWIDTH, RANGE_AVAILABILITY, TAB_AVAILABILITY, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
+import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, WEB_TEAM, SEO_TEAM, PPC_TEAM, SMM_TEAM, RANGE_BANDWIDTH, RANGE_AVAILABILITY, TAB_AVAILABILITY, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
 
 import { AuthUser, SheetId, getAllowedSheets } from '@/lib/auth';
 import Sidebar from './Sidebar';
@@ -280,6 +280,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [tasksOverviewMarketingSub, setTasksOverviewMarketingSub] = useState<MarketingSub>('seo');
   const [addTaskMarketingSub, setAddTaskMarketingSub] = useState<MarketingSub>('seo');
   const [leaderboardMarketingSub, setLeaderboardMarketingSub] = useState<MarketingSub>('seo');
+  const [tasksAssignedMarketingSub, setTasksAssignedMarketingSub] = useState<MarketingSub>('seo');
   const [analysisDateFilter, setAnalysisDateFilter] = useState<'all' | 'daily' | 'weekly' | 'monthly'>('all');
   const [topFilter, setTopFilter] = useState<'monthly' | 'alltime'>('monthly');
   const iframeLoadCount = useRef(0);
@@ -520,8 +521,6 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   };
   const webBandwidthData = filterByRoster(activeBandwidthData, bandwidthHeaders, WEB_TEAM);
   const webAvailData     = filterByRoster(availData, availHeaders, WEB_TEAM);
-  const marketingBandwidthData = filterByRoster(activeBandwidthData, bandwidthHeaders, MARKETING_TEAM);
-  const marketingAvailData     = filterByRoster(availData, availHeaders, MARKETING_TEAM);
 
   // Marketing's SEO/PPC/SMM sub-split (Add Task, Tasks Overview, Team Bandwidth, Leaderboard)
   const marketingSubRoster: Record<MarketingSub, string[]> = { seo: SEO_TEAM, ppc: PPC_TEAM, smm: SMM_TEAM };
@@ -537,7 +536,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   };
 
   // Tasks Assigned — same sort/search pipeline as searchFiltered, scoped to the selected team
-  const tasksAssignedTeamData = tasksAssignedTeam === 'web' ? webBandwidthData : marketingBandwidthData;
+  const tasksAssignedTeamData = tasksAssignedTeam === 'web' ? webBandwidthData : marketingSubBandwidth[tasksAssignedMarketingSub];
   const tasksAssignedSorted = isNewestFirst
     ? [...tasksAssignedTeamData].sort((a, b) => Number(b['__row']) - Number(a['__row']))
     : tasksAssignedTeamData;
@@ -863,6 +862,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 </button>
               ))}
             </div>
+            {tasksAssignedTeam === 'marketing' && (
+              <MarketingSubTabs value={tasksAssignedMarketingSub} onChange={setTasksAssignedMarketingSub} />
+            )}
             <SearchFilter
               searchTerm={searchTerm}
               totalCount={tasksAssignedTeamData.length}
@@ -875,13 +877,13 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   <div key={i} className="h-10 rounded" style={{ background: 'var(--cn-bg-input)' }} />
                 ))}
               </div>
-            ) : tasksAssignedTeam === 'marketing' && MARKETING_TEAM.length === 0 ? (
+            ) : tasksAssignedTeam === 'marketing' && marketingSubRoster[tasksAssignedMarketingSub].length === 0 ? (
               <div className="text-center py-16 text-sm" style={{ color: 'var(--cn-text-muted)' }}>
-                Marketing team roster hasn&apos;t been set up yet — check back once it&apos;s added.
+                {tasksAssignedMarketingSub.toUpperCase()} team roster hasn&apos;t been set up yet — check back once it&apos;s added.
               </div>
             ) : (
               <FilteredDataTable
-                key={tasksAssignedTeam}
+                key={tasksAssignedTeam === 'web' ? 'web' : tasksAssignedMarketingSub}
                 data={tasksAssignedSearchFiltered}
                 headers={bandwidthHeaders}
                 sheetNum="1"

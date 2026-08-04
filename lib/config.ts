@@ -56,8 +56,6 @@ export const RANGE_QA_TESTING = `'${TAB_QA_TESTING}'!A1:Z1000`;
 // Matched case-insensitively against the "Assigned Person" (Bandwidth
 // Allocation) / "Name" (Resource Availability) columns.
 export const WEB_TEAM = ['Akash', 'Dhruv', 'Shubham', 'Lovepreet', 'Pawan', 'Robin'];
-// Marketing roster not finalized yet — populate once provided.
-export const MARKETING_TEAM: string[] = [];
 
 // Marketing further splits into SEO/PPC/SMM sub-teams (Add Task, Tasks
 // Overview, Team Bandwidth, Leaderboard). All empty until each roster is
