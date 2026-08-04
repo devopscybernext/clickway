@@ -58,3 +58,10 @@ export const RANGE_QA_TESTING = `'${TAB_QA_TESTING}'!A1:Z1000`;
 export const WEB_TEAM = ['Akash', 'Dhruv', 'Shubham', 'Lovepreet', 'Pawan', 'Robin'];
 // Marketing roster not finalized yet — populate once provided.
 export const MARKETING_TEAM: string[] = [];
+
+// Marketing further splits into SEO/PPC/SMM sub-teams (Add Task, Tasks
+// Overview, Team Bandwidth, Leaderboard). All empty until each roster is
+// provided — the sub-tab UI is already wired up.
+export const SEO_TEAM: string[] = [];
+export const PPC_TEAM: string[] = [];
+export const SMM_TEAM: string[] = [];
