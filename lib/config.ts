@@ -57,12 +57,6 @@ export const RANGE_QA_TESTING = `'${TAB_QA_TESTING}'!A1:Z1000`;
 // Allocation) / "Name" (Resource Availability) columns.
 export const WEB_TEAM = ['Akash', 'Dhruv', 'Shubham', 'Lovepreet', 'Pawan', 'Robin'];
 
-// Marketing further splits into SEO/PPC/SMM sub-teams (Add Task, Tasks
-// Assigned, Tasks Overview, Team Bandwidth, Leaderboard).
-export const SEO_TEAM = ['Payal', 'Akanksha'];
-export const PPC_TEAM = ['Payal', 'Akanksha'];
-export const SMM_TEAM = ['Payal', 'Akanksha'];
-
 // Marketing Team spreadsheet — one tab per sub-team (SEO/PPC/SMM). Columns:
 // Timestamp, Email Address, Project Name, Task Name, Task URL, Assigned
 // Person, Task Estimation, Deadline, Task Daily Bucket, Action Taken Today,

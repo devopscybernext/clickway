@@ -277,11 +277,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [tasksOverviewTeam, setTasksOverviewTeam] = useState<'web' | 'marketing'>('web');
   const [tasksAssignedTeam, setTasksAssignedTeam] = useState<'web' | 'marketing'>('web');
   const [addTaskTeam, setAddTaskTeam] = useState<'web' | 'marketing'>('web');
-  const [leaderboardTeam, setLeaderboardTeam] = useState<'web' | 'marketing'>('web');
   const [teamBandwidthMarketingSub, setTeamBandwidthMarketingSub] = useState<MarketingSub>('seo');
   const [tasksOverviewMarketingSub, setTasksOverviewMarketingSub] = useState<MarketingSub>('seo');
   const [addTaskMarketingSub, setAddTaskMarketingSub] = useState<MarketingSub>('seo');
-  const [leaderboardMarketingSub, setLeaderboardMarketingSub] = useState<MarketingSub>('seo');
   const [tasksAssignedMarketingSub, setTasksAssignedMarketingSub] = useState<MarketingSub>('seo');
   const [analysisDateFilter, setAnalysisDateFilter] = useState<'all' | 'daily' | 'weekly' | 'monthly'>('all');
   const [topFilter, setTopFilter] = useState<'monthly' | 'alltime'>('monthly');
@@ -1394,58 +1392,17 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           {/* ── Leaderboard ─────────────────────────────────────────────────────── */}
           {isLeaderboard && (
             <section
-              className="cn-card rounded-lg p-4 sm:p-8 border transition-colors space-y-4"
+              className="cn-card rounded-lg p-4 sm:p-8 border transition-colors"
               style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
             >
-              <div className="flex items-center gap-3 flex-wrap">
-                {([
-                  { key: 'web', label: 'Web' },
-                  { key: 'marketing', label: 'Marketing' },
-                ] as const).map(tab => (
-                  <button
-                    key={tab.key}
-                    onClick={() => setLeaderboardTeam(tab.key)}
-                    className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
-                    style={{
-                      borderColor: leaderboardTeam === tab.key ? 'var(--cn-accent)' : 'transparent',
-                      color: leaderboardTeam === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
-                      background: 'transparent',
-                    }}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-              {leaderboardTeam === 'web' ? (
-                <Leaderboard
-                  key="leaderboard-web"
-                  bandwidthData={webBandwidthData}
-                  bandwidthHeaders={bandwidthHeaders}
-                  leaderboardData={lbData}
-                  user={user}
-                  onRefreshLb={fetchLb}
-                  lbLoading={lbLoading}
-                />
-              ) : (
-                <div className="space-y-4">
-                  <MarketingSubTabs value={leaderboardMarketingSub} onChange={setLeaderboardMarketingSub} />
-                  {marketingSubBandwidth[leaderboardMarketingSub].length === 0 ? (
-                    <div className="text-center py-16 text-sm" style={{ color: 'var(--cn-text-muted)' }}>
-                      No {leaderboardMarketingSub.toUpperCase()} tasks yet.
-                    </div>
-                  ) : (
-                    <Leaderboard
-                      key={`leaderboard-${leaderboardMarketingSub}`}
-                      bandwidthData={marketingSubBandwidth[leaderboardMarketingSub]}
-                      bandwidthHeaders={marketingTeamHeaders}
-                      leaderboardData={lbData}
-                      user={user}
-                      onRefreshLb={fetchLb}
-                      lbLoading={lbLoading}
-                    />
-                  )}
-                </div>
-              )}
+              <Leaderboard
+                bandwidthData={activeBandwidthData}
+                bandwidthHeaders={bandwidthHeaders}
+                leaderboardData={lbData}
+                user={user}
+                onRefreshLb={fetchLb}
+                lbLoading={lbLoading}
+              />
             </section>
           )}
         </main>
