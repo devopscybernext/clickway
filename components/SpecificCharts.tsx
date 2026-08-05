@@ -249,7 +249,7 @@ interface ResourceRow {
   totalHours: number;
   todayHours: number;
   todayTasks: number;
-  pendingTasks: { task: string; project: string; status: string; pmStatus: string; timeEst: string; taskUrl: string; bucketSet: string; bucket: string; timeLogged: string; _raw: SheetData }[];
+  pendingTasks: { task: string; project: string; status: string; pmStatus: string; timeEst: string; taskUrl: string; bucketSet: string; bucket: string; timeLogged: string; totalHoursVal: string; _raw: SheetData }[];
 }
 
 const PM_STATUS_OPTIONS_RO = ['No Action Taken', 'Changes', 'Approved', 'Submitted To Client', 'TicketClosed'];
@@ -618,10 +618,11 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
           <table className="w-full text-xs table-fixed">
             <colgroup>
               {canCopy && <col style={{ width: '5%' }} />}  {/* Copy */}
-              <col style={{ width: canEditStatus ? '13%' : '15%' }} />  {/* Project */}
-              <col style={{ width: canEditStatus ? '18%' : '22%' }} />  {/* Task */}
+              <col style={{ width: canEditStatus ? '11%' : '13%' }} />  {/* Project */}
+              <col style={{ width: canEditStatus ? '16%' : '18%' }} />  {/* Task */}
               <col style={{ width: '6%' }} />   {/* Link */}
               <col style={{ width: '6%' }} />   {/* Est. */}
+              <col style={{ width: '6%' }} />   {/* Total Hours */}
               <col style={{ width: canEditStatus ? '10%' : '11%' }} />  {/* Task Daily Bucket */}
               <col style={{ width: canEditStatus ? '10%' : '11%' }} />  {/* Bucket Set */}
               <col style={{ width: canEditStatus ? '12%' : '13%' }} />  {/* Status */}
@@ -635,6 +636,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task</th>
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Link</th>
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Est.</th>
+                <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Total Hours</th>
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task Daily Bucket</th>
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Bucket Set</th>
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Status</th>
@@ -705,6 +707,10 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                     {/* Est. */}
                     <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
                       {t.timeEst || '—'}
+                    </td>
+                    {/* Total Hours */}
+                    <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
+                      {t.totalHoursVal || '—'}
                     </td>
                     {/* Task Daily Bucket */}
                     <td className="px-4 py-2">
@@ -1069,6 +1075,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
   const bucketSetCol = headers.find(h => h.toLowerCase().includes('today bucket set') || h.toLowerCase().includes('bucket set'));
   const bucketCol    = headers.find(h => h.toLowerCase().includes('task daily bucket') || h.toLowerCase().includes('daily bucket'));
   const timeLoggedCol = headers.find(h => h.toLowerCase().includes('time logged'));
+  const totalHoursCol = headers.find(h => h.toLowerCase().includes('total hours'));
 
   if (!resourceCol || !statusCol) return null;
 
@@ -1092,6 +1099,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
     const getBucketSet = (r: SheetData) => bucketSetCol ? String(r[bucketSetCol] ?? '').trim() : '';
     const getBucket    = (r: SheetData) => bucketCol    ? String(r[bucketCol]    ?? '').trim().toLowerCase() : '';
     const getTimeLogged = (r: SheetData) => timeLoggedCol ? String(r[timeLoggedCol] ?? '').trim() : '';
+    const getTotalHoursVal = (r: SheetData) => totalHoursCol ? String(r[totalHoursCol] ?? '').trim() : '';
 
     const activeTasks  = myTasks.filter(r => getStatus(r) === 'in progress').length;
     const onHoldTasks  = myTasks.filter(r => getStatus(r) === 'on hold').length;
@@ -1117,7 +1125,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
         status: String(r[statusCol!] ?? '').trim(),
         pmStatus: getPmStatus(r), timeEst: getTimeEst(r),
         taskUrl: getTaskUrl(r), bucketSet: getBucketSet(r), bucket: getBucket(r),
-        timeLogged: getTimeLogged(r),
+        timeLogged: getTimeLogged(r), totalHoursVal: getTotalHoursVal(r),
         _raw: r,
       }))
       .slice(0, 20);
@@ -2048,6 +2056,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
   const taskUrlCol   = findCol(sheet1Headers, 'task url', 'task link', 'link', 'url');
   const bucketSetCol = sheet1Headers.find(h => h.toLowerCase().includes('today bucket set') || h.toLowerCase().includes('bucket set'));
   const pmStatusCol2 = sheet1Headers.find(h => h.toLowerCase().includes('pm status'));
+  const totalHoursCol2 = sheet1Headers.find(h => h.toLowerCase().includes('total hours'));
   const pmEmailCol   = findCol(sheet1Headers, 'pm email', 'email');
   const availNameCol   = availHeaders ? findCol(availHeaders, 'name', 'resource', 'person') : undefined;
   const availStatusCol = availHeaders ? findCol(availHeaders, 'availability', 'status', 'leave') : undefined;
@@ -2070,6 +2079,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
   const getTaskUrl   = (r: SheetData) => taskUrlCol   ? String(r[taskUrlCol]   ?? '').trim() : '';
   const getBucketSet = (r: SheetData) => bucketSetCol ? String(r[bucketSetCol] ?? '').trim() : '';
   const getPmStatus  = (r: SheetData) => pmStatusCol2 ? String(r[pmStatusCol2] ?? '').trim() : '';
+  const getTotalHoursVal2 = (r: SheetData) => totalHoursCol2 ? String(r[totalHoursCol2] ?? '').trim() : '';
 
   const names = [...new Set(sheet1Data.map(r => String(r[resourceCol] ?? '').trim()).filter(Boolean))].sort();
 
@@ -2085,10 +2095,10 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
       const b = getBucket(r);
       // Exclude tomorrow/day-after tasks from Today's tab
       if (tab === 'today' && (b === 'tomorrow' || b === 'tommorow' || b === 'day after tomorrow' || b === 'dayafter' || b === 'day after')) return false;
-      // Exclude today/everyday from Tomorrow tab (show only tomorrow + submitted-tomorrow)
-      if (tab === 'tomorrow') return (b === 'tomorrow' || b === 'tommorow');
-      // Exclude today/everyday from Day After tab
-      if (tab === 'dayafter') return (b === 'day after tomorrow' || b === 'dayafter' || b === 'day after');
+      // Tomorrow tab: tomorrow-bucket tasks plus recurring Everyday tasks
+      if (tab === 'tomorrow') return (b === 'tomorrow' || b === 'tommorow' || b === 'everyday');
+      // Day After tab: day-after-bucket tasks plus recurring Everyday tasks
+      if (tab === 'dayafter') return (b === 'day after tomorrow' || b === 'dayafter' || b === 'day after' || b === 'everyday');
       return true;
     });
     // Hours = Today + Everyday bucket tasks only (for both status and header display)
@@ -2115,7 +2125,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
             : { label: 'Occupied',         bg: '#ef4444' };
 
     // Build grouped tasks for dropdown (tab-relevant tasks only, exclude task closed)
-    const grouped: Record<string, { task: string; project: string; status: string; hours: number; taskUrl: string; bucketSet: string; pmStatus: string; realBucket: string; _raw: SheetData }[]> = {};
+    const grouped: Record<string, { task: string; project: string; status: string; hours: number; taskUrl: string; bucketSet: string; pmStatus: string; totalHoursVal: string; realBucket: string; _raw: SheetData }[]> = {};
     tabTasks.forEach(r => {
       const st = getStatus(r).toLowerCase();
       if (SKIP_STATUSES.includes(st)) return;
@@ -2127,7 +2137,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
       else if (b === 'to be expected') bucket = 'tobeexpected';
       if (!BUCKET_ORDER2.includes(bucket as typeof BUCKET_ORDER2[number])) bucket = 'everyday';
       if (!grouped[bucket]) grouped[bucket] = [];
-      grouped[bucket].push({ task: getTask(r), project: getProj(r), status: getStatus(r), hours: getTime(r), taskUrl: getTaskUrl(r), bucketSet: getBucketSet(r), pmStatus: getPmStatus(r), realBucket: b, _raw: r });
+      grouped[bucket].push({ task: getTask(r), project: getProj(r), status: getStatus(r), hours: getTime(r), taskUrl: getTaskUrl(r), bucketSet: getBucketSet(r), pmStatus: getPmStatus(r), totalHoursVal: getTotalHoursVal2(r), realBucket: b, _raw: r });
     });
 
     return { name, tabHours, displayHours, tabCount, status, grouped };
@@ -2152,7 +2162,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
           <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>Team Workload</p>
           <div className="flex gap-1">
             {([['today', "Today's"], ['tomorrow', 'Tomorrow'], ['dayafter', 'Day After']] as const).map(([t, label]) => (
-              <button key={t} onClick={() => { setTab(t); setOpenName(null); }}
+              <button key={t} onClick={() => setTab(t)}
                 className="px-3 py-1 text-[11px] font-semibold rounded-full transition-all cursor-pointer"
                 style={tab === t
                   ? { background: 'var(--cn-accent)', color: '#fff', border: 'none' }
@@ -2224,7 +2234,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
               Select a team member to see their tasks
             </div>
           ) : (() => {
-        const allTasks: { task: string; project: string; status: string; hours: number; taskUrl: string; bucketSet: string; pmStatus: string; _raw: SheetData; bucket: string; realBucket?: string }[] = [];
+        const allTasks: { task: string; project: string; status: string; hours: number; taskUrl: string; bucketSet: string; pmStatus: string; totalHoursVal: string; _raw: SheetData; bucket: string; realBucket?: string }[] = [];
         BUCKET_ORDER2.forEach(bucket => {
           (openRow.grouped[bucket] ?? []).forEach(t => allTasks.push({ ...t, bucket: t.realBucket ?? bucket }));
         });
@@ -2311,7 +2321,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
                       <table className="w-full text-xs border-collapse">
                         <thead>
                           <tr style={{ borderBottom: '1px solid var(--cn-border)', background: 'var(--cn-bg-input)' }}>
-                            {['TASK', 'LINK', 'EST.', 'TASK DAILY BUCKET', 'BUCKET SET', 'STATUS', 'PM STATUS'].map(h => (
+                            {['TASK', 'LINK', 'EST.', 'TOTAL HOURS', 'TASK DAILY BUCKET', 'BUCKET SET', 'STATUS', 'PM STATUS'].map(h => (
                               <th key={h} className="text-left px-3 py-2 font-semibold tracking-wide whitespace-nowrap" style={{ color: 'var(--cn-text-muted)', fontSize: '11px' }}>{h}</th>
                             ))}
                           </tr>
@@ -2331,6 +2341,9 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
                                   {!!t.hours && t.hours > 0
                                     ? <span className="font-bold px-1.5 py-0.5 rounded-full text-[11px]" style={{ background: '#f59e0b22', color: '#f59e0b' }}>{Math.round(t.hours * 10) / 10}h</span>
                                     : <span style={{ color: 'var(--cn-text-faint)' }}>—</span>}
+                                </td>
+                                <td className="px-3 py-2.5" style={{ minWidth: 60, color: 'var(--cn-text-muted)' }}>
+                                  {t.totalHoursVal || '—'}
                                 </td>
                                 <td className="px-3 py-2.5" style={{ minWidth: 110 }}>
                                   <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold"
