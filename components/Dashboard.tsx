@@ -1209,11 +1209,11 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   </button>
                 ))}
               </div>
-              {addTaskTeam === 'marketing' ? (
-                <div className="text-center py-16 text-sm" style={{ color: 'var(--cn-text-muted)' }}>
-                  Marketing task submission form hasn&apos;t been set up yet — check back once it&apos;s added.
-                </div>
-              ) : (
+              {(() => {
+              const addTaskFormUrl = addTaskTeam === 'web'
+                ? 'https://docs.google.com/forms/d/e/1FAIpQLSfBDYMZ6trWVeDVRhqz2AGUpcAfzlItvHTQLhUu8Ooly9h7YA'
+                : 'https://docs.google.com/forms/d/e/1FAIpQLSdja_uZyhdM9hBSyjQjQ_ZB0ahKzF3JwRdXIAEofxM9RTnFeA';
+              return (
               <>
               {/* ── Success banner ── */}
               {formSubmitted && (
@@ -1304,7 +1304,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     <p className="text-[11px] leading-snug" style={{ color: 'var(--cn-text-muted)' }}>If entries aren't visible or the form isn't loading, use the direct links below.</p>
                     <div className="flex flex-col gap-1">
                         <a
-                          href="https://docs.google.com/forms/d/e/1FAIpQLSfBDYMZ6trWVeDVRhqz2AGUpcAfzlItvHTQLhUu8Ooly9h7YA/viewform"
+                          href={`${addTaskFormUrl}/viewform`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center gap-1.5 text-[11px] font-medium transition-opacity hover:opacity-70"
@@ -1321,7 +1321,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 {/* ── Right: iframe (60%) ── */}
                 <div style={{ flex: '0 0 50%' }}>
                   <iframe
-                    src="https://docs.google.com/forms/d/e/1FAIpQLSfBDYMZ6trWVeDVRhqz2AGUpcAfzlItvHTQLhUu8Ooly9h7YA/viewform?embedded=true"
+                    key={addTaskTeam}
+                    src={`${addTaskFormUrl}/viewform?embedded=true`}
                     width="100%"
                     style={{ height: '80vh', minHeight: 600, border: 'none', borderRadius: 8 }}
                     frameBorder={0}
@@ -1334,7 +1335,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 </div>
               </div>
               </>
-              )}
+              );
+              })()}
             </section>
           )}
 

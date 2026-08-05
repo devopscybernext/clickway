@@ -1057,7 +1057,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                       const isStatus = h.toLowerCase().includes('task status') && !isStatusUpdation;
                       const isPmStatus = h.toLowerCase().includes('pm status');
                       const isTimeLogged = h.toLowerCase().includes('time logged');
-                      const isTimeEst = h.toLowerCase().includes('time estim');
+                      const isTimeEst = h.toLowerCase().includes('time estim') || h.toLowerCase().includes('task estim');
                       const isAssigned = h.toLowerCase().includes('assigned person') || h.toLowerCase().includes('assigned to');
                       const isBucket = h.toLowerCase().includes('task daily bucket') || (h.toLowerCase().includes('bucket') && !h.toLowerCase().includes('today'));
                       const isTodayBucketSet = h.toLowerCase().includes('today bucket') || h.toLowerCase().includes('bucket set');
@@ -1181,7 +1181,14 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                               onStatusChange={onStatusChange}
                             />
                           ) : isBucket ? (BUCKET_OPTIONS.find(o => o.toLowerCase() === normalizeBucket(val)) ?? val) || '—'
-                          : val || '—'}
+                          : onStatusChange && editPersonBucket ? (
+                            <InlineEditCell
+                              value={val}
+                              row={row}
+                              col={h}
+                              onStatusChange={onStatusChange}
+                            />
+                          ) : val || '—'}
                         </td>
                       );
                     })}
