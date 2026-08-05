@@ -130,6 +130,7 @@ const PHASE_OPTIONS = ['Initial Setup', 'Design', 'Development', 'Testing', 'Mai
 const MILESTONES_OPTIONS = ['No Action Taken'];
 const UPSELL_OPTIONS = ['No Action Taken', 'Upsell', 'Cross-Sell'];
 const PAYMENT_STATUS_OPTIONS = ['No Action Taken', 'Pending', 'Done', 'On Hold', 'QA_Done', 'Not Started Yet', 'In Progress', 'Automated Payment'];
+const ASSIGNED_OPTIONS = ['Atul', 'Shiwangi', 'Dheeraj', 'Anjali', 'Anurag', 'Vansh', 'Akshay', 'Kshitij', 'Bhavya', 'Payal', 'Akanksha', 'Akash'];
 
 const CHEVRON_WHITE = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`;
 const CHEVRON_MUTED = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`;
@@ -230,6 +231,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const milestonesCol = headers.find(h => h.toLowerCase().includes('upcoming milestones'));
   const upsellCol = headers.find(h => h.toLowerCase().includes('upsell'));
   const paymentStatusCol = headers.find(h => h.toLowerCase().includes('payment status'));
+  const assignedCol = headers.find(h => h.toLowerCase() === 'assigned');
   const showPmCol = data.some(r => r['__pm']);
 
   // Dropdown columns — canonical lists (matching the sheet's actual data
@@ -255,11 +257,12 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     if (milestonesCol) opts[milestonesCol] = withExtras(milestonesCol, MILESTONES_OPTIONS);
     if (upsellCol) opts[upsellCol] = withExtras(upsellCol, UPSELL_OPTIONS);
     if (paymentStatusCol) opts[paymentStatusCol] = withExtras(paymentStatusCol, PAYMENT_STATUS_OPTIONS);
+    if (assignedCol) opts[assignedCol] = withExtras(assignedCol, ASSIGNED_OPTIONS);
     return opts;
-  }, [optionSourceData, departmentCol, statusCol, phaseCol, yearCol, monthCol, milestonesCol, upsellCol, paymentStatusCol]);
+  }, [optionSourceData, departmentCol, statusCol, phaseCol, yearCol, monthCol, milestonesCol, upsellCol, paymentStatusCol, assignedCol]);
   const isDropdownCol = (h: string) =>
     h === departmentCol || h === yearCol || h === monthCol || h === statusCol || h === phaseCol ||
-    h === milestonesCol || h === upsellCol || h === paymentStatusCol;
+    h === milestonesCol || h === upsellCol || h === paymentStatusCol || h === assignedCol;
 
   const filterCols = useMemo(
     () => ([
