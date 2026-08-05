@@ -2174,47 +2174,56 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
       </div>
       <div className="h-2" />
 
-      {/* Cards row */}
-      <div className="grid gap-px" style={{ background: 'var(--cn-border)', gridTemplateColumns: `repeat(${rows.length}, minmax(0, 1fr))` }}>
-        {rows.map(row => {
-          const bg    = memberColor(row.name);
-          const photo = teamPhoto(row.name);
-          const initials = row.name.split(' ').map((p: string) => p[0]).join('').slice(0, 2).toUpperCase();
-          const isOpen = openName === row.name;
-          return (
-            <div key={row.name}
-              className="flex flex-col items-center gap-2 p-3 text-center cursor-pointer select-none transition-colors"
-              style={{ background: isOpen ? row.status.bg + '10' : 'var(--cn-bg-card)' }}
-              onClick={() => setOpenName(isOpen ? null : row.name)}>
-              {photo ? (
-                <div className="w-11 h-11 rounded-full p-[2px]" style={{ background: `conic-gradient(${bg}, #e5e7eb, ${bg})` }}>
-                  <img src={photo} alt={row.name} className="w-full h-full rounded-full object-cover"
-                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+      {/* Member list (sidebar) + detail panel — was a horizontal card row,
+          which got unreadably cramped once rosters grew past ~6 people */}
+      <div className="flex flex-col md:flex-row border-t" style={{ borderColor: 'var(--cn-border)' }}>
+        <div className="md:w-64 shrink-0 md:border-r overflow-y-auto" style={{ borderColor: 'var(--cn-border)', maxHeight: 560 }}>
+          {rows.map(row => {
+            const bg    = memberColor(row.name);
+            const photo = teamPhoto(row.name);
+            const initials = row.name.split(' ').map((p: string) => p[0]).join('').slice(0, 2).toUpperCase();
+            const isOpen = openName === row.name;
+            return (
+              <button key={row.name}
+                onClick={() => setOpenName(isOpen ? null : row.name)}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left cursor-pointer select-none transition-colors border-b"
+                style={{ background: isOpen ? row.status.bg + '10' : 'transparent', borderColor: 'var(--cn-border-light, var(--cn-border))' }}>
+                {photo ? (
+                  <div className="w-9 h-9 rounded-full p-[2px] shrink-0" style={{ background: `conic-gradient(${bg}, #e5e7eb, ${bg})` }}>
+                    <img src={photo} alt={row.name} className="w-full h-full rounded-full object-cover"
+                      onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                  </div>
+                ) : (
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                    style={{ background: `linear-gradient(135deg, ${bg}cc, ${bg}66)` }}>{initials}</div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold truncate" style={{ color: 'var(--cn-text-primary)' }}>{row.name}</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0"
+                      style={{ background: row.status.bg + '22', color: row.status.bg }}>{row.status.label}</span>
+                    {row.tabCount > 0 && (
+                      <span className="text-[10px] font-semibold truncate" style={{ color: '#f59e0b' }}>
+                        {row.tabCount} Tasks · {Math.round(row.displayHours * 10) / 10}h
+                      </span>
+                    )}
+                  </div>
                 </div>
-              ) : (
-                <div className="w-11 h-11 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                  style={{ background: `linear-gradient(135deg, ${bg}cc, ${bg}66)` }}>{initials}</div>
-              )}
-              <p className="text-xs font-semibold leading-tight" style={{ color: 'var(--cn-text-primary)' }}>{row.name}</p>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                style={{ background: row.status.bg + '22', color: row.status.bg }}>{row.status.label}</span>
-              {row.tabCount > 0 && (
-                <div className="flex items-center gap-1 text-[10px] font-semibold" style={{ color: '#f59e0b' }}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                  {row.tabCount} Tasks · {Math.round(row.displayHours * 10) / 10}h
-                </div>
-              )}
-              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                style={{ color: 'var(--cn-text-muted)', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
-                <polyline points="6 9 12 15 18 9"/>
-              </svg>
-            </div>
-          );
-        })}
-      </div>
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                  className="shrink-0" style={{ color: 'var(--cn-text-muted)', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+                  <polyline points="9 6 15 12 9 18"/>
+                </svg>
+              </button>
+            );
+          })}
+        </div>
 
-      {/* Full-width dropdown panel — styled like the Tasks Overview "My Tasks" card */}
-      {openRow && (() => {
+        <div className="flex-1 min-w-0">
+          {!openRow ? (
+            <div className="flex items-center justify-center py-16 text-sm" style={{ color: 'var(--cn-text-muted)' }}>
+              Select a team member to see their tasks
+            </div>
+          ) : (() => {
         const allTasks: { task: string; project: string; status: string; hours: number; taskUrl: string; bucketSet: string; pmStatus: string; _raw: SheetData; bucket: string; realBucket?: string }[] = [];
         BUCKET_ORDER2.forEach(bucket => {
           (openRow.grouped[bucket] ?? []).forEach(t => allTasks.push({ ...t, bucket: t.realBucket ?? bucket }));
@@ -2240,7 +2249,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
         const statusDot = (color: string) => <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ background: color }} />;
 
         return (
-          <div className="border-t" style={{ borderColor: 'var(--cn-border)', background: 'var(--cn-bg-card)' }}>
+          <div style={{ background: 'var(--cn-bg-card)' }}>
             {/* Header — avatar, status badge, designation, stat pills, total badge */}
             <div className="flex items-center gap-3 px-4 py-3 flex-wrap">
               {photo ? (
@@ -2373,6 +2382,8 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
           </div>
         );
       })()}
+        </div>
+      </div>
     </div>
   );
 }
