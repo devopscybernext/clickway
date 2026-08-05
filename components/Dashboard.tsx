@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SheetData } from '@/lib/googleSheets';
-import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, WEB_TEAM, SEO_TEAM, PPC_TEAM, SMM_TEAM, RANGE_BANDWIDTH, RANGE_AVAILABILITY, TAB_AVAILABILITY, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
+import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, MARKETING_TEAM_SHEET_ID, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, WEB_TEAM, RANGE_BANDWIDTH, RANGE_AVAILABILITY, TAB_AVAILABILITY, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
 
 import { AuthUser, SheetId, getAllowedSheets } from '@/lib/auth';
 import Sidebar from './Sidebar';
@@ -260,6 +260,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [pmUsers, setPmUsers] = useState<AuthUser[]>([]);
   const [pmBandwidthData, setPmBandwidthData] = useState<SheetData[]>([]);
   const [pmBandwidthHeaders, setPmBandwidthHeaders] = useState<string[]>([]);
+  const [marketingTeamData, setMarketingTeamData] = useState<SheetData[]>([]);
+  const [marketingTeamHeaders, setMarketingTeamHeaders] = useState<string[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [lbLoading, setLbLoading] = useState(false);
@@ -427,6 +429,22 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     return () => clearInterval(id);
   }, [canSeePmBandwidth]);
 
+  // Marketing Team — SEO/PPC/SMM tabs in their own spreadsheet, merged
+  // server-side via /api/marketing-team (each row tagged with its sub-team)
+  const canSeeMarketingTeam = isAdmin || user.role === 'pm' || user.role === 'resource';
+  useEffect(() => {
+    if (!canSeeMarketingTeam) return;
+    const fetchMarketingTeam = () => {
+      fetch('/api/marketing-team')
+        .then(res => res.json())
+        .then(json => { if (json.success) { setMarketingTeamData(json.data); setMarketingTeamHeaders(json.headers); } })
+        .catch(() => {});
+    };
+    fetchMarketingTeam();
+    const id = setInterval(fetchMarketingTeam, REFRESH_INTERVAL);
+    return () => clearInterval(id);
+  }, [canSeeMarketingTeam]);
+
   // QA Testing data (Vinay's dedicated tab) — once on load, then every 160s.
   // Vinay, admin, and PM can see this tab (admin/PM read-only), so only fetch for them.
   const isVinay = user.role === 'resource' && user.username === 'vinay';
@@ -495,6 +513,19 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     setPmBandwidthData(prev => prev.map(r => r['__id'] === row['__id'] ? { ...r, [colName]: newValue } : r));
   };
 
+  const handleMarketingTeamChange = async (row: SheetData, colName: string, newValue: string) => {
+    const rowNum = Number(row['__row']);
+    const subTab = String(row['__tab'] ?? '');
+    const colIndex = marketingTeamHeaders.indexOf(colName);
+    if (!rowNum || !subTab || colIndex === -1) return;
+    await fetch('/api/update-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spreadsheetId: MARKETING_TEAM_SHEET_ID, sheetName: subTab, row: rowNum, colIndex, value: newValue }),
+    });
+    setMarketingTeamData(prev => prev.map(r => r['__id'] === row['__id'] ? { ...r, [colName]: newValue } : r));
+  };
+
   const handleSheetChange = (sheet: SheetId) => {
     setSelectedSheet(sheet);
     setSearchTerm('');
@@ -522,18 +553,15 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const webBandwidthData = filterByRoster(activeBandwidthData, bandwidthHeaders, WEB_TEAM);
   const webAvailData     = filterByRoster(availData, availHeaders, WEB_TEAM);
 
-  // Marketing's SEO/PPC/SMM sub-split (Add Task, Tasks Overview, Team Bandwidth, Leaderboard)
-  const marketingSubRoster: Record<MarketingSub, string[]> = { seo: SEO_TEAM, ppc: PPC_TEAM, smm: SMM_TEAM };
+  // Marketing's SEO/PPC/SMM sub-split — real data from the Marketing Team
+  // spreadsheet (one tab per sub-team), not a roster filter over Bandwidth
+  // Allocation. No separate availability sheet exists for Marketing.
   const marketingSubBandwidth: Record<MarketingSub, SheetData[]> = {
-    seo: filterByRoster(activeBandwidthData, bandwidthHeaders, SEO_TEAM),
-    ppc: filterByRoster(activeBandwidthData, bandwidthHeaders, PPC_TEAM),
-    smm: filterByRoster(activeBandwidthData, bandwidthHeaders, SMM_TEAM),
+    seo: marketingTeamData.filter(r => r['__sub'] === 'seo'),
+    ppc: marketingTeamData.filter(r => r['__sub'] === 'ppc'),
+    smm: marketingTeamData.filter(r => r['__sub'] === 'smm'),
   };
-  const marketingSubAvail: Record<MarketingSub, SheetData[]> = {
-    seo: filterByRoster(availData, availHeaders, SEO_TEAM),
-    ppc: filterByRoster(availData, availHeaders, PPC_TEAM),
-    smm: filterByRoster(availData, availHeaders, SMM_TEAM),
-  };
+  const marketingSubAvail: Record<MarketingSub, SheetData[]> = { seo: [], ppc: [], smm: [] };
 
   // Tasks Assigned — same sort/search pipeline as searchFiltered, scoped to the selected team
   const tasksAssignedTeamData = tasksAssignedTeam === 'web' ? webBandwidthData : marketingSubBandwidth[tasksAssignedMarketingSub];
@@ -877,22 +905,24 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   <div key={i} className="h-10 rounded" style={{ background: 'var(--cn-bg-input)' }} />
                 ))}
               </div>
-            ) : tasksAssignedTeam === 'marketing' && marketingSubRoster[tasksAssignedMarketingSub].length === 0 ? (
+            ) : tasksAssignedTeam === 'marketing' && marketingSubBandwidth[tasksAssignedMarketingSub].length === 0 ? (
               <div className="text-center py-16 text-sm" style={{ color: 'var(--cn-text-muted)' }}>
-                {tasksAssignedMarketingSub.toUpperCase()} team roster hasn&apos;t been set up yet — check back once it&apos;s added.
+                No {tasksAssignedMarketingSub.toUpperCase()} tasks yet.
               </div>
             ) : (
               <FilteredDataTable
                 key={tasksAssignedTeam === 'web' ? 'web' : tasksAssignedMarketingSub}
                 data={tasksAssignedSearchFiltered}
-                headers={bandwidthHeaders}
+                headers={tasksAssignedTeam === 'web' ? bandwidthHeaders : marketingTeamHeaders}
                 sheetNum="1"
-                onStatusChange={handleBandwidthStatusChange}
+                onStatusChange={tasksAssignedTeam === 'web' ? handleBandwidthStatusChange : handleMarketingTeamChange}
+                statusOptions={tasksAssignedTeam === 'marketing' ? MARKETING_STATUS_OPTIONS : undefined}
+                todayBucketSetOptions={tasksAssignedTeam === 'marketing' ? MARKETING_TODAY_BUCKET_SET_OPTIONS : undefined}
                 readOnlyStatus
                 readOnlyPmStatus={user.role === 'resource'}
                 defaultPersonFilter={user.role === 'resource' ? user.displayName : undefined}
                 editPersonBucket={user.role === 'akash' || user.role === 'admin' || user.role === 'high' || user.role === 'mod'}
-                hiddenCols={user.role === 'pm' ? bandwidthHeaders.filter(h => h.toLowerCase().includes('time logged')) : undefined}
+                hiddenCols={user.role === 'pm' ? (tasksAssignedTeam === 'web' ? bandwidthHeaders : marketingTeamHeaders).filter(h => h.toLowerCase().includes('time logged')) : undefined}
                 showCopy={isAdmin}
                 rowCopy={isAdmin}
               />
@@ -1103,19 +1133,18 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 ) : (
                   <div className="space-y-4">
                     <MarketingSubTabs value={teamBandwidthMarketingSub} onChange={setTeamBandwidthMarketingSub} />
-                    {marketingSubRoster[teamBandwidthMarketingSub].length === 0 ? (
+                    {marketingSubBandwidth[teamBandwidthMarketingSub].length === 0 ? (
                       <div className="text-center py-16 text-sm" style={{ color: 'var(--cn-text-muted)' }}>
-                        {teamBandwidthMarketingSub.toUpperCase()} team roster hasn&apos;t been set up yet — check back once it&apos;s added.
+                        No {teamBandwidthMarketingSub.toUpperCase()} tasks yet.
                       </div>
                     ) : (
                       <ResourceStatusGrid
                         key={`team-bandwidth-${teamBandwidthMarketingSub}`}
                         sheet1Data={marketingSubBandwidth[teamBandwidthMarketingSub]}
-                        sheet1Headers={bandwidthHeaders}
+                        sheet1Headers={marketingTeamHeaders}
                         availData={marketingSubAvail[teamBandwidthMarketingSub]}
-                        availHeaders={availHeaders}
-                        onStatusChange={handleBandwidthStatusChange}
-                        pmStatusColName={bandwidthHeaders.find(h => h.toLowerCase().includes('pm status'))}
+                        onStatusChange={handleMarketingTeamChange}
+                        pmStatusColName={marketingTeamHeaders.find(h => h.toLowerCase().includes('pm status'))}
                         canEditPmStatus={isAdmin || user.role === 'pm'}
                         isAdmin={isAdmin}
                         currentUserEmail={user.email}
@@ -1177,19 +1206,18 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 ) : (
                   <div className="space-y-4">
                     <MarketingSubTabs value={tasksOverviewMarketingSub} onChange={setTasksOverviewMarketingSub} />
-                    {marketingSubRoster[tasksOverviewMarketingSub].length === 0 ? (
+                    {marketingSubBandwidth[tasksOverviewMarketingSub].length === 0 ? (
                       <div className="text-center py-16 text-sm" style={{ color: 'var(--cn-text-muted)' }}>
-                        {tasksOverviewMarketingSub.toUpperCase()} team roster hasn&apos;t been set up yet — check back once it&apos;s added.
+                        No {tasksOverviewMarketingSub.toUpperCase()} tasks yet.
                       </div>
                     ) : (
                       <ResourceOverview
                         key={tasksOverviewMarketingSub}
                         data={marketingSubBandwidth[tasksOverviewMarketingSub]}
-                        headers={bandwidthHeaders}
+                        headers={marketingTeamHeaders}
                         availData={marketingSubAvail[tasksOverviewMarketingSub]}
-                        availHeaders={availHeaders}
-                        onStatusChange={handleBandwidthStatusChange}
-                        pmStatusColName={bandwidthHeaders.find(h => h.toLowerCase().includes('pm status'))}
+                        onStatusChange={handleMarketingTeamChange}
+                        pmStatusColName={marketingTeamHeaders.find(h => h.toLowerCase().includes('pm status'))}
                         currentUserName={user.displayName}
                         currentUserEmail={user.email}
                         showFilter={user.role === 'pm' || isAdmin}
@@ -1198,11 +1226,6 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                         canCopy={user.role === 'resource'}
                         defaultFilter="me"
                         restrictPmStatusToOwn={user.role === 'pm'}
-                        vinayQaMode={isVinay}
-                        showQaTab={isAdmin || user.role === 'pm'}
-                        qaData={qaData}
-                        qaHeaders={qaHeaders}
-                        onQaCellChange={handleQaChange}
                       />
                     )}
                   </div>
@@ -1406,15 +1429,15 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               ) : (
                 <div className="space-y-4">
                   <MarketingSubTabs value={leaderboardMarketingSub} onChange={setLeaderboardMarketingSub} />
-                  {marketingSubRoster[leaderboardMarketingSub].length === 0 ? (
+                  {marketingSubBandwidth[leaderboardMarketingSub].length === 0 ? (
                     <div className="text-center py-16 text-sm" style={{ color: 'var(--cn-text-muted)' }}>
-                      {leaderboardMarketingSub.toUpperCase()} team roster hasn&apos;t been set up yet — check back once it&apos;s added.
+                      No {leaderboardMarketingSub.toUpperCase()} tasks yet.
                     </div>
                   ) : (
                     <Leaderboard
                       key={`leaderboard-${leaderboardMarketingSub}`}
                       bandwidthData={marketingSubBandwidth[leaderboardMarketingSub]}
-                      bandwidthHeaders={bandwidthHeaders}
+                      bandwidthHeaders={marketingTeamHeaders}
                       leaderboardData={lbData}
                       user={user}
                       onRefreshLb={fetchLb}

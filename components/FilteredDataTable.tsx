@@ -446,12 +446,15 @@ interface StatusSelectProps {
   row: SheetData;
   col: string;
   onStatusChange: (row: SheetData, col: string, newValue: string) => Promise<void>;
+  options?: string[];
 }
 
-function StatusSelect({ value, row, col, onStatusChange }: StatusSelectProps) {
+function StatusSelect({ value, row, col, onStatusChange, options }: StatusSelectProps) {
+  const opts = options ?? STATUS_OPTIONS;
+  const optsLower = opts.map(s => s.toLowerCase());
   const normalise = (v: string) => {
-    const i = STATUS_OPTIONS_LOWER.indexOf(v.toLowerCase());
-    return i !== -1 ? STATUS_OPTIONS[i] : v;
+    const i = optsLower.indexOf(v.toLowerCase());
+    return i !== -1 ? opts[i] : v;
   };
   const [current, setCurrent] = useState(() => normalise(value));
   const [saving, setSaving] = useState(false);
@@ -490,13 +493,13 @@ function StatusSelect({ value, row, col, onStatusChange }: StatusSelectProps) {
         className="text-xs font-semibold rounded-full pl-2.5 pr-7 py-1 border-0 focus:outline-none cursor-pointer disabled:opacity-60 transition-colors appearance-none"
         style={{ backgroundColor: color, color: '#fff', minWidth: '130px', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center' }}
       >
-        {STATUS_OPTIONS.map(opt => (
+        {opts.map(opt => (
           <option key={opt} value={opt} style={{ background: '#1a1a1a', color: '#fff' }}>
             {opt}
           </option>
         ))}
         {/* keep current value if not in known list */}
-        {!STATUS_OPTIONS_LOWER.includes(current.toLowerCase()) && current && (
+        {!optsLower.includes(current.toLowerCase()) && current && (
           <option value={current}>{current}</option>
         )}
       </select>
@@ -594,6 +597,11 @@ interface Props {
   hiddenCols?: string[];
   onlyColTerms?: string[];
   hiddenFilterTerms?: string[];
+  // Overrides for the built-in dropdown option lists — used where a data
+  // source's valid values differ from Bandwidth Allocation's (e.g. Marketing's
+  // Task Status Updation includes "Submitted To Admin"/"Task Closed")
+  statusOptions?: string[];
+  todayBucketSetOptions?: string[];
 }
 
 const BUCKET_OPTIONS = ['Today', 'Tomorrow', 'Day After Tomorrow', 'Everyday', 'No Action Taken', 'Submitted', 'To Be Expected'];
@@ -620,8 +628,11 @@ function parseTimestamp(v: string): number {
   return new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s)).getTime();
 }
 
-export default function FilteredDataTable({ data, headers, sheetNum, onStatusChange, readOnlyStatus, readOnlyPmStatus, showCopy, defaultPersonFilter, editPersonBucket, readOnlyBucket, readOnlyAssigned, rowCopy, restrictToBucketEdit, editStatusUpdation, hiddenCols, onlyColTerms, hiddenFilterTerms }: Props) {
+export default function FilteredDataTable({ data, headers, sheetNum, onStatusChange, readOnlyStatus, readOnlyPmStatus, showCopy, defaultPersonFilter, editPersonBucket, readOnlyBucket, readOnlyAssigned, rowCopy, restrictToBucketEdit, editStatusUpdation, hiddenCols, onlyColTerms, hiddenFilterTerms, statusOptions, todayBucketSetOptions }: Props) {
   const [copiedRow, setCopiedRow] = useState<number | null>(null);
+  const effectiveStatusOptions = statusOptions ?? STATUS_OPTIONS;
+  const effectiveStatusOptionsLower = effectiveStatusOptions.map(s => s.toLowerCase());
+  const effectiveTodayBucketSetOptions = todayBucketSetOptions ?? TODAY_BUCKET_SET_OPTIONS;
 
   const copyRow = (row: SheetData) => {
     const projectCol = headers.find(h => h.toLowerCase().includes('project'));
@@ -729,8 +740,8 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
       )];
       if (term === 'task status') {
         // Always list all known statuses + any unknown ones from data
-        const extras = dataVals.filter(v => !STATUS_OPTIONS_LOWER.includes(v.toLowerCase()));
-        opts[col] = [...STATUS_OPTIONS, ...extras];
+        const extras = dataVals.filter(v => !effectiveStatusOptionsLower.includes(v.toLowerCase()));
+        opts[col] = [...effectiveStatusOptions, ...extras];
       } else if (term === 'task daily bucket') {
         const BUCKET_ALIASES = ['n/a', 'tommorow', 'tommorrow', 'tomorow', 'day after tommorow', 'day after tommorrow'];
         const extras = dataVals.filter(v => !BUCKET_OPTIONS_LOWER.includes(v.toLowerCase()) && !BUCKET_ALIASES.includes(v.toLowerCase()));
@@ -1070,7 +1081,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                           ) : isTodayBucketSet && editPersonBucket && !restrictToBucketEdit && onStatusChange ? (
                             <InlineSelectCell
                               value={val}
-                              options={TODAY_BUCKET_SET_OPTIONS}
+                              options={effectiveTodayBucketSetOptions}
                               row={row}
                               col={h}
                               onStatusChange={onStatusChange}
@@ -1113,6 +1124,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                               row={row}
                               col={h}
                               onStatusChange={onStatusChange}
+                              options={effectiveStatusOptions}
                             />
                           ) : isStatusUpdation && val ? (
                             (() => {
@@ -1133,6 +1145,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                               row={row}
                               col={h}
                               onStatusChange={onStatusChange}
+                              options={effectiveStatusOptions}
                             />
                           ) : isStatus && val ? (
                             (() => {

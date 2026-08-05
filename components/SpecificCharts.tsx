@@ -145,8 +145,10 @@ export const STATUS_COLORS: Record<string, string> = {
   'testing':             '#2563eb',
   'on hold':             '#7c3aed',
   'submitted to akash':  '#d97706',
+  'submitted to admin':  '#d97706',
   'submitted to pm':     '#10b981',
   'submitted to client': '#6d28d9',
+  'task closed':         '#4b5563',
 };
 const PALETTE = ['#FE4A23','#3b82f6','#10b981','#f59e0b','#8b5cf6','#06b6d4','#ec4899','#84cc16','#ef4444','#14b8a6'];
 const PM_STATUS_COLORS_MAP: Record<string, string> = {

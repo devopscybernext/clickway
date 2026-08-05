@@ -58,8 +58,24 @@ export const RANGE_QA_TESTING = `'${TAB_QA_TESTING}'!A1:Z1000`;
 export const WEB_TEAM = ['Akash', 'Dhruv', 'Shubham', 'Lovepreet', 'Pawan', 'Robin'];
 
 // Marketing further splits into SEO/PPC/SMM sub-teams (Add Task, Tasks
-// Overview, Team Bandwidth, Leaderboard). All empty until each roster is
-// provided — the sub-tab UI is already wired up.
-export const SEO_TEAM: string[] = [];
-export const PPC_TEAM: string[] = [];
-export const SMM_TEAM: string[] = [];
+// Assigned, Tasks Overview, Team Bandwidth, Leaderboard).
+export const SEO_TEAM = ['Payal', 'Akanksha'];
+export const PPC_TEAM = ['Payal', 'Akanksha'];
+export const SMM_TEAM = ['Payal', 'Akanksha'];
+
+// Marketing Team spreadsheet — one tab per sub-team (SEO/PPC/SMM). Columns:
+// Timestamp, Email Address, Project Name, Task Name, Task URL, Assigned
+// Person, Task Estimation, Deadline, Task Daily Bucket, Action Taken Today,
+// Performance Signal/Insights, Blocker (PPC/SEO only), Next Steps, Time
+// Logged On Ac, Task Status Updation, Today Bucket Set, Total Hours, PM Status
+export const MARKETING_TEAM_SHEET_ID = '1TTfD6-EKMXucucAyI2iNJLd6-P6lbolgQe-QOC1GyXs';
+
+// Task Status Updation options for the Marketing Team sheet — differs from
+// Bandwidth Allocation's list ("Submitted To Admin" instead of "Submitted To
+// Akash", plus "Task Closed")
+export const MARKETING_STATUS_OPTIONS = [
+  'No Action Taken', 'To Be Started', 'In Progress', 'Testing', 'On Hold',
+  'Submitted To Admin', 'Submitted To PM', 'Task Closed',
+];
+// Today Bucket Set for Marketing includes "No Action Taken" as an explicit option
+export const MARKETING_TODAY_BUCKET_SET_OPTIONS = ['No Action Taken', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'URGENT'];
