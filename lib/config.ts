@@ -64,6 +64,12 @@ export const WEB_TEAM = ['Akash', 'Dhruv', 'Shubham', 'Lovepreet', 'Pawan', 'Rob
 // Logged On Ac, Task Status Updation, Today Bucket Set, Total Hours, PM Status
 export const MARKETING_TEAM_SHEET_ID = '1TTfD6-EKMXucucAyI2iNJLd6-P6lbolgQe-QOC1GyXs';
 
+// Assigned Person options per sub-team — matches each tab's own dropdown
+// validation in the sheet (unioned with any extra names already in the data)
+export const SEO_ASSIGNED_PERSONS = ['Bhavya', 'Kshitij', 'Akshay'];
+export const PPC_ASSIGNED_PERSONS = ['Atul', 'Shiwangi', 'Anjali', 'Dheeraj', 'Anurag', 'Vansh', 'Akshay'];
+export const SMM_ASSIGNED_PERSONS = ['Payal', 'Akanksha'];
+
 // Task Status Updation options for the Marketing Team sheet — differs from
 // Bandwidth Allocation's list ("Submitted To Admin" instead of "Submitted To
 // Akash", plus "Task Closed")

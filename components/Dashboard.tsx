@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SheetData } from '@/lib/googleSheets';
-import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, MARKETING_TEAM_SHEET_ID, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, WEB_TEAM, RANGE_BANDWIDTH, RANGE_AVAILABILITY, TAB_AVAILABILITY, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
+import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, MARKETING_TEAM_SHEET_ID, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, SEO_ASSIGNED_PERSONS, PPC_ASSIGNED_PERSONS, SMM_ASSIGNED_PERSONS, WEB_TEAM, RANGE_BANDWIDTH, RANGE_AVAILABILITY, TAB_AVAILABILITY, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
 
 import { AuthUser, SheetId, getAllowedSheets } from '@/lib/auth';
 import Sidebar from './Sidebar';
@@ -560,6 +560,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     smm: marketingTeamData.filter(r => r['__sub'] === 'smm'),
   };
   const marketingSubAvail: Record<MarketingSub, SheetData[]> = { seo: [], ppc: [], smm: [] };
+  const marketingSubAssignedPersons: Record<MarketingSub, string[]> = { seo: SEO_ASSIGNED_PERSONS, ppc: PPC_ASSIGNED_PERSONS, smm: SMM_ASSIGNED_PERSONS };
 
   // Tasks Assigned — same sort/search pipeline as searchFiltered, scoped to the selected team
   const tasksAssignedTeamData = tasksAssignedTeam === 'web' ? webBandwidthData : marketingSubBandwidth[tasksAssignedMarketingSub];
@@ -916,6 +917,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 onStatusChange={tasksAssignedTeam === 'web' ? handleBandwidthStatusChange : handleMarketingTeamChange}
                 statusOptions={tasksAssignedTeam === 'marketing' ? MARKETING_STATUS_OPTIONS : undefined}
                 todayBucketSetOptions={tasksAssignedTeam === 'marketing' ? MARKETING_TODAY_BUCKET_SET_OPTIONS : undefined}
+                assignedPersonOptions={tasksAssignedTeam === 'marketing' ? marketingSubAssignedPersons[tasksAssignedMarketingSub] : undefined}
                 readOnlyStatus
                 readOnlyPmStatus={user.role === 'resource'}
                 defaultPersonFilter={user.role === 'resource' ? user.displayName : undefined}

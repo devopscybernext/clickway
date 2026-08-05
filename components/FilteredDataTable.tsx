@@ -602,6 +602,7 @@ interface Props {
   // Task Status Updation includes "Submitted To Admin"/"Task Closed")
   statusOptions?: string[];
   todayBucketSetOptions?: string[];
+  assignedPersonOptions?: string[];
 }
 
 const BUCKET_OPTIONS = ['Today', 'Tomorrow', 'Day After Tomorrow', 'Everyday', 'No Action Taken', 'Submitted', 'To Be Expected'];
@@ -628,7 +629,7 @@ function parseTimestamp(v: string): number {
   return new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s)).getTime();
 }
 
-export default function FilteredDataTable({ data, headers, sheetNum, onStatusChange, readOnlyStatus, readOnlyPmStatus, showCopy, defaultPersonFilter, editPersonBucket, readOnlyBucket, readOnlyAssigned, rowCopy, restrictToBucketEdit, editStatusUpdation, hiddenCols, onlyColTerms, hiddenFilterTerms, statusOptions, todayBucketSetOptions }: Props) {
+export default function FilteredDataTable({ data, headers, sheetNum, onStatusChange, readOnlyStatus, readOnlyPmStatus, showCopy, defaultPersonFilter, editPersonBucket, readOnlyBucket, readOnlyAssigned, rowCopy, restrictToBucketEdit, editStatusUpdation, hiddenCols, onlyColTerms, hiddenFilterTerms, statusOptions, todayBucketSetOptions, assignedPersonOptions }: Props) {
   const [copiedRow, setCopiedRow] = useState<number | null>(null);
   const effectiveStatusOptions = statusOptions ?? STATUS_OPTIONS;
   const effectiveStatusOptionsLower = effectiveStatusOptions.map(s => s.toLowerCase());
@@ -665,6 +666,10 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
   const personOptions = useMemo(() => {
     if (!personColHeader) return [];
     const vals = [...new Set(data.map(r => String(r[personColHeader] ?? '').trim()).filter(Boolean))];
+    if (assignedPersonOptions) {
+      const extras = vals.filter(v => !assignedPersonOptions.includes(v));
+      return [...assignedPersonOptions, ...extras.sort()];
+    }
     return vals.sort();
   }, [data, personColHeader]);
 
