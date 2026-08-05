@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { SheetData } from '@/lib/googleSheets';
 import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, MARKETING_ASSIGNED_PERSONS, WEB_TEAM, RANGE_BANDWIDTH, RANGE_AVAILABILITY, TAB_AVAILABILITY, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
 
-import { AuthUser, SheetId, getAllowedSheets } from '@/lib/auth';
+import { AuthUser, SheetId, Team, getAllowedSheets, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, getTasksAssignedLockedTeam } from '@/lib/auth';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import SpecificCharts, { ResourceOverview, PmStatusOverview, KpiCards, ResourceStatusGrid, InsightCards, PmStatusChart } from './SpecificCharts';
@@ -219,7 +219,17 @@ interface DashboardProps {
 export default function Dashboard({ user, onLogout }: DashboardProps) {
   const allowedSheets = getAllowedSheets(user);
   const [selectedSheet, setSelectedSheet] = useState<SheetId>(allowedSheets[0]);
-  const isAdmin = user.role === 'akash' || user.role === 'admin' || user.role === 'high' || user.role === 'mod';
+
+  // Role tiers (see lib/auth.ts) — used instead of scattering user.role === '...'
+  // checks everywhere. isAdmin/isPmTier/isTeamAdmin/isIndividual are mutually exclusive.
+  const isAdmin      = isAdminTierRole(user.role);
+  const isPmTier      = isPmTierRole(user.role);
+  const isTeamAdmin   = isTeamAdminTierRole(user.role);
+  const isIndividual  = isIndividualTierRole(user.role);
+  // Roles pinned to one team everywhere (WebAdmin/WebTeam/MarketingAdmin/MarketingTeam)
+  const lockedTeam: Team | undefined = getLockedTeam(user.role);
+  // Tasks Assigned additionally pins PMWebAdmin/PMMarketingAdmin to their own team
+  const lockedTasksAssignedTeam: Team | undefined = getTasksAssignedLockedTeam(user.role);
 
   const [bandwidthData, setBandwidthData] = useState<SheetData[]>([]);
   const [bandwidthHeaders, setBandwidthHeaders] = useState<string[]>([]);
@@ -247,10 +257,12 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [analysisSubTab, setAnalysisSubTab] = useState<'resources' | 'pm'>('resources');
   const [toolsSubTab, setToolsSubTab] = useState<'clock' | 'holiday' | 'ai'>('clock');
   const [pmBandwidthSubTab, setPmBandwidthSubTab] = useState<'all' | 'mine'>('all');
-  const [teamBandwidthSubTab, setTeamBandwidthSubTab] = useState<'web' | 'marketing'>('web');
-  const [tasksOverviewTeam, setTasksOverviewTeam] = useState<'web' | 'marketing'>('web');
-  const [tasksAssignedTeam, setTasksAssignedTeam] = useState<'web' | 'marketing'>('web');
-  const [addTaskTeam, setAddTaskTeam] = useState<'web' | 'marketing'>('web');
+  const [teamBandwidthSubTab, setTeamBandwidthSubTab] = useState<Team>(lockedTeam ?? 'web');
+  const [tasksOverviewTeam, setTasksOverviewTeam] = useState<Team>(lockedTeam ?? 'web');
+  const [tasksAssignedTeam, setTasksAssignedTeam] = useState<Team>(lockedTasksAssignedTeam ?? 'web');
+  const [addTaskTeam, setAddTaskTeam] = useState<Team>(lockedTeam ?? 'web');
+  const [analyticsTeam, setAnalyticsTeam] = useState<Team>(lockedTeam ?? 'web');
+  const [leaderboardTeam, setLeaderboardTeam] = useState<Team>(lockedTeam ?? 'web');
   const [analysisDateFilter, setAnalysisDateFilter] = useState<'all' | 'daily' | 'weekly' | 'monthly'>('all');
   const [topFilter, setTopFilter] = useState<'monthly' | 'alltime'>('monthly');
   const iframeLoadCount = useRef(0);
@@ -269,7 +281,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const currentData    = selectedSheet === '1' ? activeBandwidthData : availData;
   const currentHeaders = selectedSheet === '1' ? bandwidthHeaders : availHeaders;
 
-  const isNewestFirst = user.role === 'pm' || user.role === 'akash' || user.role === 'admin' || user.role === 'high' || user.role === 'mod';
+  const isNewestFirst = !isIndividual;
   const sortedData = isNewestFirst
     ? [...currentData].sort((a, b) => Number(b['__row']) - Number(a['__row']))
     : currentData;
@@ -383,7 +395,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
   // PM Project Bandwidth — one tab per PM in a separate spreadsheet, merged
   // server-side via /api/pm-bandwidth (each row tagged with its PM's tab name)
-  const canSeePmBandwidth = isAdmin || user.role === 'pm';
+  const canSeePmBandwidth = isAdmin || isPmTier;
   useEffect(() => {
     if (!canSeePmBandwidth) return;
     const fetchPmBandwidth = () => {
@@ -399,7 +411,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
   // Marketing Team — SEO/PPC/SMM tabs in their own spreadsheet, merged
   // server-side via /api/marketing-team (each row tagged with its sub-team)
-  const canSeeMarketingTeam = isAdmin || user.role === 'pm' || user.role === 'resource';
+  const canSeeMarketingTeam = isAdmin || isPmTier || lockedTeam === 'marketing' || user.role === 'resource';
   useEffect(() => {
     if (!canSeeMarketingTeam) return;
     const fetchMarketingTeam = () => {
@@ -416,7 +428,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   // QA Testing data (Vinay's dedicated tab) — once on load, then every 160s.
   // Vinay, admin, and PM can see this tab (admin/PM read-only), so only fetch for them.
   const isVinay = user.role === 'resource' && user.username === 'vinay';
-  const canSeeQaTesting = isAdmin || user.role === 'pm' || isVinay;
+  const canSeeQaTesting = isAdmin || isPmTier || isVinay;
   const fetchQa = useCallback(async () => {
     try {
       const qa = await fetchSheet(SHEET_IDS['1'], RANGE_QA_TESTING);
@@ -524,6 +536,19 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   // "Marketing Tasks" tab (Department column distinguishes SEO/PPC/SMM).
   // No separate availability sheet exists for Marketing.
   const marketingAvailData: SheetData[] = [];
+
+  // Dashboard analytics (sheet 3) — same Web/Marketing split as the other pages,
+  // reusing the same generic (header-driven) components either way.
+  const analyticsData         = analyticsTeam === 'web' ? activeBandwidthData : marketingTeamData;
+  const analyticsHeaders      = analyticsTeam === 'web' ? bandwidthHeaders : marketingTeamHeaders;
+  const analyticsAvailData    = analyticsTeam === 'web' ? availData : marketingAvailData;
+  const analyticsAvailHeaders = analyticsTeam === 'web' ? availHeaders : [];
+  const analyticsOnStatusChange = analyticsTeam === 'web' ? handleBandwidthStatusChange : handleMarketingTeamChange;
+
+  // Leaderboard (sheet 7) — same split; Marketing has no manual-points tab yet
+  const lbTeamData    = leaderboardTeam === 'web' ? activeBandwidthData : marketingTeamData;
+  const lbTeamHeaders = leaderboardTeam === 'web' ? bandwidthHeaders : marketingTeamHeaders;
+  const lbManualData  = leaderboardTeam === 'web' ? lbData : [];
 
   // Tasks Assigned — same sort/search pipeline as searchFiltered, scoped to the selected team
   const tasksAssignedTeamData = tasksAssignedTeam === 'web' ? webBandwidthData : marketingTeamData;
@@ -652,7 +677,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               const key = Object.keys(TOP_DESIGNATIONS).find(k => name.toLowerCase().includes(k));
               return key ? TOP_DESIGNATIONS[key] : '';
             };
-            const topRankings = calcLeaderboard(activeBandwidthData, bandwidthHeaders, lbData, topFilter);
+            const topManualData = analyticsTeam === 'web' ? lbData : [];
+            const topRankings = calcLeaderboard(analyticsData, analyticsHeaders, topManualData, topFilter);
             const top: PersonStats | undefined = topRankings[0];
             const topPhoto = top ? getPhoto(top.name) : '';
             return (
@@ -668,42 +694,64 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   </h2>
                   <p className="text-sm mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>
                     {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                    {' · '}{user.role === 'resource' ? "Here's your personal task overview for today." : "Here's your team overview for today."}
+                    {' · '}{isIndividual ? "Here's your personal task overview for today." : "Here's your team overview for today."}
                   </p>
                 </div>
               </div>
 
+              {/* ── Web / Marketing tab (hidden for roles pinned to one team) ── */}
+              {!lockedTeam && (
+                <div className="flex items-center gap-3 flex-wrap -mb-2">
+                  {([
+                    { key: 'web', label: 'Web' },
+                    { key: 'marketing', label: 'Marketing' },
+                  ] as const).map(tab => (
+                    <button
+                      key={tab.key}
+                      onClick={() => setAnalyticsTeam(tab.key)}
+                      className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
+                      style={{
+                        borderColor: analyticsTeam === tab.key ? 'var(--cn-accent)' : 'transparent',
+                        color: analyticsTeam === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
+                        background: 'transparent',
+                      }}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              )}
 
-              {/* ── Project State cards — admin + PM ── */}
-              {(isAdmin || user.role === 'pm') && (
+              {/* ── Project State cards — admin + PM + Team Admin ── */}
+              {(isAdmin || isPmTier || isTeamAdmin) && (
                 <InsightCards mode="project-cards"
-                  sheet1Data={activeBandwidthData}
-                  sheet1Headers={bandwidthHeaders}
-                  availData={availData}
-                  availHeaders={availHeaders}
+                  sheet1Data={analyticsData}
+                  sheet1Headers={analyticsHeaders}
+                  availData={analyticsAvailData}
+                  availHeaders={analyticsAvailHeaders}
                 />
               )}
 
-              {/* ── Project State cards — resource (individual data only) ── */}
-              {user.role === 'resource' && (
+              {/* ── Project State cards — individual contributor (own data only) ── */}
+              {isIndividual && (
                 <InsightCards mode="project-cards"
-                  sheet1Data={activeBandwidthData}
-                  sheet1Headers={bandwidthHeaders}
+                  sheet1Data={analyticsData}
+                  sheet1Headers={analyticsHeaders}
                   personFilter={user.displayName}
                 />
               )}
 
-              {/* ── Today's Team Workload grid — admin + PM ── */}
-              {(isAdmin || user.role === 'pm') && (
+              {/* ── Today's Team Workload grid — admin + PM + Team Admin ── */}
+              {(isAdmin || isPmTier || isTeamAdmin) && (
                 <ResourceStatusGrid
-                  key="team-workload"
-                  sheet1Data={activeBandwidthData}
-                  sheet1Headers={bandwidthHeaders}
-                  availData={availData}
-                  availHeaders={availHeaders}
-                  onStatusChange={handleBandwidthStatusChange}
-                  pmStatusColName={bandwidthHeaders.find(h => h.toLowerCase().includes('pm status'))}
-                  canEditPmStatus={isAdmin || user.role === 'pm'}
+                  key={`team-workload-${analyticsTeam}`}
+                  sheet1Data={analyticsData}
+                  sheet1Headers={analyticsHeaders}
+                  availData={analyticsAvailData}
+                  availHeaders={analyticsAvailHeaders}
+                  onStatusChange={analyticsOnStatusChange}
+                  pmStatusColName={analyticsHeaders.find(h => h.toLowerCase().includes('pm status'))}
+                  canEditPmStatus={isAdmin || isPmTier || isTeamAdmin}
                   isAdmin={isAdmin}
                   currentUserEmail={user.email}
                 />
@@ -712,13 +760,13 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               {/* ── Charts + sticky Top Performer sidebar ── */}
               <div className="flex gap-4 items-start">
                 <div className="flex-1 min-w-0 flex flex-col gap-4">
-                  {loading && !bandwidthData.length ? (
+                  {loading && analyticsTeam === 'web' && !analyticsData.length ? (
                     <div className="animate-pulse space-y-3">
                       {Array.from({ length: 4 }).map((_, i) => (
                         <div key={i} className="h-64 rounded-lg" style={{ background: 'var(--cn-bg-input)' }} />
                       ))}
                     </div>
-                  ) : !bandwidthData.length ? (
+                  ) : !analyticsData.length ? (
                     <div
                       className="cn-card border rounded-lg flex flex-col items-center justify-center gap-3 py-20"
                       style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
@@ -735,19 +783,20 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     </div>
                   ) : (
                     <SpecificCharts
-                      sheet1Data={activeBandwidthData}
-                      sheet1Headers={bandwidthHeaders}
-                      pmView={user.role === 'pm'}
-                      resourceView={user.role === 'resource'}
+                      key={analyticsTeam}
+                      sheet1Data={analyticsData}
+                      sheet1Headers={analyticsHeaders}
+                      pmView={isPmTier}
+                      resourceView={isIndividual}
                       resourceName={user.displayName}
-                      isAdmin={isAdmin}
-                      availData={availData}
-                      availHeaders={availHeaders}
-                      onStatusChange={handleBandwidthStatusChange}
-                      pmStatusColName={bandwidthHeaders.find(h => h.toLowerCase().includes('pm status'))}
+                      isAdmin={isAdmin || isTeamAdmin}
+                      availData={analyticsAvailData}
+                      availHeaders={analyticsAvailHeaders}
+                      onStatusChange={analyticsOnStatusChange}
+                      pmStatusColName={analyticsHeaders.find(h => h.toLowerCase().includes('pm status'))}
                       currentUserName={user.displayName}
                       currentUserEmail={user.email}
-                      showFilter={user.role === 'pm' || isAdmin}
+                      showFilter={isPmTier || isAdmin || isTeamAdmin}
                       hideKpi
                     />
                   )}
@@ -833,25 +882,27 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               <h2 className="font-semibold text-base" style={{ color: 'var(--cn-text-primary)' }}>Tasks Assigned</h2>
               <p className="text-xs mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>Active task assignments across all team members and projects</p>
             </div>
-            <div className="flex items-center gap-3 flex-wrap -mt-1">
-              {([
-                { key: 'web', label: 'Web' },
-                { key: 'marketing', label: 'Marketing' },
-              ] as const).map(tab => (
-                <button
-                  key={tab.key}
-                  onClick={() => setTasksAssignedTeam(tab.key)}
-                  className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
-                  style={{
-                    borderColor: tasksAssignedTeam === tab.key ? 'var(--cn-accent)' : 'transparent',
-                    color: tasksAssignedTeam === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
-                    background: 'transparent',
-                  }}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+            {!lockedTasksAssignedTeam && (
+              <div className="flex items-center gap-3 flex-wrap -mt-1">
+                {([
+                  { key: 'web', label: 'Web' },
+                  { key: 'marketing', label: 'Marketing' },
+                ] as const).map(tab => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setTasksAssignedTeam(tab.key)}
+                    className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
+                    style={{
+                      borderColor: tasksAssignedTeam === tab.key ? 'var(--cn-accent)' : 'transparent',
+                      color: tasksAssignedTeam === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
+                      background: 'transparent',
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            )}
             <SearchFilter
               searchTerm={searchTerm}
               totalCount={tasksAssignedTeamData.length}
@@ -879,10 +930,10 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 todayBucketSetOptions={tasksAssignedTeam === 'marketing' ? MARKETING_TODAY_BUCKET_SET_OPTIONS : undefined}
                 assignedPersonOptions={tasksAssignedTeam === 'marketing' ? MARKETING_ASSIGNED_PERSONS : undefined}
                 readOnlyStatus
-                readOnlyPmStatus={user.role === 'resource'}
-                defaultPersonFilter={user.role === 'resource' ? user.displayName : undefined}
-                editPersonBucket={user.role === 'akash' || user.role === 'admin' || user.role === 'high' || user.role === 'mod'}
-                hiddenCols={user.role === 'pm' ? (tasksAssignedTeam === 'web' ? bandwidthHeaders : marketingTeamHeaders).filter(h => h.toLowerCase().includes('time logged')) : undefined}
+                readOnlyPmStatus={isIndividual}
+                defaultPersonFilter={isIndividual ? user.displayName : undefined}
+                editPersonBucket={isAdmin}
+                hiddenCols={isPmTier ? (tasksAssignedTeam === 'web' ? bandwidthHeaders : marketingTeamHeaders).filter(h => h.toLowerCase().includes('time logged')) : undefined}
                 showCopy={isAdmin}
                 rowCopy={isAdmin}
               />
@@ -893,7 +944,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           {/* ── Team (admin gets Resources/Project Managers sub-tabs; others see gallery directly) ── */}
 
           {/* ── Individual Analysis (admin only) ─────────────────────────────────── */}
-          {isIndividualAnalysis && (isAdmin || user.role === 'pm') && (
+          {isIndividualAnalysis && (isAdmin || isPmTier) && (
             <section
               className="cn-card rounded-lg border transition-colors"
               style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
@@ -1055,25 +1106,27 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               className="cn-card rounded-lg border transition-colors"
               style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
             >
-              <div className="flex items-center gap-3 px-4 sm:px-6 pt-4 sm:pt-5 pb-0 flex-wrap">
-                {([
-                  { key: 'web', label: 'Web' },
-                  { key: 'marketing', label: 'Marketing' },
-                ] as const).map(tab => (
-                  <button
-                    key={tab.key}
-                    onClick={() => setTeamBandwidthSubTab(tab.key)}
-                    className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
-                    style={{
-                      borderColor: teamBandwidthSubTab === tab.key ? 'var(--cn-accent)' : 'transparent',
-                      color: teamBandwidthSubTab === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
-                      background: 'transparent',
-                    }}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
+              {!lockedTeam && (
+                <div className="flex items-center gap-3 px-4 sm:px-6 pt-4 sm:pt-5 pb-0 flex-wrap">
+                  {([
+                    { key: 'web', label: 'Web' },
+                    { key: 'marketing', label: 'Marketing' },
+                  ] as const).map(tab => (
+                    <button
+                      key={tab.key}
+                      onClick={() => setTeamBandwidthSubTab(tab.key)}
+                      className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
+                      style={{
+                        borderColor: teamBandwidthSubTab === tab.key ? 'var(--cn-accent)' : 'transparent',
+                        color: teamBandwidthSubTab === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
+                        background: 'transparent',
+                      }}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div style={{ borderTop: '1px solid var(--cn-border)' }} />
               <div className="p-3 sm:p-6">
                 {teamBandwidthSubTab === 'web' ? (
@@ -1085,7 +1138,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     availHeaders={availHeaders}
                     onStatusChange={handleBandwidthStatusChange}
                     pmStatusColName={bandwidthHeaders.find(h => h.toLowerCase().includes('pm status'))}
-                    canEditPmStatus={isAdmin || user.role === 'pm'}
+                    canEditPmStatus={isAdmin || isPmTier || isTeamAdmin}
                     isAdmin={isAdmin}
                     currentUserEmail={user.email}
                     autoOpenFirst
@@ -1102,7 +1155,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     availData={marketingAvailData}
                     onStatusChange={handleMarketingTeamChange}
                     pmStatusColName={marketingTeamHeaders.find(h => h.toLowerCase().includes('pm status'))}
-                    canEditPmStatus={isAdmin || user.role === 'pm'}
+                    canEditPmStatus={isAdmin || isPmTier || isTeamAdmin}
                     isAdmin={isAdmin}
                     currentUserEmail={user.email}
                     autoOpenFirst
@@ -1115,25 +1168,27 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           {/* ── Tasks Overview (Web / Marketing) ──────────────────────────────────── */}
           {isResourceOverview && (
             <section className="cn-card rounded-lg border transition-colors" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
-              <div className="flex items-center gap-3 px-4 sm:px-6 pt-4 sm:pt-5 pb-0 flex-wrap">
-                {([
-                  { key: 'web', label: 'Web' },
-                  { key: 'marketing', label: 'Marketing' },
-                ] as const).map(tab => (
-                  <button
-                    key={tab.key}
-                    onClick={() => setTasksOverviewTeam(tab.key)}
-                    className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
-                    style={{
-                      borderColor: tasksOverviewTeam === tab.key ? 'var(--cn-accent)' : 'transparent',
-                      color: tasksOverviewTeam === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
-                      background: 'transparent',
-                    }}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
+              {!lockedTeam && (
+                <div className="flex items-center gap-3 px-4 sm:px-6 pt-4 sm:pt-5 pb-0 flex-wrap">
+                  {([
+                    { key: 'web', label: 'Web' },
+                    { key: 'marketing', label: 'Marketing' },
+                  ] as const).map(tab => (
+                    <button
+                      key={tab.key}
+                      onClick={() => setTasksOverviewTeam(tab.key)}
+                      className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
+                      style={{
+                        borderColor: tasksOverviewTeam === tab.key ? 'var(--cn-accent)' : 'transparent',
+                        color: tasksOverviewTeam === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
+                        background: 'transparent',
+                      }}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div style={{ borderTop: '1px solid var(--cn-border)' }} />
               <div className="p-3 sm:p-6">
                 {tasksOverviewTeam === 'web' ? (
@@ -1146,14 +1201,14 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     pmStatusColName={bandwidthHeaders.find(h => h.toLowerCase().includes('pm status'))}
                     currentUserName={user.displayName}
                     currentUserEmail={user.email}
-                    showFilter={user.role === 'pm' || isAdmin}
-                    canEditPmStatus={user.role !== 'resource'}
-                    canEditStatus={user.role === 'resource'}
-                    canCopy={user.role === 'resource'}
+                    showFilter={isPmTier || isAdmin || isTeamAdmin}
+                    canEditPmStatus={!isIndividual}
+                    canEditStatus={isIndividual}
+                    canCopy={isIndividual}
                     defaultFilter="me"
-                    restrictPmStatusToOwn={user.role === 'pm'}
+                    restrictPmStatusToOwn={isPmTier}
                     vinayQaMode={isVinay}
-                    showQaTab={isAdmin || user.role === 'pm'}
+                    showQaTab={isAdmin || isPmTier}
                     qaData={qaData}
                     qaHeaders={qaHeaders}
                     onQaCellChange={handleQaChange}
@@ -1172,12 +1227,12 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     pmStatusColName={marketingTeamHeaders.find(h => h.toLowerCase().includes('pm status'))}
                     currentUserName={user.displayName}
                     currentUserEmail={user.email}
-                    showFilter={user.role === 'pm' || isAdmin}
-                    canEditPmStatus={user.role !== 'resource'}
-                    canEditStatus={user.role === 'resource'}
-                    canCopy={user.role === 'resource'}
+                    showFilter={isPmTier || isAdmin || isTeamAdmin}
+                    canEditPmStatus={!isIndividual}
+                    canEditStatus={isIndividual}
+                    canCopy={isIndividual}
                     defaultFilter="me"
-                    restrictPmStatusToOwn={user.role === 'pm'}
+                    restrictPmStatusToOwn={isPmTier}
                   />
                 )}
               </div>
@@ -1190,25 +1245,27 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               className="cn-card rounded-lg p-3 sm:p-6 border transition-colors space-y-4"
               style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
             >
-              <div className="flex items-center gap-3 flex-wrap">
-                {([
-                  { key: 'web', label: 'Web' },
-                  { key: 'marketing', label: 'Marketing' },
-                ] as const).map(tab => (
-                  <button
-                    key={tab.key}
-                    onClick={() => setAddTaskTeam(tab.key)}
-                    className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
-                    style={{
-                      borderColor: addTaskTeam === tab.key ? 'var(--cn-accent)' : 'transparent',
-                      color: addTaskTeam === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
-                      background: 'transparent',
-                    }}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
+              {!lockedTeam && (
+                <div className="flex items-center gap-3 flex-wrap">
+                  {([
+                    { key: 'web', label: 'Web' },
+                    { key: 'marketing', label: 'Marketing' },
+                  ] as const).map(tab => (
+                    <button
+                      key={tab.key}
+                      onClick={() => setAddTaskTeam(tab.key)}
+                      className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
+                      style={{
+                        borderColor: addTaskTeam === tab.key ? 'var(--cn-accent)' : 'transparent',
+                        color: addTaskTeam === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
+                        background: 'transparent',
+                      }}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              )}
               {(() => {
               const addTaskFormUrl = addTaskTeam === 'web'
                 ? 'https://docs.google.com/forms/d/e/1FAIpQLSfBDYMZ6trWVeDVRhqz2AGUpcAfzlItvHTQLhUu8Ooly9h7YA'
@@ -1343,17 +1400,45 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           {/* ── Leaderboard ─────────────────────────────────────────────────────── */}
           {isLeaderboard && (
             <section
-              className="cn-card rounded-lg p-4 sm:p-8 border transition-colors"
+              className="cn-card rounded-lg p-4 sm:p-8 border transition-colors space-y-4"
               style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
             >
-              <Leaderboard
-                bandwidthData={activeBandwidthData}
-                bandwidthHeaders={bandwidthHeaders}
-                leaderboardData={lbData}
-                user={user}
-                onRefreshLb={fetchLb}
-                lbLoading={lbLoading}
-              />
+              {!lockedTeam && (
+                <div className="flex items-center gap-3 flex-wrap -mt-2 -mb-2">
+                  {([
+                    { key: 'web', label: 'Web' },
+                    { key: 'marketing', label: 'Marketing' },
+                  ] as const).map(tab => (
+                    <button
+                      key={tab.key}
+                      onClick={() => setLeaderboardTeam(tab.key)}
+                      className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
+                      style={{
+                        borderColor: leaderboardTeam === tab.key ? 'var(--cn-accent)' : 'transparent',
+                        color: leaderboardTeam === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
+                        background: 'transparent',
+                      }}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {leaderboardTeam === 'marketing' && lbTeamData.length === 0 ? (
+                <div className="text-center py-16 text-sm" style={{ color: 'var(--cn-text-muted)' }}>
+                  No Marketing tasks yet.
+                </div>
+              ) : (
+                <Leaderboard
+                  key={leaderboardTeam}
+                  bandwidthData={lbTeamData}
+                  bandwidthHeaders={lbTeamHeaders}
+                  leaderboardData={lbManualData}
+                  user={user}
+                  onRefreshLb={fetchLb}
+                  lbLoading={lbLoading}
+                />
+              )}
             </section>
           )}
         </main>

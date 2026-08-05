@@ -3,24 +3,33 @@ import bcrypt from 'bcryptjs';
 import { fetchSheetData } from '@/lib/googleSheets';
 import { USER_DETAILS_SHEET_ID, RANGE_USERS } from '@/lib/config';
 import { signSession, COOKIE_NAME } from '@/lib/session';
-import { MOD_ENABLED, Role, AuthUser } from '@/lib/auth';
+import { MOD_ENABLED, Role, AuthUser, isAdminTierRole } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 
+// Admin-tier roles (HM/Admin/Mod) log in with Username; everyone else logs
+// in with Email — a single "identifier" field on the client, resolved here
+// per-row against whichever column that row's role is supposed to use.
 export async function POST(req: NextRequest) {
   try {
-    const { username, password } = await req.json() as { username?: string; password?: string };
-    if (!username || !password) {
-      return NextResponse.json({ success: false, error: 'Username and password are required' }, { status: 400 });
+    const { identifier, password } = await req.json() as { identifier?: string; password?: string };
+    if (!identifier || !password) {
+      return NextResponse.json({ success: false, error: 'Email/username and password are required' }, { status: 400 });
     }
 
     const { data } = await fetchSheetData(USER_DETAILS_SHEET_ID, RANGE_USERS);
-    const row = data.find(
-      r => String(r['Username'] ?? '').trim().toLowerCase() === username.trim().toLowerCase()
-    );
+    const input = identifier.trim().toLowerCase();
+    const row = data.find(r => {
+      const role = String(r['Role'] ?? '').trim() as Role;
+      if (isAdminTierRole(role)) {
+        return String(r['Username'] ?? '').trim().toLowerCase() === input;
+      }
+      const email = String(r['Email'] ?? '').trim().toLowerCase();
+      return !!email && email === input;
+    });
 
     const invalidResponse = () =>
-      NextResponse.json({ success: false, error: 'Invalid username or password.' }, { status: 401 });
+      NextResponse.json({ success: false, error: 'Invalid credentials.' }, { status: 401 });
 
     if (!row) return invalidResponse();
 
@@ -31,7 +40,7 @@ export async function POST(req: NextRequest) {
     if (!ok) return invalidResponse();
 
     const role = String(row['Role'] ?? '').trim() as Role;
-    if (role === 'mod' && !MOD_ENABLED) return invalidResponse();
+    if (role.toLowerCase() === 'mod' && !MOD_ENABLED) return invalidResponse();
 
     const user: AuthUser = {
       username: String(row['Username']).trim(),

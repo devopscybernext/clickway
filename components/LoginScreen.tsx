@@ -9,7 +9,7 @@ interface Props {
 }
 
 export default function LoginScreen({ onLogin }: Props) {
-  const [username, setUsername] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -29,13 +29,13 @@ export default function LoginScreen({ onLogin }: Props) {
       const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ identifier, password }),
       });
       const json = await res.json();
       if (json.success) {
         onLogin(json.user as AuthUser);
       } else {
-        setError(json.error ?? 'Invalid username or password.');
+        setError(json.error ?? 'Invalid credentials.');
       }
     } catch {
       setError('Could not reach the server. Please try again.');
@@ -91,16 +91,16 @@ export default function LoginScreen({ onLogin }: Props) {
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Username */}
+            {/* Email or Username */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium" style={{ color: 'var(--cn-text-muted)' }}>
-                Username
+                Email or Username
               </label>
               <input
                 type="text"
-                value={username}
-                onChange={e => { setUsername(e.target.value); setError(''); }}
-                placeholder="Enter username"
+                value={identifier}
+                onChange={e => { setIdentifier(e.target.value); setError(''); }}
+                placeholder="Enter email or username"
                 autoComplete="username"
                 required
                 className="w-full rounded-lg px-3 py-2.5 text-sm border focus:outline-none transition-colors"
@@ -158,7 +158,7 @@ export default function LoginScreen({ onLogin }: Props) {
             {/* Submit */}
             <button
               type="submit"
-              disabled={loading || !username || !password}
+              disabled={loading || !identifier || !password}
               className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white transition-all disabled:opacity-50 mt-2 cursor-pointer"
               style={{ background: 'var(--cn-accent)' }}
               onMouseEnter={e => { if (!loading) (e.currentTarget as HTMLButtonElement).style.background = 'var(--cn-accent-hover)'; }}

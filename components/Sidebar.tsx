@@ -31,8 +31,11 @@ const NAV_ICONS: Record<SheetId, React.ReactNode> = {
 };
 
 const ROLE_LABELS: Record<string, string> = {
+  HM: 'Admin', Admin: 'Admin', Mod: 'Admin',
   akash: 'Admin', admin: 'Admin', high: 'Admin', mod: 'Admin',
-  pm: 'Project Manager', resource: 'Resource',
+  pm: 'Project Manager', PMWebAdmin: 'Project Manager', PMMarketingAdmin: 'Project Manager',
+  WebAdmin: 'Team Admin', MarketingAdmin: 'Team Admin',
+  resource: 'Team Member', WebTeam: 'Team Member', MarketingTeam: 'Team Member',
 };
 
 const USER_DESIGNATIONS: Record<string, string> = {
