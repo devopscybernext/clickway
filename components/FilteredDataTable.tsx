@@ -1181,14 +1181,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                               onStatusChange={onStatusChange}
                             />
                           ) : isBucket ? (BUCKET_OPTIONS.find(o => o.toLowerCase() === normalizeBucket(val)) ?? val) || '—'
-                          : onStatusChange && editPersonBucket ? (
-                            <InlineEditCell
-                              value={val}
-                              row={row}
-                              col={h}
-                              onStatusChange={onStatusChange}
-                            />
-                          ) : val || '—'}
+                          : val || '—'}
                         </td>
                       );
                     })}
