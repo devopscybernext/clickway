@@ -429,7 +429,7 @@ function ResourceTimeLoggedEdit({ value, raw, colName, onStatusChange }: {
   );
 }
 
-function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatusColName, canEditPmStatus = true, statusColName, timeLoggedColName, canEditStatus = false, canCopy = false, pmEmailCol, currentUserEmail }: {
+function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatusColName, canEditPmStatus = true, statusColName, timeLoggedColName, canEditStatus = false, canCopy = false, pmEmailCol, currentUserEmail, showTotalHours = false }: {
   row: ResourceRow; onLeave: boolean;
   isOpen: boolean; onToggle: () => void;
   onStatusChange?: (row: SheetData, col: string, val: string) => Promise<void>;
@@ -441,6 +441,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
   canCopy?: boolean;
   pmEmailCol?: string;
   currentUserEmail?: string;
+  showTotalHours?: boolean;
 }) {
   const visibleTasks = row.pendingTasks;
   const open = isOpen;
@@ -622,7 +623,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
               <col style={{ width: canEditStatus ? '16%' : '18%' }} />  {/* Task */}
               <col style={{ width: '6%' }} />   {/* Link */}
               <col style={{ width: '6%' }} />   {/* Est. */}
-              <col style={{ width: '6%' }} />   {/* Total Hours */}
+              {showTotalHours && <col style={{ width: '6%' }} />}   {/* Total Hours */}
               <col style={{ width: canEditStatus ? '10%' : '11%' }} />  {/* Task Daily Bucket */}
               <col style={{ width: canEditStatus ? '10%' : '11%' }} />  {/* Bucket Set */}
               <col style={{ width: canEditStatus ? '12%' : '13%' }} />  {/* Status */}
@@ -636,7 +637,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task</th>
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Link</th>
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Est.</th>
-                <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Total Hours</th>
+                {showTotalHours && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Total Hours</th>}
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task Daily Bucket</th>
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Bucket Set</th>
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Status</th>
@@ -709,9 +710,11 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                       {t.timeEst || '—'}
                     </td>
                     {/* Total Hours */}
-                    <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
-                      {t.totalHoursVal || '—'}
-                    </td>
+                    {showTotalHours && (
+                      <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
+                        {t.totalHoursVal || '—'}
+                      </td>
+                    )}
                     {/* Task Daily Bucket */}
                     <td className="px-4 py-2">
                       {t.bucket ? (
@@ -1338,6 +1341,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
               canCopy={canCopy}
               pmEmailCol={restrictPmStatusToOwn ? emailCol : undefined}
               currentUserEmail={currentUserEmail}
+              showTotalHours={!!totalHoursCol}
             />
           ))}
         </div>
@@ -2321,7 +2325,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
                       <table className="w-full text-xs border-collapse">
                         <thead>
                           <tr style={{ borderBottom: '1px solid var(--cn-border)', background: 'var(--cn-bg-input)' }}>
-                            {['TASK', 'LINK', 'EST.', 'TOTAL HOURS', 'TASK DAILY BUCKET', 'BUCKET SET', 'STATUS', 'PM STATUS'].map(h => (
+                            {['TASK', 'LINK', 'EST.', ...(totalHoursCol2 ? ['TOTAL HOURS'] : []), 'TASK DAILY BUCKET', 'BUCKET SET', 'STATUS', 'PM STATUS'].map(h => (
                               <th key={h} className="text-left px-3 py-2 font-semibold tracking-wide whitespace-nowrap" style={{ color: 'var(--cn-text-muted)', fontSize: '11px' }}>{h}</th>
                             ))}
                           </tr>
@@ -2342,9 +2346,11 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
                                     ? <span className="font-bold px-1.5 py-0.5 rounded-full text-[11px]" style={{ background: '#f59e0b22', color: '#f59e0b' }}>{Math.round(t.hours * 10) / 10}h</span>
                                     : <span style={{ color: 'var(--cn-text-faint)' }}>—</span>}
                                 </td>
-                                <td className="px-3 py-2.5" style={{ minWidth: 60, color: 'var(--cn-text-muted)' }}>
-                                  {t.totalHoursVal || '—'}
-                                </td>
+                                {totalHoursCol2 && (
+                                  <td className="px-3 py-2.5" style={{ minWidth: 60, color: 'var(--cn-text-muted)' }}>
+                                    {t.totalHoursVal || '—'}
+                                  </td>
+                                )}
                                 <td className="px-3 py-2.5" style={{ minWidth: 110 }}>
                                   <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold"
                                     style={{ background: BUCKET_COLORS2[t.bucket] + '22', color: BUCKET_COLORS2[t.bucket] }}>
