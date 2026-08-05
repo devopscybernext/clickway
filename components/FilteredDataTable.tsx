@@ -76,6 +76,7 @@ const FILTER_CONFIG: Record<'1' | '2', { term: string; label: string }[]> = {
   '1': [
     { term: 'project name',      label: 'Project Name' },
     { term: 'priority',          label: 'Priority' },
+    { term: 'department',        label: 'Department' },
     { term: 'assigned person',   label: 'Assigned Person' },
     { term: 'assigned to',       label: 'Assigned To' },
     { term: 'task daily bucket', label: 'Task Daily Bucket' },
@@ -96,8 +97,8 @@ const FILTER_CONFIG: Record<'1' | '2', { term: string; label: string }[]> = {
 function getDefaultCols(allCols: string[], sheetNum: '1' | '2'): string[] {
   if (sheetNum === '1') {
     const terms = [
-      'project name', 'task name', 'task url', 'time estimation',
-      'assigned person', 'assigned to', 'task daily bucket', 'task status',
+      'project name', 'task name', 'task url', 'time estimation', 'task estimation',
+      'department', 'assigned person', 'assigned to', 'task daily bucket', 'task status',
       'time logged', 'today bucket set', 'pm status', 'status updation',
       'preferred resource',
     ];

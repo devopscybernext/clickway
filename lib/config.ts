@@ -57,18 +57,26 @@ export const RANGE_QA_TESTING = `'${TAB_QA_TESTING}'!A1:Z1000`;
 // Allocation) / "Name" (Resource Availability) columns.
 export const WEB_TEAM = ['Akash', 'Dhruv', 'Shubham', 'Lovepreet', 'Pawan', 'Robin'];
 
-// Marketing Team spreadsheet — one tab per sub-team (SEO/PPC/SMM). Columns:
-// Timestamp, Email Address, Project Name, Task Name, Task URL, Assigned
-// Person, Task Estimation, Deadline, Task Daily Bucket, Action Taken Today,
-// Performance Signal/Insights, Blocker (PPC/SEO only), Next Steps, Time
-// Logged On Ac, Task Status Updation, Today Bucket Set, Total Hours, PM Status
+// Marketing Team spreadsheet — a single "Marketing Tasks" tab covering every
+// sub-team, distinguished by the Department column (SEO/PPC/SMM/...) rather
+// than separate tabs. Columns: Timestamp, Email Address, Project Name, Task
+// Name, Task URL, Department, Task Estimation, Deadline, Assigned Person,
+// Task Daily Bucket, Action Taken Today, Performance Signal/Insights,
+// Blocker, Next Steps, Time Logged On Ac, Task Status Updation, Today
+// Bucket Set, Total Hours, PM Status
 export const MARKETING_TEAM_SHEET_ID = '1TTfD6-EKMXucucAyI2iNJLd6-P6lbolgQe-QOC1GyXs';
+export const TAB_MARKETING_TASKS = 'Marketing Tasks';
 
-// Assigned Person options per sub-team — matches each tab's own dropdown
-// validation in the sheet (unioned with any extra names already in the data)
-export const SEO_ASSIGNED_PERSONS = ['Bhavya', 'Kshitij', 'Akshay'];
-export const PPC_ASSIGNED_PERSONS = ['Atul', 'Shiwangi', 'Anjali', 'Dheeraj', 'Anurag', 'Vansh', 'Akshay'];
-export const SMM_ASSIGNED_PERSONS = ['Payal', 'Akanksha'];
+// Department options (matches the sheet's dropdown validation)
+export const MARKETING_DEPARTMENT_OPTIONS = ['SEO', 'PPC', 'SMM'];
+
+// Assigned Person — union of every department's roster (matches each
+// department's own dropdown validation in the sheet)
+export const MARKETING_ASSIGNED_PERSONS = [
+  'Bhavya', 'Kshitij', 'Akshay', // SEO
+  'Atul', 'Shiwangi', 'Anjali', 'Dheeraj', 'Anurag', 'Vansh', // PPC (Akshay shared with SEO)
+  'Payal', 'Akanksha', // SMM
+];
 
 // Task Status Updation options for the Marketing Team sheet — differs from
 // Bandwidth Allocation's list ("Submitted To Admin" instead of "Submitted To
