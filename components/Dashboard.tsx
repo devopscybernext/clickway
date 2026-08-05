@@ -262,7 +262,6 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [tasksAssignedTeam, setTasksAssignedTeam] = useState<Team>(lockedTasksAssignedTeam ?? 'web');
   const [addTaskTeam, setAddTaskTeam] = useState<Team>(lockedTeam ?? 'web');
   const [analyticsTeam, setAnalyticsTeam] = useState<Team>(lockedTeam ?? 'web');
-  const [leaderboardTeam, setLeaderboardTeam] = useState<Team>(lockedTeam ?? 'web');
   const [analysisDateFilter, setAnalysisDateFilter] = useState<'all' | 'daily' | 'weekly' | 'monthly'>('all');
   const [topFilter, setTopFilter] = useState<'monthly' | 'alltime'>('monthly');
   const iframeLoadCount = useRef(0);
@@ -544,11 +543,6 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const analyticsAvailData    = analyticsTeam === 'web' ? availData : marketingAvailData;
   const analyticsAvailHeaders = analyticsTeam === 'web' ? availHeaders : [];
   const analyticsOnStatusChange = analyticsTeam === 'web' ? handleBandwidthStatusChange : handleMarketingTeamChange;
-
-  // Leaderboard (sheet 7) — same split; Marketing has no manual-points tab yet
-  const lbTeamData    = leaderboardTeam === 'web' ? activeBandwidthData : marketingTeamData;
-  const lbTeamHeaders = leaderboardTeam === 'web' ? bandwidthHeaders : marketingTeamHeaders;
-  const lbManualData  = leaderboardTeam === 'web' ? lbData : [];
 
   // Tasks Assigned — same sort/search pipeline as searchFiltered, scoped to the selected team
   const tasksAssignedTeamData = tasksAssignedTeam === 'web' ? webBandwidthData : marketingTeamData;
@@ -1397,48 +1391,21 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
             </section>
           )}
 
-          {/* ── Leaderboard ─────────────────────────────────────────────────────── */}
+          {/* ── Leaderboard — Web only for now; Marketing has no points/scoring
+               system yet, so a Marketing tab would just show an all-zero board ── */}
           {isLeaderboard && (
             <section
-              className="cn-card rounded-lg p-4 sm:p-8 border transition-colors space-y-4"
+              className="cn-card rounded-lg p-4 sm:p-8 border transition-colors"
               style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
             >
-              {!lockedTeam && (
-                <div className="flex items-center gap-3 flex-wrap -mt-2 -mb-2">
-                  {([
-                    { key: 'web', label: 'Web' },
-                    { key: 'marketing', label: 'Marketing' },
-                  ] as const).map(tab => (
-                    <button
-                      key={tab.key}
-                      onClick={() => setLeaderboardTeam(tab.key)}
-                      className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
-                      style={{
-                        borderColor: leaderboardTeam === tab.key ? 'var(--cn-accent)' : 'transparent',
-                        color: leaderboardTeam === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
-                        background: 'transparent',
-                      }}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {leaderboardTeam === 'marketing' && lbTeamData.length === 0 ? (
-                <div className="text-center py-16 text-sm" style={{ color: 'var(--cn-text-muted)' }}>
-                  No Marketing tasks yet.
-                </div>
-              ) : (
-                <Leaderboard
-                  key={leaderboardTeam}
-                  bandwidthData={lbTeamData}
-                  bandwidthHeaders={lbTeamHeaders}
-                  leaderboardData={lbManualData}
-                  user={user}
-                  onRefreshLb={fetchLb}
-                  lbLoading={lbLoading}
-                />
-              )}
+              <Leaderboard
+                bandwidthData={activeBandwidthData}
+                bandwidthHeaders={bandwidthHeaders}
+                leaderboardData={lbData}
+                user={user}
+                onRefreshLb={fetchLb}
+                lbLoading={lbLoading}
+              />
             </section>
           )}
         </main>
