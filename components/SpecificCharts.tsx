@@ -934,7 +934,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
 
 
 // ─── Flat Tasks Table (all resources' tasks in a single table, no grouping) ────
-function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus = true, statusColName, timeLoggedColName, canEditStatus = false, canCopy = false, currentUserName, pmEmailCol, currentUserEmail, vinayQaMode = false, showMarketingCols = false, showTimeLogged = true, showTotalHours = false, bucketColName, totalHoursColName, actionTakenColName, performanceSignalColName, blockerColName, nextStepsColName }: {
+function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus = true, statusColName, timeLoggedColName, canEditStatus = false, canCopy = false, currentUserName, pmEmailCol, currentUserEmail, vinayQaMode = false, showMarketingCols = false, showTotalHours = false, bucketColName, totalHoursColName }: {
   rows: ResourceRow[];
   onStatusChange?: (row: SheetData, col: string, val: string) => Promise<void>;
   pmStatusColName?: string;
@@ -948,14 +948,9 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
   currentUserEmail?: string;
   vinayQaMode?: boolean;
   showMarketingCols?: boolean;
-  showTimeLogged?: boolean;
   showTotalHours?: boolean;
   bucketColName?: string;
   totalHoursColName?: string;
-  actionTakenColName?: string;
-  performanceSignalColName?: string;
-  blockerColName?: string;
-  nextStepsColName?: string;
 }) {
   const [copiedRowIdx, setCopiedRowIdx] = useState<number | null>(null);
   const [copiedTable, setCopiedTable] = useState(false);
@@ -1057,15 +1052,10 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
               <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Project</th>
               <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task</th>
               <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Link</th>
-              {!vinayQaMode && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Est.</th>}
-              {showTotalHours && !vinayQaMode && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Total Hours</th>}
+              {!vinayQaMode && !showMarketingCols && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Est.</th>}
+              {showTotalHours && !vinayQaMode && !showMarketingCols && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Total Hours</th>}
               <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task Daily Bucket</th>
               {!vinayQaMode && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Bucket Set</th>}
-              {showMarketingCols && !vinayQaMode && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Action Taken Today</th>}
-              {showMarketingCols && !vinayQaMode && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Performance Signal/Insights</th>}
-              {showMarketingCols && !vinayQaMode && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Blocker</th>}
-              {showMarketingCols && !vinayQaMode && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Next Steps</th>}
-              {showTimeLogged && !vinayQaMode && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Time Logged On AC</th>}
               <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Status</th>
               {!vinayQaMode && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">PM Status</th>}
             </tr>
@@ -1131,12 +1121,12 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
                       </a>
                     ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>}
                   </td>
-                  {!vinayQaMode && (
+                  {!vinayQaMode && !showMarketingCols && (
                     <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
                       {t.timeEst || '—'}
                     </td>
                   )}
-                  {showTotalHours && !vinayQaMode && (
+                  {showTotalHours && !vinayQaMode && !showMarketingCols && (
                     <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
                       {onStatusChange && totalHoursColName && rowCanEditStatus ? (
                         <ResourceTimeLoggedEdit value={t.totalHoursVal} raw={t._raw} colName={totalHoursColName} onStatusChange={onStatusChange} />
@@ -1161,41 +1151,6 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
                           {t.bucketSet.toLowerCase() === 'tommorow' ? 'Tomorrow' : t.bucketSet}
                         </span>
                       ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>}
-                    </td>
-                  )}
-                  {showMarketingCols && !vinayQaMode && (
-                    <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
-                      {onStatusChange && actionTakenColName && rowCanEditStatus ? (
-                        <ResourceTimeLoggedEdit value={t.actionTakenToday} raw={t._raw} colName={actionTakenColName} onStatusChange={onStatusChange} widthClass="w-full min-w-[90px]" />
-                      ) : <span className="truncate block">{t.actionTakenToday || '—'}</span>}
-                    </td>
-                  )}
-                  {showMarketingCols && !vinayQaMode && (
-                    <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
-                      {onStatusChange && performanceSignalColName && rowCanEditStatus ? (
-                        <ResourceTimeLoggedEdit value={t.performanceSignal} raw={t._raw} colName={performanceSignalColName} onStatusChange={onStatusChange} widthClass="w-full min-w-[90px]" />
-                      ) : <span className="truncate block">{t.performanceSignal || '—'}</span>}
-                    </td>
-                  )}
-                  {showMarketingCols && !vinayQaMode && (
-                    <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
-                      {onStatusChange && blockerColName && rowCanEditStatus ? (
-                        <ResourceTimeLoggedEdit value={t.blocker} raw={t._raw} colName={blockerColName} onStatusChange={onStatusChange} widthClass="w-full min-w-[70px]" />
-                      ) : <span className="truncate block">{t.blocker || '—'}</span>}
-                    </td>
-                  )}
-                  {showMarketingCols && !vinayQaMode && (
-                    <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
-                      {onStatusChange && nextStepsColName && rowCanEditStatus ? (
-                        <ResourceTimeLoggedEdit value={t.nextSteps} raw={t._raw} colName={nextStepsColName} onStatusChange={onStatusChange} widthClass="w-full min-w-[70px]" />
-                      ) : <span className="truncate block">{t.nextSteps || '—'}</span>}
-                    </td>
-                  )}
-                  {showTimeLogged && !vinayQaMode && (
-                    <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
-                      {onStatusChange && timeLoggedColName && rowCanEditStatus ? (
-                        <ResourceTimeLoggedEdit value={t.timeLogged} raw={t._raw} colName={timeLoggedColName} onStatusChange={onStatusChange} />
-                      ) : (t.timeLogged || '—')}
                     </td>
                   )}
                   <td className="px-4 py-2">
@@ -1537,14 +1492,9 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
           currentUserEmail={currentUserEmail}
           vinayQaMode={vinayQaMode}
           showMarketingCols={showMarketingCols}
-          showTimeLogged={showTimeLogged}
           showTotalHours={showTotalHours}
           bucketColName={bucketCol}
           totalHoursColName={totalHoursCol}
-          actionTakenColName={actionTakenCol}
-          performanceSignalColName={performanceSignalCol}
-          blockerColName={blockerCol}
-          nextStepsColName={nextStepsCol}
         />
       ) : (
         <div className="space-y-2">

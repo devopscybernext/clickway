@@ -87,6 +87,10 @@ export function getTasksAssignedLockedTeam(role: Role): Team | undefined {
 const FULL_ACCESS: SheetId[]     = ['3', '6', '1', '9', '11', '12', '7', '14'];
 const NO_PM_BANDWIDTH: SheetId[] = ['3', '6', '1', '9', '12', '7', '14'];
 const TEAM_MEMBER: SheetId[]     = ['3', '9', '7', '14'];
+// Marketing has no leaderboard/scoring system yet — MarketingAdmin/MarketingTeam
+// don't get the Leaderboard nav item until a real Marketing leaderboard exists.
+const NO_PM_BANDWIDTH_NO_LB: SheetId[] = ['3', '6', '1', '9', '12', '14'];
+const TEAM_MEMBER_NO_LB: SheetId[]     = ['3', '9', '14'];
 
 export const ROLE_SHEETS: Record<Role, SheetId[]> = {
   HM:    FULL_ACCESS,
@@ -95,9 +99,9 @@ export const ROLE_SHEETS: Record<Role, SheetId[]> = {
   PMWebAdmin:       FULL_ACCESS,
   PMMarketingAdmin: FULL_ACCESS,
   WebAdmin:       NO_PM_BANDWIDTH,
-  MarketingAdmin: NO_PM_BANDWIDTH,
+  MarketingAdmin: NO_PM_BANDWIDTH_NO_LB,
   WebTeam:       TEAM_MEMBER,
-  MarketingTeam: TEAM_MEMBER,
+  MarketingTeam: TEAM_MEMBER_NO_LB,
   // legacy
   pm:       ['3', '6', '9', '11', '12', '7', '14'],
   resource: TEAM_MEMBER,
