@@ -503,7 +503,7 @@ function ResourceTimeLoggedEdit({ value, raw, colName, onStatusChange, widthClas
   );
 }
 
-function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatusColName, canEditPmStatus = true, statusColName, timeLoggedColName, canEditStatus = false, canCopy = false, pmEmailCol, currentUserEmail, showMarketingCols = false, showTimeLogged = true, showTotalHours = false, bucketColName, totalHoursColName, actionTakenColName, performanceSignalColName, blockerColName, nextStepsColName }: {
+function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatusColName, canEditPmStatus = true, statusColName, timeLoggedColName, canEditStatus = false, canCopy = false, pmEmailCol, currentUserEmail, showMarketingCols = false, showTimeLogged = true, showTotalHours = false, bucketColName, actionTakenColName, performanceSignalColName, blockerColName, nextStepsColName }: {
   row: ResourceRow; onLeave: boolean;
   isOpen: boolean; onToggle: () => void;
   onStatusChange?: (row: SheetData, col: string, val: string) => Promise<void>;
@@ -519,7 +519,6 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
   showTimeLogged?: boolean;
   showTotalHours?: boolean;
   bucketColName?: string;
-  totalHoursColName?: string;
   actionTakenColName?: string;
   performanceSignalColName?: string;
   blockerColName?: string;
@@ -537,6 +536,13 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
     });
     return [...map.entries()].sort((a, b) => b[1].length - a[1].length);
   })();
+  // Fixed per-column pixel widths so the table never squishes/overlaps —
+  // once the sum exceeds the container, overflow-x-auto scrolls instead.
+  const cardTableMinWidth =
+    (canCopy ? 40 : 0) + (showMarketingCols ? 160 : 220) + 70 + 70 +
+    (showTotalHours ? 90 : 0) + 120 + 110 +
+    (showMarketingCols ? 140 + 160 + 110 + 110 : 0) +
+    (showTimeLogged ? 110 : 0) + 140 + 160;
   const open = isOpen;
   const initials = row.name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
   const bg      = memberColor(row.name);
@@ -716,22 +722,22 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
               <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'var(--cn-bg-card)', color: 'var(--cn-text-muted)' }}>{tasks.length}</span>
             </div>
             <div className="overflow-x-auto">
-          <table className="w-full text-xs table-fixed">
+          <table className="text-xs table-fixed" style={{ width: '100%', minWidth: cardTableMinWidth }}>
             <colgroup>
-              {canCopy && <col style={{ width: '5%' }} />}  {/* Copy */}
-              <col style={{ width: showMarketingCols ? '13%' : '20%' }} />  {/* Task */}
-              <col style={{ width: '6%' }} />   {/* Link */}
-              <col style={{ width: '6%' }} />   {/* Est. */}
-              {showTotalHours && <col style={{ width: '7%' }} />}  {/* Total Hours */}
-              <col style={{ width: showMarketingCols ? '9%' : '12%' }} />  {/* Task Daily Bucket */}
-              <col style={{ width: showMarketingCols ? '9%' : '12%' }} />  {/* Bucket Set */}
-              {showMarketingCols && <col style={{ width: '11%' }} />}  {/* Action Taken Today */}
-              {showMarketingCols && <col style={{ width: '11%' }} />}  {/* Performance Signal/Insights */}
-              {showMarketingCols && <col style={{ width: '9%' }} />}  {/* Blocker */}
-              {showMarketingCols && <col style={{ width: '9%' }} />}  {/* Next Steps */}
-              {showTimeLogged && <col style={{ width: showMarketingCols ? '9%' : '11%' }} />}  {/* Time Logged On AC */}
-              <col style={{ width: showMarketingCols ? '10%' : '14%' }} />  {/* Status */}
-              <col style={{ width: showMarketingCols ? '10%' : '19%' }} />  {/* PM Status */}
+              {canCopy && <col style={{ width: '40px' }} />}  {/* Copy */}
+              <col style={{ width: showMarketingCols ? '160px' : '220px' }} />  {/* Task */}
+              <col style={{ width: '70px' }} />   {/* Link */}
+              <col style={{ width: '70px' }} />   {/* Est. */}
+              {showTotalHours && <col style={{ width: '90px' }} />}  {/* Total Hours */}
+              <col style={{ width: '120px' }} />  {/* Task Daily Bucket */}
+              <col style={{ width: '110px' }} />  {/* Bucket Set */}
+              {showMarketingCols && <col style={{ width: '140px' }} />}  {/* Action Taken Today */}
+              {showMarketingCols && <col style={{ width: '160px' }} />}  {/* Performance Signal/Insights */}
+              {showMarketingCols && <col style={{ width: '110px' }} />}  {/* Blocker */}
+              {showMarketingCols && <col style={{ width: '110px' }} />}  {/* Next Steps */}
+              {showTimeLogged && <col style={{ width: '110px' }} />}  {/* Time Logged On AC */}
+              <col style={{ width: '140px' }} />  {/* Status */}
+              <col style={{ width: '160px' }} />  {/* PM Status */}
             </colgroup>
             <thead>
               <tr style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}>
@@ -811,12 +817,10 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                     <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
                       {t.timeEst || '—'}
                     </td>
-                    {/* Total Hours */}
+                    {/* Total Hours — always read-only, sourced from the sheet */}
                     {showTotalHours && (
                       <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
-                        {onStatusChange && totalHoursColName && canEditStatus ? (
-                          <ResourceTimeLoggedEdit value={t.totalHoursVal} raw={t._raw} colName={totalHoursColName} onStatusChange={onStatusChange} />
-                        ) : (t.totalHoursVal || '—')}
+                        {t.totalHoursVal || '—'}
                       </td>
                     )}
                     {/* Task Daily Bucket */}
@@ -934,7 +938,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
 
 
 // ─── Flat Tasks Table (all resources' tasks in a single table, no grouping) ────
-function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus = true, statusColName, timeLoggedColName, canEditStatus = false, canCopy = false, currentUserName, pmEmailCol, currentUserEmail, vinayQaMode = false, showMarketingCols = false, showTotalHours = false, bucketColName, totalHoursColName }: {
+function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus = true, statusColName, timeLoggedColName, canEditStatus = false, canCopy = false, currentUserName, pmEmailCol, currentUserEmail, vinayQaMode = false, showMarketingCols = false, showTotalHours = false, bucketColName }: {
   rows: ResourceRow[];
   onStatusChange?: (row: SheetData, col: string, val: string) => Promise<void>;
   pmStatusColName?: string;
@@ -950,7 +954,6 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
   showMarketingCols?: boolean;
   showTotalHours?: boolean;
   bucketColName?: string;
-  totalHoursColName?: string;
 }) {
   const [copiedRowIdx, setCopiedRowIdx] = useState<number | null>(null);
   const [copiedTable, setCopiedTable] = useState(false);
@@ -960,6 +963,12 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
   const flatTasks = vinayQaMode
     ? allFlatTasks.filter(t => t.status.trim().toLowerCase() === 'testing')
     : allFlatTasks;
+  // Fixed minimum width so the table scrolls instead of squishing columns
+  const flatTableMinWidth =
+    (canCopy ? 40 : 0) + 140 + 130 + 160 + 70 +
+    (!vinayQaMode && !showMarketingCols ? 70 : 0) +
+    (showTotalHours && !vinayQaMode && !showMarketingCols ? 90 : 0) +
+    120 + (!vinayQaMode ? 110 : 0) + 140 + (!vinayQaMode ? 160 : 0);
 
   const copyRow = (t: typeof flatTasks[number], idx: number) => {
     const text = `Project Name: ${t.project}\nTask URL: ${t.taskUrl}\nEst Time: `;
@@ -1044,7 +1053,7 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
         </div>
       )}
       <div className="overflow-x-auto">
-        <table className="w-full text-xs table-fixed">
+        <table className="text-xs table-fixed" style={{ width: '100%', minWidth: flatTableMinWidth }}>
           <thead>
             <tr style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}>
               {canCopy && <th className="px-2 py-2 w-10" />}
@@ -1128,9 +1137,7 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
                   )}
                   {showTotalHours && !vinayQaMode && !showMarketingCols && (
                     <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
-                      {onStatusChange && totalHoursColName && rowCanEditStatus ? (
-                        <ResourceTimeLoggedEdit value={t.totalHoursVal} raw={t._raw} colName={totalHoursColName} onStatusChange={onStatusChange} />
-                      ) : (t.totalHoursVal || '—')}
+                      {t.totalHoursVal || '—'}
                     </td>
                   )}
                   <td className="px-4 py-2">
@@ -1187,7 +1194,7 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
   );
 }
 
-export function ResourceOverview({ data, headers, availData = [], availHeaders = [], onStatusChange, pmStatusColName, currentUserName, currentUserEmail, showFilter, canEditPmStatus = true, canEditStatus = false, canCopy = false, restrictToMine = false, defaultFilter = 'all', restrictPmStatusToOwn = false, vinayQaMode = false, showQaTab = false, qaData = [], qaHeaders = [], onQaCellChange, isMarketingTeamViewer = false }: { data: SheetData[]; headers: string[]; availData?: SheetData[]; availHeaders?: string[]; onStatusChange?: (row: SheetData, col: string, val: string) => Promise<void>; pmStatusColName?: string; currentUserName?: string; currentUserEmail?: string; showFilter?: boolean; canEditPmStatus?: boolean; canEditStatus?: boolean; canCopy?: boolean; restrictToMine?: boolean; defaultFilter?: 'all' | 'me'; restrictPmStatusToOwn?: boolean; vinayQaMode?: boolean; showQaTab?: boolean; qaData?: SheetData[]; qaHeaders?: string[]; onQaCellChange?: (row: SheetData, colName: string, value: string) => Promise<void>; isMarketingTeamViewer?: boolean }) {
+export function ResourceOverview({ data, headers, availData = [], availHeaders = [], onStatusChange, pmStatusColName, currentUserName, currentUserEmail, showFilter, canEditPmStatus = true, canEditStatus = false, canCopy = false, restrictToMine = false, defaultFilter = 'all', restrictPmStatusToOwn = false, vinayQaMode = false, showQaTab = false, qaData = [], qaHeaders = [], onQaCellChange }: { data: SheetData[]; headers: string[]; availData?: SheetData[]; availHeaders?: string[]; onStatusChange?: (row: SheetData, col: string, val: string) => Promise<void>; pmStatusColName?: string; currentUserName?: string; currentUserEmail?: string; showFilter?: boolean; canEditPmStatus?: boolean; canEditStatus?: boolean; canCopy?: boolean; restrictToMine?: boolean; defaultFilter?: 'all' | 'me'; restrictPmStatusToOwn?: boolean; vinayQaMode?: boolean; showQaTab?: boolean; qaData?: SheetData[]; qaHeaders?: string[]; onQaCellChange?: (row: SheetData, colName: string, value: string) => Promise<void> }) {
   const [openName, setOpenName] = useState<string | null>(null);
   const [pmFilter, setPmFilter] = useState<'all' | 'me' | 'today' | 'me-today' | 'flat' | 'qa'>(restrictToMine ? 'me' : vinayQaMode ? 'flat' : defaultFilter);
   const [search, setSearch] = useState('');
@@ -1233,13 +1240,18 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
   const blockerCol = headers.find(h => h.toLowerCase() === 'blocker' || h.toLowerCase().includes('blocker'));
   const nextStepsCol = headers.find(h => h.toLowerCase().includes('next steps'));
   const isMarketingSheet = !!actionTakenCol;
-  // Action Taken/Performance Signal/Blocker/Next Steps/Time Logged are only
-  // shown to MarketingTeam members themselves — PMs/admins/team-admins don't
-  // see them even when viewing the same Marketing data. Total Hours is the
-  // opposite: always shown to everyone once the sheet has it.
-  const showMarketingCols = isMarketingSheet && isMarketingTeamViewer;
-  const showTimeLogged = !isMarketingSheet || isMarketingTeamViewer;
+  // Action Taken/Performance Signal/Blocker/Next Steps are Marketing-only
+  // fields, only shown to MarketingTeam members viewing their own tasks.
+  // Time Logged On AC is shown to any individual-tier viewer (WebTeam or
+  // MarketingTeam) on their own tasks, but never to admin/PM/team-admin.
+  // Total Hours is independent of both — shown whenever the sheet has it,
+  // to everyone, and never editable (it's sourced from the sheet).
+  const showMarketingCols = isMarketingSheet && canEditStatus;
+  const showTimeLogged = canEditStatus;
   const showTotalHours = !!totalHoursCol;
+  // Task Daily Bucket is only editable on Marketing data — Web team members
+  // don't get an editable bucket dropdown.
+  const editableBucketCol = isMarketingSheet ? bucketCol : undefined;
 
   if (!resourceCol || !statusCol) return null;
 
@@ -1493,8 +1505,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
           vinayQaMode={vinayQaMode}
           showMarketingCols={showMarketingCols}
           showTotalHours={showTotalHours}
-          bucketColName={bucketCol}
-          totalHoursColName={totalHoursCol}
+          bucketColName={editableBucketCol}
         />
       ) : (
         <div className="space-y-2">
@@ -1522,8 +1533,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
               showMarketingCols={showMarketingCols}
               showTimeLogged={showTimeLogged}
               showTotalHours={showTotalHours}
-              bucketColName={bucketCol}
-              totalHoursColName={totalHoursCol}
+              bucketColName={editableBucketCol}
               actionTakenColName={actionTakenCol}
               performanceSignalColName={performanceSignalCol}
               blockerColName={blockerCol}
@@ -2247,12 +2257,11 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
   const taskUrlCol   = findCol(sheet1Headers, 'task url', 'task link', 'link', 'url');
   const bucketSetCol = sheet1Headers.find(h => h.toLowerCase().includes('today bucket set') || h.toLowerCase().includes('bucket set'));
   const pmStatusCol2 = sheet1Headers.find(h => h.toLowerCase().includes('pm status'));
-  const timeLoggedCol2 = sheet1Headers.find(h => h.toLowerCase().includes('time logged'));
   const totalHoursCol2 = sheet1Headers.find(h => h.toLowerCase().includes('total hours'));
-  // Total Hours only exists on the Marketing Tasks sheet — used both to show
-  // that column and to hide Time Logged On AC (Marketing-only, hidden here
-  // regardless of role; only shown to MarketingTeam members in Tasks Overview).
-  const isMarketingSheet2 = !!totalHoursCol2;
+  // Team Bandwidth has no individual-tier viewers — Time Logged On AC never
+  // shows here (only in Tasks Overview, for the row's own owner). Total Hours
+  // shows whenever the sheet has it, independent of team.
+  const showTotalHours2 = !!totalHoursCol2;
   const pmEmailCol   = findCol(sheet1Headers, 'pm email', 'email');
   const availNameCol   = availHeaders ? findCol(availHeaders, 'name', 'resource', 'person') : undefined;
   const availStatusCol = availHeaders ? findCol(availHeaders, 'availability', 'status', 'leave') : undefined;
@@ -2275,7 +2284,6 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
   const getTaskUrl   = (r: SheetData) => taskUrlCol   ? String(r[taskUrlCol]   ?? '').trim() : '';
   const getBucketSet = (r: SheetData) => bucketSetCol ? String(r[bucketSetCol] ?? '').trim() : '';
   const getPmStatus  = (r: SheetData) => pmStatusCol2 ? String(r[pmStatusCol2] ?? '').trim() : '';
-  const getTimeLogged2 = (r: SheetData) => timeLoggedCol2 ? String(r[timeLoggedCol2] ?? '').trim() : '';
   const getTotalHoursVal2 = (r: SheetData) => totalHoursCol2 ? String(r[totalHoursCol2] ?? '').trim() : '';
 
   const names = [...new Set(sheet1Data.map(r => String(r[resourceCol] ?? '').trim()).filter(Boolean))].sort();
@@ -2334,7 +2342,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
               : { label: 'Occupied',         bg: '#ef4444' };
 
     // Build grouped tasks for dropdown (tab-relevant tasks only, exclude task closed)
-    const grouped: Record<string, { task: string; project: string; status: string; hours: number; taskUrl: string; bucketSet: string; pmStatus: string; timeLogged: string; totalHoursVal: string; realBucket: string; _raw: SheetData }[]> = {};
+    const grouped: Record<string, { task: string; project: string; status: string; hours: number; taskUrl: string; bucketSet: string; pmStatus: string; totalHoursVal: string; realBucket: string; _raw: SheetData }[]> = {};
     tabTasks.forEach(r => {
       const st = getStatus(r).toLowerCase();
       if (SKIP_STATUSES.includes(st)) return;
@@ -2349,7 +2357,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
       grouped[bucket].push({
         task: getTask(r), project: getProj(r), status: getStatus(r), hours: getTime(r),
         taskUrl: getTaskUrl(r), bucketSet: getBucketSet(r), pmStatus: getPmStatus(r),
-        timeLogged: getTimeLogged2(r), totalHoursVal: getTotalHoursVal2(r),
+        totalHoursVal: getTotalHoursVal2(r),
         realBucket: b, _raw: r,
       });
     });
@@ -2451,7 +2459,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
               Select a team member to see their tasks
             </div>
           ) : (() => {
-        const allTasks: { task: string; project: string; status: string; hours: number; taskUrl: string; bucketSet: string; pmStatus: string; timeLogged: string; totalHoursVal: string; _raw: SheetData; bucket: string; realBucket?: string }[] = [];
+        const allTasks: { task: string; project: string; status: string; hours: number; taskUrl: string; bucketSet: string; pmStatus: string; totalHoursVal: string; _raw: SheetData; bucket: string; realBucket?: string }[] = [];
         BUCKET_ORDER2.forEach(bucket => {
           (openRow.grouped[bucket] ?? []).forEach(t => allTasks.push({ ...t, bucket: t.realBucket ?? bucket }));
         });
@@ -2539,9 +2547,8 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
                         <thead>
                           <tr style={{ borderBottom: '1px solid var(--cn-border)', background: 'var(--cn-bg-input)' }}>
                             {['TASK', 'LINK', 'EST.',
-                              ...(isMarketingSheet2 ? ['TOTAL HOURS'] : []),
+                              ...(showTotalHours2 ? ['TOTAL HOURS'] : []),
                               'TASK DAILY BUCKET', 'BUCKET SET',
-                              ...(isMarketingSheet2 ? [] : ['TIME LOGGED ON AC']),
                               'STATUS', 'PM STATUS'].map(h => (
                               <th key={h} className="text-left px-3 py-2 font-semibold tracking-wide whitespace-nowrap" style={{ color: 'var(--cn-text-muted)', fontSize: '11px' }}>{h}</th>
                             ))}
@@ -2563,7 +2570,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
                                     ? <span className="font-bold px-1.5 py-0.5 rounded-full text-[11px]" style={{ background: '#f59e0b22', color: '#f59e0b' }}>{Math.round(t.hours * 10) / 10}h</span>
                                     : <span style={{ color: 'var(--cn-text-faint)' }}>—</span>}
                                 </td>
-                                {isMarketingSheet2 && (
+                                {showTotalHours2 && (
                                   <td className="px-3 py-2.5" style={{ minWidth: 60, color: 'var(--cn-text-muted)' }}>{t.totalHoursVal || '—'}</td>
                                 )}
                                 <td className="px-3 py-2.5" style={{ minWidth: 110 }}>
@@ -2577,9 +2584,6 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
                                     ? <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>{t.bucketSet}</span>
                                     : <span style={{ color: 'var(--cn-text-faint)' }}>—</span>}
                                 </td>
-                                {!isMarketingSheet2 && (
-                                  <td className="px-3 py-2.5" style={{ minWidth: 90, color: 'var(--cn-text-muted)' }}>{t.timeLogged || '—'}</td>
-                                )}
                                 <td className="px-3 py-2.5" style={{ minWidth: 120 }}>
                                   <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold"
                                     style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)', border: '1px solid var(--cn-border)' }}>

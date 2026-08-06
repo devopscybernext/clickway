@@ -843,7 +843,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 readOnlyPmStatus={isIndividual}
                 defaultPersonFilter={isIndividual ? user.displayName : undefined}
                 editPersonBucket={isAdmin}
-                hiddenCols={isPmTier ? (tasksAssignedTeam === 'web' ? bandwidthHeaders : marketingTeamHeaders).filter(h => h.toLowerCase().includes('time logged')) : undefined}
+                hiddenCols={(tasksAssignedTeam === 'web' ? bandwidthHeaders : marketingTeamHeaders).filter(h => h.toLowerCase().includes('time logged'))}
                 showCopy={isAdmin}
                 rowCopy={isAdmin}
               />
@@ -1122,7 +1122,6 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     qaData={qaData}
                     qaHeaders={qaHeaders}
                     onQaCellChange={handleQaChange}
-                    isMarketingTeamViewer={user.role === 'MarketingTeam'}
                   />
                 ) : marketingTeamData.length === 0 ? (
                   <div className="text-center py-16 text-sm" style={{ color: 'var(--cn-text-muted)' }}>
@@ -1144,7 +1143,6 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     canCopy={isIndividual}
                     defaultFilter="me"
                     restrictPmStatusToOwn={isPmTier}
-                    isMarketingTeamViewer={user.role === 'MarketingTeam'}
                   />
                 )}
               </div>
