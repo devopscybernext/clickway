@@ -1212,6 +1212,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     qaData={qaData}
                     qaHeaders={qaHeaders}
                     onQaCellChange={handleQaChange}
+                    isMarketingTeamViewer={user.role === 'MarketingTeam'}
                   />
                 ) : marketingTeamData.length === 0 ? (
                   <div className="text-center py-16 text-sm" style={{ color: 'var(--cn-text-muted)' }}>
@@ -1233,6 +1234,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     canCopy={isIndividual}
                     defaultFilter="me"
                     restrictPmStatusToOwn={isPmTier}
+                    isMarketingTeamViewer={user.role === 'MarketingTeam'}
                   />
                 )}
               </div>
