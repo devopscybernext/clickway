@@ -229,9 +229,17 @@ export function parseHours(val: string): number {
   return isNaN(num) ? 0 : num;
 }
 
-// Status based on todayHours (today+everyday) — matches the badge shown on the card
+// Status based on todayHours (today+everyday) — matches the badge shown on the card.
+// PPC (Marketing) is the one department whose "Everyday" tasks carry a full
+// monthly hour block rather than a daily one, so it gets its own thresholds.
 function resourceStatus(row: ResourceRow, onLeave = false): { label: string; bg: string; text: string } {
-  if (onLeave)                return { label: 'On Leave',           bg: '#ef4444', text: '#fff' };
+  if (onLeave) return { label: 'On Leave', bg: '#ef4444', text: '#fff' };
+  if (row.department.trim().toLowerCase() === 'ppc') {
+    if (row.todayHours > 130)  return { label: 'Overload',           bg: '#dc2626', text: '#fff' };
+    if (row.todayHours >= 120) return { label: 'Occupied',           bg: '#f97316', text: '#fff' };
+    if (row.todayHours >= 60)  return { label: 'Partially Available', bg: '#f59e0b', text: '#fff' };
+    return                            { label: 'Available',          bg: '#22c55e', text: '#fff' };
+  }
   if (row.todayHours === 0)   return { label: 'Available',          bg: '#22c55e', text: '#fff' };
   if (row.todayHours <= 6.5)  return { label: 'Partially Available', bg: '#f59e0b', text: '#fff' };
   if (row.todayHours <= 7.3)  return { label: 'Occupied',           bg: '#f97316', text: '#fff' };
@@ -241,6 +249,7 @@ function resourceStatus(row: ResourceRow, onLeave = false): { label: string; bg:
 
 interface ResourceRow {
   name: string;
+  department: string;
   activeProject: string;
   activeTasks: number;
   onHoldTasks: number;
@@ -517,6 +526,17 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
   nextStepsColName?: string;
 }) {
   const visibleTasks = row.pendingTasks;
+  // Group into one card per project, largest project first — mirrors the
+  // Team Bandwidth/Team Workload layout instead of one long flat table.
+  const projectGroups = (() => {
+    const map = new Map<string, typeof visibleTasks>();
+    visibleTasks.forEach(t => {
+      const key = t.project || 'No Project';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(t);
+    });
+    return [...map.entries()].sort((a, b) => b[1].length - a[1].length);
+  })();
   const open = isOpen;
   const initials = row.name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
   const bg      = memberColor(row.name);
@@ -686,31 +706,36 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
         )}
       </div>
 
-      {/* Expanded task list */}
+      {/* Expanded task list — grouped into one card per project */}
       {open && visibleTasks.length > 0 && (
-        <div style={{ borderTop: '1px solid var(--cn-border)' }}>
+        <div style={{ borderTop: '1px solid var(--cn-border)' }} className="p-3 sm:p-4 flex flex-col gap-3">
+          {projectGroups.map(([project, tasks]) => (
+          <div key={project} className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--cn-border)', background: 'var(--cn-bg-card)' }}>
+            <div className="px-3 py-2 flex items-center justify-between" style={{ borderBottom: '1px solid var(--cn-border)', background: 'var(--cn-bg-input)' }}>
+              <p className="text-xs font-bold truncate" style={{ color: 'var(--cn-text-primary)' }}>{project}</p>
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'var(--cn-bg-card)', color: 'var(--cn-text-muted)' }}>{tasks.length}</span>
+            </div>
+            <div className="overflow-x-auto">
           <table className="w-full text-xs table-fixed">
             <colgroup>
               {canCopy && <col style={{ width: '5%' }} />}  {/* Copy */}
-              <col style={{ width: showMarketingCols ? '9%' : '13%' }} />  {/* Project */}
-              <col style={{ width: showMarketingCols ? '11%' : '18%' }} />  {/* Task */}
-              <col style={{ width: '5%' }} />   {/* Link */}
-              <col style={{ width: '5%' }} />   {/* Est. */}
-              {showTotalHours && <col style={{ width: '6%' }} />}  {/* Total Hours */}
-              <col style={{ width: showMarketingCols ? '8%' : '11%' }} />  {/* Task Daily Bucket */}
-              <col style={{ width: showMarketingCols ? '8%' : '11%' }} />  {/* Bucket Set */}
-              {showMarketingCols && <col style={{ width: '10%' }} />}  {/* Action Taken Today */}
-              {showMarketingCols && <col style={{ width: '10%' }} />}  {/* Performance Signal/Insights */}
-              {showMarketingCols && <col style={{ width: '8%' }} />}  {/* Blocker */}
-              {showMarketingCols && <col style={{ width: '8%' }} />}  {/* Next Steps */}
-              {showTimeLogged && <col style={{ width: showMarketingCols ? '8%' : '10%' }} />}  {/* Time Logged On AC */}
-              <col style={{ width: showMarketingCols ? '9%' : '13%' }} />  {/* Status */}
-              <col style={{ width: showMarketingCols ? '9%' : '17%' }} />  {/* PM Status */}
+              <col style={{ width: showMarketingCols ? '13%' : '20%' }} />  {/* Task */}
+              <col style={{ width: '6%' }} />   {/* Link */}
+              <col style={{ width: '6%' }} />   {/* Est. */}
+              {showTotalHours && <col style={{ width: '7%' }} />}  {/* Total Hours */}
+              <col style={{ width: showMarketingCols ? '9%' : '12%' }} />  {/* Task Daily Bucket */}
+              <col style={{ width: showMarketingCols ? '9%' : '12%' }} />  {/* Bucket Set */}
+              {showMarketingCols && <col style={{ width: '11%' }} />}  {/* Action Taken Today */}
+              {showMarketingCols && <col style={{ width: '11%' }} />}  {/* Performance Signal/Insights */}
+              {showMarketingCols && <col style={{ width: '9%' }} />}  {/* Blocker */}
+              {showMarketingCols && <col style={{ width: '9%' }} />}  {/* Next Steps */}
+              {showTimeLogged && <col style={{ width: showMarketingCols ? '9%' : '11%' }} />}  {/* Time Logged On AC */}
+              <col style={{ width: showMarketingCols ? '10%' : '14%' }} />  {/* Status */}
+              <col style={{ width: showMarketingCols ? '10%' : '19%' }} />  {/* PM Status */}
             </colgroup>
             <thead>
               <tr style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}>
                 {canCopy && <th className="px-2 py-2 w-10" />}
-                <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Project</th>
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task</th>
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Link</th>
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Est.</th>
@@ -727,7 +752,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
               </tr>
             </thead>
             <tbody>
-              {visibleTasks.map((t, i) => {
+              {tasks.map((t, i) => {
                 const sColor  = STATUS_COLORS[t.status.toLowerCase()] ?? '#6b7280';
                 const pmColor: Record<string,string> = {
                   'approved': '#16a34a', 'submitted to client': '#6d28d9',
@@ -767,10 +792,6 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                         </button>
                       </td>
                     )}
-                    {/* Project */}
-                    <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
-                      <span className="truncate block">{t.project || '—'}</span>
-                    </td>
                     {/* Task */}
                     <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-primary)' }}>
                       <span className="truncate block">{t.task || '—'}</span>
@@ -902,6 +923,9 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
               })}
             </tbody>
           </table>
+            </div>
+          </div>
+          ))}
         </div>
       )}
     </div>
@@ -1237,6 +1261,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
   }
 
   const resourceCol  = headers.find(h => h.toLowerCase().includes('assigned person'));
+  const deptCol      = headers.find(h => h.toLowerCase() === 'department');
   const statusCol    = headers.find(h => h.toLowerCase().includes('task status') || h.toLowerCase() === 'status');
   const projectCol   = headers.find(h => h.toLowerCase().includes('project name') || h.toLowerCase().includes('project'));
   const taskCol      = headers.find(h => h.toLowerCase().includes('task name') || h.toLowerCase().includes('task title') || h.toLowerCase().includes('task information'));
@@ -1274,6 +1299,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
 
   const rows: ResourceRow[] = names.map(name => {
     const myTasks = data.filter(r => String(r[resourceCol] ?? '').trim().toLowerCase() === name.toLowerCase());
+    const department = deptCol ? String(myTasks.find(r => String(r[deptCol] ?? '').trim())?.[deptCol] ?? '').trim() : '';
     const getStatus    = (r: SheetData) => String(r[statusCol!]   ?? '').trim().toLowerCase();
     const getProject   = (r: SheetData) => projectCol   ? String(r[projectCol]   ?? '').trim() : '';
     const getTask      = (r: SheetData) => taskCol      ? String(r[taskCol]      ?? '').trim() : '';
@@ -1320,7 +1346,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
       }))
       .slice(0, 20);
 
-    return { name, activeProject, activeTasks, onHoldTasks, pendingPM, toBeStarted, testingTasks, totalHours, todayHours, todayTasks, pendingTasks };
+    return { name, department, activeProject, activeTasks, onHoldTasks, pendingPM, toBeStarted, testingTasks, totalHours, todayHours, todayTasks, pendingTasks };
   }).filter(r => r.totalHours > 0 || r.activeTasks + r.onHoldTasks + r.pendingPM + r.toBeStarted + r.testingTasks > 0)
     .sort((a, b) => (b.activeTasks + b.onHoldTasks) - (a.activeTasks + a.onHoldTasks));
 
@@ -2262,6 +2288,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
 
 
   const resourceCol = findCol(sheet1Headers, 'assigned person', 'assigned to', 'resource');
+  const deptCol     = sheet1Headers.find(h => h.toLowerCase() === 'department');
   const statusCol   = findCol(sheet1Headers, 'task status', 'status');
   const bucketCol   = findCol(sheet1Headers, 'task daily bucket', 'bucket');
   const timeEstCol  = findCol(sheet1Headers, 'time estimation', 'time estimate', 'estimation');
@@ -2308,6 +2335,8 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
 
   const rows = names.map(name => {
     const myTasks = sheet1Data.filter(r => String(r[resourceCol] ?? '').trim() === name);
+    const personDept = deptCol ? String(myTasks.find(r => String(r[deptCol] ?? '').trim())?.[deptCol] ?? '').trim() : '';
+    const isPPC = personDept.toLowerCase() === 'ppc';
     // Show tasks filtered by tab — exclude closed tasks and tomorrow/dayafter from Today's tab
     const tabTasks = myTasks.filter(r => {
       const st = getStatus(r).toLowerCase();
@@ -2334,15 +2363,25 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
       if (av) { const v = String(av[availStatusCol] ?? '').trim().toLowerCase(); onLeave = v.includes('leave') || v === 'absent'; }
     }
 
+    // PPC's "Everyday" tasks carry a full monthly hour block rather than a
+    // daily one, so it gets its own thresholds instead of the daily-hours bands.
     const status = onLeave
-      ? { label: 'On Leave',           bg: '#ef4444' }
-      : displayHours === 0
-        ? { label: 'Available',          bg: '#22c55e' }
-        : displayHours <= 6.5
-          ? { label: 'Partially Occupied', bg: '#f59e0b' }
-          : displayHours <= 7.3
-            ? { label: 'Occupied',         bg: '#f97316' }
-            : { label: 'Occupied',         bg: '#ef4444' };
+      ? { label: 'On Leave', bg: '#ef4444' }
+      : isPPC
+        ? (displayHours > 130
+            ? { label: 'Overload',            bg: '#dc2626' }
+            : displayHours >= 120
+              ? { label: 'Occupied',          bg: '#f97316' }
+              : displayHours >= 60
+                ? { label: 'Partially Available', bg: '#f59e0b' }
+                : { label: 'Available',        bg: '#22c55e' })
+        : displayHours === 0
+          ? { label: 'Available',          bg: '#22c55e' }
+          : displayHours <= 6.5
+            ? { label: 'Partially Occupied', bg: '#f59e0b' }
+            : displayHours <= 7.3
+              ? { label: 'Occupied',         bg: '#f97316' }
+              : { label: 'Occupied',         bg: '#ef4444' };
 
     // Build grouped tasks for dropdown (tab-relevant tasks only, exclude task closed)
     const grouped: Record<string, { task: string; project: string; status: string; hours: number; taskUrl: string; bucketSet: string; pmStatus: string; timeLogged: string; totalHoursVal: string; realBucket: string; _raw: SheetData }[]> = {};
@@ -2377,6 +2416,9 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
     { label: 'Partially Occupied', color: '#f59e0b' },
     { label: 'Occupied',           color: '#ef4444' },
     { label: 'On Leave',           color: '#8b5cf6' },
+    // PPC-only labels — only shown when at least one PPC row uses them
+    ...(rows.some(r => r.status.label === 'Partially Available') ? [{ label: 'Partially Available', color: '#f59e0b' }] : []),
+    ...(rows.some(r => r.status.label === 'Overload') ? [{ label: 'Overload', color: '#dc2626' }] : []),
   ];
 
   return (

@@ -269,7 +269,6 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [addTaskTeam, setAddTaskTeam] = useState<Team>(lockedTeam ?? 'web');
   const [analyticsTeam, setAnalyticsTeam] = useState<Team>(lockedTeam ?? 'web');
   const [analysisDateFilter, setAnalysisDateFilter] = useState<'all' | 'daily' | 'weekly' | 'monthly'>('all');
-  const [topFilter, setTopFilter] = useState<'monthly' | 'alltime'>('monthly');
   const iframeLoadCount = useRef(0);
 
   const intervalRef   = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -655,32 +654,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
             </div>
           )}
 
-          {/* Analytics + sticky Top Performer sidebar */}
+          {/* Analytics */}
           {isAnalytics && (() => {
-            const TOP_PHOTOS: Record<string, string> = {
-              akash: '/team/Akash.png', lovepreet: '/team/Lovepreet.png', manpreet: '/team/Manpreet.png',
-              shubham: '/team/Shubham.png', dhruv: '/team/Dhruv.png', pawan: '/team/Pawan.png',
-              vinay: '/team/Vinay.png', robin: '/team/Robin.png',
-            };
-            const TOP_DESIGNATIONS: Record<string, string> = {
-              akash: 'Senior UI/UX Designer', kiran: 'Project Manager',
-              lovepreet: 'Web Designer', manpreet: 'Web Designer',
-              shubham: 'Web Designer', dhruv: 'CMS Developer',
-              pawan: 'Web Developer - Team Lead', vinay: 'QA Analyst',
-              robin: 'Web Designer',
-            };
-            const getPhoto = (name: string) => {
-              const key = Object.keys(TOP_PHOTOS).find(k => name.toLowerCase().includes(k));
-              return key ? TOP_PHOTOS[key] : '';
-            };
-            const getDesignation = (name: string) => {
-              const key = Object.keys(TOP_DESIGNATIONS).find(k => name.toLowerCase().includes(k));
-              return key ? TOP_DESIGNATIONS[key] : '';
-            };
-            const topManualData = analyticsTeam === 'web' ? lbData : [];
-            const topRankings = calcLeaderboard(analyticsData, analyticsHeaders, topManualData, topFilter);
-            const top: PersonStats | undefined = topRankings[0];
-            const topPhoto = top ? getPhoto(top.name) : '';
             return (
             <div className="space-y-4">
               {/* ── Greeting — full width ── */}
@@ -760,9 +735,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 />
               )}
 
-              {/* ── Charts + sticky Top Performer sidebar ── */}
-              <div className="flex gap-4 items-start">
-                <div className="flex-1 min-w-0 flex flex-col gap-4">
+              {/* ── Charts ── */}
+              <div className="flex flex-col gap-4">
                   {loading && analyticsTeam === 'web' && !analyticsData.length ? (
                     <div className="animate-pulse space-y-3">
                       {Array.from({ length: 4 }).map((_, i) => (
@@ -804,74 +778,6 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                       hideBreakdownCharts
                     />
                   )}
-                </div>
-
-                {/* Sticky Top Performer sidebar */}
-                <div className="shrink-0 sticky top-4" style={{ width: '22%', minWidth: 200 }}>
-                <div className="cn-card rounded-xl border flex flex-col overflow-hidden"
-                  style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
-                  {/* Tabs */}
-                  <div className="flex border-b" style={{ borderColor: 'var(--cn-border)' }}>
-                    {(['monthly', 'alltime'] as const).map(f => (
-                      <button key={f} onClick={() => setTopFilter(f)}
-                        className="flex-1 px-3 py-2 text-[11px] font-semibold transition-all cursor-pointer"
-                        style={{
-                          color: topFilter === f ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
-                          borderBottom: `2px solid ${topFilter === f ? 'var(--cn-accent)' : 'transparent'}`,
-                          background: 'transparent',
-                        }}>
-                        {f === 'monthly' ? 'This Month' : 'All Time'}
-                      </button>
-                    ))}
-                  </div>
-                  {/* Content */}
-                  {top && top.totalPoints > 0 ? (
-                    <div className="flex flex-col items-center text-center px-4 py-5 flex-1 relative"
-                      style={{ background: 'var(--cn-bg-card)' }}>
-                      <div className="text-[10px] font-bold uppercase tracking-widest mb-3 px-3 py-1 rounded-full"
-                        style={{ background: 'var(--cn-accent)', color: '#fff' }}>
-                        🏆 Top Performer
-                      </div>
-                      <div className="relative mb-2">
-                        {topPhoto ? (
-                          <img src={topPhoto} alt={top.name} className="w-24 h-24 rounded-full object-cover"
-                            style={{ border: '3px solid var(--cn-accent)', boxShadow: '0 4px 24px #FE4A2345' }}
-                            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                        ) : (
-                          <div className="w-24 h-24 rounded-full flex items-center justify-center text-white font-bold text-3xl"
-                            style={{ background: 'var(--cn-accent)', border: '3px solid var(--cn-accent)', boxShadow: '0 4px 24px #FE4A2345' }}>
-                            {top.name.charAt(0).toUpperCase()}
-                          </div>
-                        )}
-                        <span className="absolute -top-2 -right-2 text-2xl">👑</span>
-                      </div>
-                      <p className="text-base font-bold leading-tight" style={{ color: 'var(--cn-text-primary)' }}>{top.name}</p>
-                      {getDesignation(top.name) && (
-                        <p className="text-[11px] mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>{getDesignation(top.name)}</p>
-                      )}
-                      <p className="text-2xl font-extrabold mt-2" style={{ color: 'var(--cn-accent)' }}>
-                        {top.totalPoints} <span className="text-sm font-semibold">pts</span>
-                      </p>
-                      <div className="w-full mt-3 pt-3 border-t grid grid-cols-3 gap-2" style={{ borderColor: 'var(--cn-border)' }}>
-                        {[
-                          { label: 'Tasks Closed', value: top.taskClosedCount >= 1000 ? `${(top.taskClosedCount / 1000).toFixed(1)}k` : top.taskClosedCount },
-                          { label: 'PM Status', value: top.pmApprovedCount >= 1000 ? `${(top.pmApprovedCount / 1000).toFixed(1)}k` : top.pmApprovedCount },
-                          { label: 'Total Points', value: top.totalPoints >= 1000 ? `${(top.totalPoints / 1000).toFixed(1)}k` : top.totalPoints },
-                        ].map(({ label, value }) => (
-                          <div key={label} className="rounded-lg px-2 py-2" style={{ background: 'var(--cn-bg-input)' }}>
-                            <p className="text-[10px]" style={{ color: 'var(--cn-text-muted)' }}>{label}</p>
-                            <p className="text-sm font-bold mt-0.5" style={{ color: 'var(--cn-text-primary)' }}>{value}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center py-10">
-                      <p className="text-xs" style={{ color: 'var(--cn-text-muted)' }}>No data yet</p>
-                    </div>
-                  )}
-                </div>
-              </div>
               </div>
             </div>
             );
