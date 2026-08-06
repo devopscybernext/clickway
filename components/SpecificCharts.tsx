@@ -191,6 +191,12 @@ const TEAM_PHOTOS: Record<string, string> = {
   kiran: '/team/Kiran.png', yash: '/team/Yash.png',
   muskan: '/team/Muskan.png', moon: '/team/Moon.png',
   sameer: '/team/Sameer.png',
+  atul: '/team/PPC/Atul.png', shiwangi: '/team/PPC/Shiwangi.png',
+  dheeraj: '/team/PPC/Dheeraj.png', anjali: '/team/PPC/Anjali.png',
+  anurag: '/team/PPC/Anurag.png', vansh: '/team/PPC/Vansh.png',
+  akshay: '/team/SEO/Akshay.png', bhavya: '/team/SEO/Bhavya.png',
+  kshitij: '/team/SEO/Kshitij.png',
+  payal: '/team/SMM/Payal.png', akanksha: '/team/SMM/Akanksha.png',
 };
 
 const TEAM_DESIGNATIONS: Record<string, string> = {

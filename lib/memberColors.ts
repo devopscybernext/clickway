@@ -28,6 +28,15 @@ const TEAM_PHOTOS: Record<string, string> = {
   kiran: '/team/Kiran.png', yash: '/team/Yash.png',
   muskan: '/team/Muskan.png', moon: '/team/Moon.png',
   sameer: '/team/Sameer.png',
+  // Marketing — PPC
+  atul: '/team/PPC/Atul.png', shiwangi: '/team/PPC/Shiwangi.png',
+  dheeraj: '/team/PPC/Dheeraj.png', anjali: '/team/PPC/Anjali.png',
+  anurag: '/team/PPC/Anurag.png', vansh: '/team/PPC/Vansh.png',
+  // Marketing — SEO
+  akshay: '/team/SEO/Akshay.png', bhavya: '/team/SEO/Bhavya.png',
+  kshitij: '/team/SEO/Kshitij.png',
+  // Marketing — SMM
+  payal: '/team/SMM/Payal.png', akanksha: '/team/SMM/Akanksha.png',
 };
 
 export function memberPhoto(name: string): string {
