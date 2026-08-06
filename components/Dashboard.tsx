@@ -701,24 +701,26 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
               {/* ── Web / Marketing tab (hidden for roles pinned to one team) ── */}
               {!lockedTeam && (
-                <div className="flex items-center gap-3 flex-wrap -mb-2">
-                  {([
-                    { key: 'web', label: 'Web' },
-                    { key: 'marketing', label: 'Marketing' },
-                  ] as const).map(tab => (
-                    <button
-                      key={tab.key}
-                      onClick={() => setAnalyticsTeam(tab.key)}
-                      className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
-                      style={{
-                        borderColor: analyticsTeam === tab.key ? 'var(--cn-accent)' : 'transparent',
-                        color: analyticsTeam === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
-                        background: 'transparent',
-                      }}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
+                <div className="cn-card rounded-lg border transition-colors" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+                  <div className="flex items-center gap-3 px-4 sm:px-6 pt-3 pb-0 flex-wrap">
+                    {([
+                      { key: 'web', label: 'Web' },
+                      { key: 'marketing', label: 'Marketing' },
+                    ] as const).map(tab => (
+                      <button
+                        key={tab.key}
+                        onClick={() => setAnalyticsTeam(tab.key)}
+                        className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
+                        style={{
+                          borderColor: analyticsTeam === tab.key ? 'var(--cn-accent)' : 'transparent',
+                          color: analyticsTeam === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
+                          background: 'transparent',
+                        }}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -754,6 +756,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   canEditPmStatus={isAdmin || isPmTier || isTeamAdmin}
                   isAdmin={isAdmin}
                   currentUserEmail={user.email}
+                  autoOpenFirst
                 />
               )}
 
@@ -798,6 +801,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                       currentUserEmail={user.email}
                       showFilter={isPmTier || isAdmin || isTeamAdmin}
                       hideKpi
+                      hideBreakdownCharts
                     />
                   )}
                 </div>

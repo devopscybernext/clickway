@@ -91,6 +91,7 @@ interface Props {
   showFilter?: boolean;
   hideKpi?: boolean;
   hidePmStatus?: boolean;
+  hideBreakdownCharts?: boolean;
 }
 
 function findCol(headers: string[], ...terms: string[]): string | undefined {
@@ -1239,10 +1240,14 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
 
   const applyFilter = (row: ResourceRow) => {
     const taskList = row.pendingTasks;
-    if (pmFilter === 'me' && emailCol && currentUserEmail)
-      return taskList.filter(t => String(t._raw[emailCol!] ?? '').trim().toLowerCase() === currentUserEmail!.toLowerCase());
+    // Assigned Person name is the authoritative "who is this task for" field —
+    // prefer it over an "Email" column, which on some sheets (e.g. Marketing
+    // Tasks' "Email Address") records who submitted the task, not who it's
+    // assigned to, and would otherwise silently show zero results.
     if (pmFilter === 'me' && myNameMatch)
       return isMyRow(row) ? taskList : [];
+    if (pmFilter === 'me' && emailCol && currentUserEmail)
+      return taskList.filter(t => String(t._raw[emailCol!] ?? '').trim().toLowerCase() === currentUserEmail!.toLowerCase());
     if (pmFilter === 'today') {
       // Resource accounts (whose name matches one of the rows) only see their own today tasks;
       // PM/admin viewing the team-wide list still see everyone's today tasks.
@@ -1251,9 +1256,11 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
     }
     if (pmFilter === 'me-today') {
       const isToday = (t: { bucket: string }) => { const b = t.bucket.toLowerCase(); return b === 'today' || b === 'everyday'; };
+      if (myNameMatch)
+        return isMyRow(row) ? taskList.filter(isToday) : [];
       if (emailCol && currentUserEmail)
         return taskList.filter(t => String(t._raw[emailCol!] ?? '').trim().toLowerCase() === currentUserEmail!.toLowerCase() && isToday(t));
-      return isMyRow(row) ? taskList.filter(isToday) : [];
+      return [];
     }
     return taskList;
   };
@@ -2757,7 +2764,7 @@ export function KpiCards({ sheet1Data, sheet1Headers, pmView = false, resourceVi
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
-export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = false, resourceView = false, resourceName = '', isAdmin = false, availData = [], availHeaders = [], onStatusChange, pmStatusColName, currentUserName, currentUserEmail, showFilter, hideKpi = false, hidePmStatus = false }: Props) {
+export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = false, resourceView = false, resourceName = '', isAdmin = false, availData = [], availHeaders = [], onStatusChange, pmStatusColName, currentUserName, currentUserEmail, showFilter, hideKpi = false, hidePmStatus = false, hideBreakdownCharts = false }: Props) {
   const [pmStatusFilter, setPmStatusFilter]   = useState<DateFilter>('all');
   const [projectFilter,  setProjectFilter]    = useState<DateFilter>('all');
   const [breakdownFilter, setBreakdownFilter] = useState<DateFilter>('all');
@@ -2963,21 +2970,25 @@ export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = fal
         </>
       )}
 
-      {/* ── Hours Breakdown per Person ───────────────────────────────────────── */}
-      <ChartShell title="Hours Breakdown per Person" sub="Stacked view of each team member's hours by task status" filter={breakdownFilter} onFilter={setBreakdownFilter}>
-        <StackedBarCard title="" data={statusPerPersonDataFiltered} statuses={allStatusesFiltered} />
-      </ChartShell>
+      {!hideBreakdownCharts && (
+        <>
+          {/* ── Hours Breakdown per Person ───────────────────────────────────── */}
+          <ChartShell title="Hours Breakdown per Person" sub="Stacked view of each team member's hours by task status" filter={breakdownFilter} onFilter={setBreakdownFilter}>
+            <StackedBarCard title="" data={statusPerPersonDataFiltered} statuses={allStatusesFiltered} />
+          </ChartShell>
 
-      {/* ── Hours per Project ────────────────────────────────────────────────── */}
-      <ChartShell title="Hours per Project" sub="Estimated hours per client / project (top 15)" filter={projectFilter} onFilter={setProjectFilter}>
-        <BarCard title="" data={tasksByProjectFiltered} dataKey="Hours" color="#10b981" />
-      </ChartShell>
+          {/* ── Hours per Project ────────────────────────────────────────────── */}
+          <ChartShell title="Hours per Project" sub="Estimated hours per client / project (top 15)" filter={projectFilter} onFilter={setProjectFilter}>
+            <BarCard title="" data={tasksByProjectFiltered} dataKey="Hours" color="#10b981" />
+          </ChartShell>
 
-      {/* ── Hours by PM Status ───────────────────────────────────────────────── */}
-      {!hidePmStatus && (
-        <ChartShell title="Hours by PM Status" sub="Estimated hours by PM approval stage" filter={pmStatusFilter} onFilter={setPmStatusFilter}>
-          <DonutCard title="" data={pmStatusDataFiltered} colorMap={PM_STATUS_COLORS_MAP} adminStyle />
-        </ChartShell>
+          {/* ── Hours by PM Status ───────────────────────────────────────────── */}
+          {!hidePmStatus && (
+            <ChartShell title="Hours by PM Status" sub="Estimated hours by PM approval stage" filter={pmStatusFilter} onFilter={setPmStatusFilter}>
+              <DonutCard title="" data={pmStatusDataFiltered} colorMap={PM_STATUS_COLORS_MAP} adminStyle />
+            </ChartShell>
+          )}
+        </>
       )}
 
     </section>
