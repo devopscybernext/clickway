@@ -93,18 +93,23 @@ const FILTER_CONFIG: Record<'1' | '2', { term: string; label: string }[]> = {
   ],
 };
 
+// Default column order for sheet 1 (Tasks Assigned) — Project Name, Task
+// Name, Task URL, Task Estimation, Assigned Person, Task Daily Bucket,
+// Today Bucket Set, Time Logged on AC, Task Status Updation, PM Status.
+// Reused both to pick the default column set and to order them, since the
+// sheet's own column order doesn't match this display order.
+const SHEET1_COL_ORDER = [
+  'project name', 'task name', 'task url', 'time estimation', 'task estimation',
+  'assigned person', 'assigned to', 'task daily bucket', 'today bucket set',
+  'time logged', 'task status', 'status updation', 'pm status',
+];
+
 // Returns default visible columns per sheet
 function getDefaultCols(allCols: string[], sheetNum: '1' | '2'): string[] {
   if (sheetNum === '1') {
-    const terms = [
-      'project name', 'task name', 'task url', 'time estimation', 'task estimation',
-      'department', 'assigned person', 'assigned to', 'task daily bucket', 'task status',
-      'time logged', 'today bucket set', 'pm status', 'status updation',
-      'preferred resource',
-    ];
     return allCols.filter(h => {
       const lower = h.toLowerCase();
-      return terms.some(t => lower.includes(t));
+      return SHEET1_COL_ORDER.some(t => lower.includes(t));
     });
   }
   // Sheet 2 — Resource Availability
@@ -732,10 +737,21 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
     setColsInitialized(true);
   }, [allCols, colsInitialized, sheetNum]);
 
-  // Visible headers preserve original column order
-  const visibleHeaders = useMemo(
-    () => allCols.filter(h => selectedCols.includes(h)),
-    [allCols, selectedCols]
+  // Visible headers — sheet 1 uses a fixed display order (matches the
+  // canonical column list, not the sheet's own column order); any extra
+  // columns the user adds via the column picker are appended at the end in
+  // their original sheet order. Other sheets keep the original column order.
+  const visibleHeaders = useMemo(() => {
+    const cols = allCols.filter(h => selectedCols.includes(h));
+    if (sheetNum !== '1') return cols;
+    const orderIndex = (h: string) => {
+      const lower = h.toLowerCase();
+      const idx = SHEET1_COL_ORDER.findIndex(t => lower.includes(t));
+      return idx === -1 ? SHEET1_COL_ORDER.length : idx;
+    };
+    return [...cols].sort((a, b) => orderIndex(a) - orderIndex(b));
+  },
+    [allCols, selectedCols, sheetNum]
   );
 
   const filterOptions = useMemo(() => {

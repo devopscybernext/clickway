@@ -230,6 +230,12 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const lockedTeam: Team | undefined = getLockedTeam(user.role);
   // Tasks Assigned additionally pins PMWebAdmin/PMMarketingAdmin to their own team
   const lockedTasksAssignedTeam: Team | undefined = getTasksAssignedLockedTeam(user.role);
+  // Tasks Overview & Team Bandwidth: only individual-tier roles (WebTeam/
+  // MarketingTeam) stay pinned to one team — WebAdmin/MarketingAdmin (and
+  // everyone above them) get both tabs here even though they're locked
+  // everywhere else.
+  const lockedTasksOverviewTeam: Team | undefined = isIndividual ? lockedTeam : undefined;
+  const lockedTeamBandwidthTeam: Team | undefined = isIndividual ? lockedTeam : undefined;
 
   const [bandwidthData, setBandwidthData] = useState<SheetData[]>([]);
   const [bandwidthHeaders, setBandwidthHeaders] = useState<string[]>([]);
@@ -257,8 +263,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [analysisSubTab, setAnalysisSubTab] = useState<'resources' | 'pm'>('resources');
   const [toolsSubTab, setToolsSubTab] = useState<'clock' | 'holiday' | 'ai'>('clock');
   const [pmBandwidthSubTab, setPmBandwidthSubTab] = useState<'all' | 'mine'>('all');
-  const [teamBandwidthSubTab, setTeamBandwidthSubTab] = useState<Team>(lockedTeam ?? 'web');
-  const [tasksOverviewTeam, setTasksOverviewTeam] = useState<Team>(lockedTeam ?? 'web');
+  const [teamBandwidthSubTab, setTeamBandwidthSubTab] = useState<Team>(lockedTeamBandwidthTeam ?? 'web');
+  const [tasksOverviewTeam, setTasksOverviewTeam] = useState<Team>(lockedTasksOverviewTeam ?? 'web');
   const [tasksAssignedTeam, setTasksAssignedTeam] = useState<Team>(lockedTasksAssignedTeam ?? 'web');
   const [addTaskTeam, setAddTaskTeam] = useState<Team>(lockedTeam ?? 'web');
   const [analyticsTeam, setAnalyticsTeam] = useState<Team>(lockedTeam ?? 'web');
@@ -1100,7 +1106,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               className="cn-card rounded-lg border transition-colors"
               style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
             >
-              {!lockedTeam && (
+              {!lockedTeamBandwidthTeam && (
                 <div className="flex items-center gap-3 px-4 sm:px-6 pt-4 sm:pt-5 pb-0 flex-wrap">
                   {([
                     { key: 'web', label: 'Web' },
@@ -1162,7 +1168,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           {/* ── Tasks Overview (Web / Marketing) ──────────────────────────────────── */}
           {isResourceOverview && (
             <section className="cn-card rounded-lg border transition-colors" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
-              {!lockedTeam && (
+              {!lockedTasksOverviewTeam && (
                 <div className="flex items-center gap-3 px-4 sm:px-6 pt-4 sm:pt-5 pb-0 flex-wrap">
                   {([
                     { key: 'web', label: 'Web' },

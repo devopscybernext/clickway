@@ -249,7 +249,7 @@ interface ResourceRow {
   totalHours: number;
   todayHours: number;
   todayTasks: number;
-  pendingTasks: { task: string; project: string; status: string; pmStatus: string; timeEst: string; taskUrl: string; bucketSet: string; bucket: string; timeLogged: string; totalHoursVal: string; _raw: SheetData }[];
+  pendingTasks: { task: string; project: string; status: string; pmStatus: string; timeEst: string; taskUrl: string; bucketSet: string; bucket: string; timeLogged: string; actionTakenToday: string; performanceSignal: string; blocker: string; nextSteps: string; _raw: SheetData }[];
 }
 
 const PM_STATUS_OPTIONS_RO = ['No Action Taken', 'Changes', 'Approved', 'Submitted To Client', 'TicketClosed'];
@@ -429,7 +429,7 @@ function ResourceTimeLoggedEdit({ value, raw, colName, onStatusChange }: {
   );
 }
 
-function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatusColName, canEditPmStatus = true, statusColName, timeLoggedColName, canEditStatus = false, canCopy = false, pmEmailCol, currentUserEmail, showTotalHours = false }: {
+function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatusColName, canEditPmStatus = true, statusColName, timeLoggedColName, canEditStatus = false, canCopy = false, pmEmailCol, currentUserEmail, showMarketingCols = false }: {
   row: ResourceRow; onLeave: boolean;
   isOpen: boolean; onToggle: () => void;
   onStatusChange?: (row: SheetData, col: string, val: string) => Promise<void>;
@@ -441,7 +441,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
   canCopy?: boolean;
   pmEmailCol?: string;
   currentUserEmail?: string;
-  showTotalHours?: boolean;
+  showMarketingCols?: boolean;
 }) {
   const visibleTasks = row.pendingTasks;
   const open = isOpen;
@@ -619,16 +619,19 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
           <table className="w-full text-xs table-fixed">
             <colgroup>
               {canCopy && <col style={{ width: '5%' }} />}  {/* Copy */}
-              <col style={{ width: canEditStatus ? '11%' : '13%' }} />  {/* Project */}
-              <col style={{ width: canEditStatus ? '16%' : '18%' }} />  {/* Task */}
-              <col style={{ width: '6%' }} />   {/* Link */}
-              <col style={{ width: '6%' }} />   {/* Est. */}
-              {showTotalHours && <col style={{ width: '6%' }} />}   {/* Total Hours */}
-              <col style={{ width: canEditStatus ? '10%' : '11%' }} />  {/* Task Daily Bucket */}
-              <col style={{ width: canEditStatus ? '10%' : '11%' }} />  {/* Bucket Set */}
-              <col style={{ width: canEditStatus ? '12%' : '13%' }} />  {/* Status */}
-              {canEditStatus && <col style={{ width: '10%' }} />}  {/* Time Logged On AC */}
-              <col style={{ width: canEditStatus ? '15%' : '17%' }} />  {/* PM Status */}
+              <col style={{ width: showMarketingCols ? '9%' : '13%' }} />  {/* Project */}
+              <col style={{ width: showMarketingCols ? '11%' : '18%' }} />  {/* Task */}
+              <col style={{ width: '5%' }} />   {/* Link */}
+              <col style={{ width: '5%' }} />   {/* Est. */}
+              <col style={{ width: showMarketingCols ? '8%' : '11%' }} />  {/* Task Daily Bucket */}
+              <col style={{ width: showMarketingCols ? '8%' : '11%' }} />  {/* Bucket Set */}
+              {showMarketingCols && <col style={{ width: '10%' }} />}  {/* Action Taken Today */}
+              {showMarketingCols && <col style={{ width: '10%' }} />}  {/* Performance Signal/Insights */}
+              {showMarketingCols && <col style={{ width: '8%' }} />}  {/* Blocker */}
+              {showMarketingCols && <col style={{ width: '8%' }} />}  {/* Next Steps */}
+              <col style={{ width: showMarketingCols ? '8%' : '10%' }} />  {/* Time Logged On AC */}
+              <col style={{ width: showMarketingCols ? '9%' : '13%' }} />  {/* Status */}
+              <col style={{ width: showMarketingCols ? '9%' : '17%' }} />  {/* PM Status */}
             </colgroup>
             <thead>
               <tr style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}>
@@ -637,11 +640,14 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task</th>
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Link</th>
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Est.</th>
-                {showTotalHours && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Total Hours</th>}
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task Daily Bucket</th>
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Bucket Set</th>
+                {showMarketingCols && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Action Taken Today</th>}
+                {showMarketingCols && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Performance Signal/Insights</th>}
+                {showMarketingCols && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Blocker</th>}
+                {showMarketingCols && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Next Steps</th>}
+                <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Time Logged On AC</th>
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Status</th>
-                {canEditStatus && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Time Logged On AC</th>}
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">PM Status</th>
               </tr>
             </thead>
@@ -709,12 +715,6 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                     <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
                       {t.timeEst || '—'}
                     </td>
-                    {/* Total Hours */}
-                    {showTotalHours && (
-                      <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
-                        {t.totalHoursVal || '—'}
-                      </td>
-                    )}
                     {/* Task Daily Bucket */}
                     <td className="px-4 py-2">
                       {t.bucket ? (
@@ -733,6 +733,41 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                         </span>
                       ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>}
                     </td>
+                    {/* Action Taken Today */}
+                    {showMarketingCols && (
+                      <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
+                        <span className="truncate block">{t.actionTakenToday || '—'}</span>
+                      </td>
+                    )}
+                    {/* Performance Signal/Insights */}
+                    {showMarketingCols && (
+                      <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
+                        <span className="truncate block">{t.performanceSignal || '—'}</span>
+                      </td>
+                    )}
+                    {/* Blocker */}
+                    {showMarketingCols && (
+                      <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
+                        <span className="truncate block">{t.blocker || '—'}</span>
+                      </td>
+                    )}
+                    {/* Next Steps */}
+                    {showMarketingCols && (
+                      <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
+                        <span className="truncate block">{t.nextSteps || '—'}</span>
+                      </td>
+                    )}
+                    {/* Time Logged On AC */}
+                    <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
+                      {onStatusChange && timeLoggedColName && canEditStatus ? (
+                        <ResourceTimeLoggedEdit
+                          value={t.timeLogged}
+                          raw={t._raw}
+                          colName={timeLoggedColName}
+                          onStatusChange={onStatusChange}
+                        />
+                      ) : (t.timeLogged || '—')}
+                    </td>
                     {/* Status */}
                     <td className="px-4 py-2">
                       {onStatusChange && statusColName && canEditStatus ? (
@@ -749,19 +784,6 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                         </span>
                       )}
                     </td>
-                    {/* Time Logged On AC */}
-                    {canEditStatus && (
-                      <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
-                        {onStatusChange && timeLoggedColName ? (
-                          <ResourceTimeLoggedEdit
-                            value={t.timeLogged}
-                            raw={t._raw}
-                            colName={timeLoggedColName}
-                            onStatusChange={onStatusChange}
-                          />
-                        ) : (t.timeLogged || '—')}
-                      </td>
-                    )}
                     {/* PM Status */}
                     <td className="px-4 py-2">
                       {onStatusChange && pmStatusColName && rowCanEditPmStatus ? (
@@ -793,7 +815,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
 
 
 // ─── Flat Tasks Table (all resources' tasks in a single table, no grouping) ────
-function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus = true, statusColName, timeLoggedColName, canEditStatus = false, canCopy = false, currentUserName, pmEmailCol, currentUserEmail, vinayQaMode = false }: {
+function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus = true, statusColName, timeLoggedColName, canEditStatus = false, canCopy = false, currentUserName, pmEmailCol, currentUserEmail, vinayQaMode = false, showMarketingCols = false }: {
   rows: ResourceRow[];
   onStatusChange?: (row: SheetData, col: string, val: string) => Promise<void>;
   pmStatusColName?: string;
@@ -806,6 +828,7 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
   pmEmailCol?: string;
   currentUserEmail?: string;
   vinayQaMode?: boolean;
+  showMarketingCols?: boolean;
 }) {
   const [copiedRowIdx, setCopiedRowIdx] = useState<number | null>(null);
   const [copiedTable, setCopiedTable] = useState(false);
@@ -910,8 +933,12 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
               {!vinayQaMode && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Est.</th>}
               <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task Daily Bucket</th>
               {!vinayQaMode && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Bucket Set</th>}
+              {showMarketingCols && !vinayQaMode && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Action Taken Today</th>}
+              {showMarketingCols && !vinayQaMode && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Performance Signal/Insights</th>}
+              {showMarketingCols && !vinayQaMode && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Blocker</th>}
+              {showMarketingCols && !vinayQaMode && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Next Steps</th>}
+              {!vinayQaMode && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Time Logged On AC</th>}
               <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Status</th>
-              {canEditStatus && !vinayQaMode && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Time Logged On AC</th>}
               {!vinayQaMode && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">PM Status</th>}
             </tr>
           </thead>
@@ -999,6 +1026,33 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
                       ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>}
                     </td>
                   )}
+                  {showMarketingCols && !vinayQaMode && (
+                    <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
+                      <span className="truncate block">{t.actionTakenToday || '—'}</span>
+                    </td>
+                  )}
+                  {showMarketingCols && !vinayQaMode && (
+                    <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
+                      <span className="truncate block">{t.performanceSignal || '—'}</span>
+                    </td>
+                  )}
+                  {showMarketingCols && !vinayQaMode && (
+                    <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
+                      <span className="truncate block">{t.blocker || '—'}</span>
+                    </td>
+                  )}
+                  {showMarketingCols && !vinayQaMode && (
+                    <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
+                      <span className="truncate block">{t.nextSteps || '—'}</span>
+                    </td>
+                  )}
+                  {!vinayQaMode && (
+                    <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
+                      {onStatusChange && timeLoggedColName && rowCanEditStatus ? (
+                        <ResourceTimeLoggedEdit value={t.timeLogged} raw={t._raw} colName={timeLoggedColName} onStatusChange={onStatusChange} />
+                      ) : (t.timeLogged || '—')}
+                    </td>
+                  )}
                   <td className="px-4 py-2">
                     {onStatusChange && statusColName && rowCanEditStatus ? (
                       <ResourceStatusSelect value={t.status || 'No Action Taken'} raw={t._raw} colName={statusColName} onStatusChange={onStatusChange} />
@@ -1009,13 +1063,6 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
                       </span>
                     )}
                   </td>
-                  {canEditStatus && !vinayQaMode && (
-                    <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
-                      {onStatusChange && timeLoggedColName && rowCanEditStatus ? (
-                        <ResourceTimeLoggedEdit value={t.timeLogged} raw={t._raw} colName={timeLoggedColName} onStatusChange={onStatusChange} />
-                      ) : (t.timeLogged || '—')}
-                    </td>
-                  )}
                   {!vinayQaMode && (
                   <td className="px-4 py-2">
                     {onStatusChange && pmStatusColName && rowCanEditPmStatus ? (
@@ -1078,7 +1125,12 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
   const bucketSetCol = headers.find(h => h.toLowerCase().includes('today bucket set') || h.toLowerCase().includes('bucket set'));
   const bucketCol    = headers.find(h => h.toLowerCase().includes('task daily bucket') || h.toLowerCase().includes('daily bucket'));
   const timeLoggedCol = headers.find(h => h.toLowerCase().includes('time logged'));
-  const totalHoursCol = headers.find(h => h.toLowerCase().includes('total hours'));
+  // Marketing-only fields — absent from Bandwidth Allocation, present on the Marketing Tasks sheet
+  const actionTakenCol = headers.find(h => h.toLowerCase().includes('action taken today'));
+  const performanceSignalCol = headers.find(h => h.toLowerCase().includes('performance signal'));
+  const blockerCol = headers.find(h => h.toLowerCase() === 'blocker' || h.toLowerCase().includes('blocker'));
+  const nextStepsCol = headers.find(h => h.toLowerCase().includes('next steps'));
+  const showMarketingCols = !!actionTakenCol;
 
   if (!resourceCol || !statusCol) return null;
 
@@ -1102,7 +1154,10 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
     const getBucketSet = (r: SheetData) => bucketSetCol ? String(r[bucketSetCol] ?? '').trim() : '';
     const getBucket    = (r: SheetData) => bucketCol    ? String(r[bucketCol]    ?? '').trim().toLowerCase() : '';
     const getTimeLogged = (r: SheetData) => timeLoggedCol ? String(r[timeLoggedCol] ?? '').trim() : '';
-    const getTotalHoursVal = (r: SheetData) => totalHoursCol ? String(r[totalHoursCol] ?? '').trim() : '';
+    const getActionTaken = (r: SheetData) => actionTakenCol ? String(r[actionTakenCol] ?? '').trim() : '';
+    const getPerformanceSignal = (r: SheetData) => performanceSignalCol ? String(r[performanceSignalCol] ?? '').trim() : '';
+    const getBlocker = (r: SheetData) => blockerCol ? String(r[blockerCol] ?? '').trim() : '';
+    const getNextSteps = (r: SheetData) => nextStepsCol ? String(r[nextStepsCol] ?? '').trim() : '';
 
     const activeTasks  = myTasks.filter(r => getStatus(r) === 'in progress').length;
     const onHoldTasks  = myTasks.filter(r => getStatus(r) === 'on hold').length;
@@ -1128,7 +1183,9 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
         status: String(r[statusCol!] ?? '').trim(),
         pmStatus: getPmStatus(r), timeEst: getTimeEst(r),
         taskUrl: getTaskUrl(r), bucketSet: getBucketSet(r), bucket: getBucket(r),
-        timeLogged: getTimeLogged(r), totalHoursVal: getTotalHoursVal(r),
+        timeLogged: getTimeLogged(r),
+        actionTakenToday: getActionTaken(r), performanceSignal: getPerformanceSignal(r),
+        blocker: getBlocker(r), nextSteps: getNextSteps(r),
         _raw: r,
       }))
       .slice(0, 20);
@@ -1317,6 +1374,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
           pmEmailCol={restrictPmStatusToOwn ? emailCol : undefined}
           currentUserEmail={currentUserEmail}
           vinayQaMode={vinayQaMode}
+          showMarketingCols={showMarketingCols}
         />
       ) : (
         <div className="space-y-2">
@@ -1341,7 +1399,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
               canCopy={canCopy}
               pmEmailCol={restrictPmStatusToOwn ? emailCol : undefined}
               currentUserEmail={currentUserEmail}
-              showTotalHours={!!totalHoursCol}
+              showMarketingCols={showMarketingCols}
             />
           ))}
         </div>
@@ -2060,7 +2118,13 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
   const taskUrlCol   = findCol(sheet1Headers, 'task url', 'task link', 'link', 'url');
   const bucketSetCol = sheet1Headers.find(h => h.toLowerCase().includes('today bucket set') || h.toLowerCase().includes('bucket set'));
   const pmStatusCol2 = sheet1Headers.find(h => h.toLowerCase().includes('pm status'));
-  const totalHoursCol2 = sheet1Headers.find(h => h.toLowerCase().includes('total hours'));
+  const timeLoggedCol2 = sheet1Headers.find(h => h.toLowerCase().includes('time logged'));
+  // Marketing-only fields — absent from Bandwidth Allocation, present on the Marketing Tasks sheet
+  const actionTakenCol2 = sheet1Headers.find(h => h.toLowerCase().includes('action taken today'));
+  const performanceSignalCol2 = sheet1Headers.find(h => h.toLowerCase().includes('performance signal'));
+  const blockerCol2 = sheet1Headers.find(h => h.toLowerCase() === 'blocker' || h.toLowerCase().includes('blocker'));
+  const nextStepsCol2 = sheet1Headers.find(h => h.toLowerCase().includes('next steps'));
+  const showMarketingCols2 = !!actionTakenCol2;
   const pmEmailCol   = findCol(sheet1Headers, 'pm email', 'email');
   const availNameCol   = availHeaders ? findCol(availHeaders, 'name', 'resource', 'person') : undefined;
   const availStatusCol = availHeaders ? findCol(availHeaders, 'availability', 'status', 'leave') : undefined;
@@ -2083,7 +2147,11 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
   const getTaskUrl   = (r: SheetData) => taskUrlCol   ? String(r[taskUrlCol]   ?? '').trim() : '';
   const getBucketSet = (r: SheetData) => bucketSetCol ? String(r[bucketSetCol] ?? '').trim() : '';
   const getPmStatus  = (r: SheetData) => pmStatusCol2 ? String(r[pmStatusCol2] ?? '').trim() : '';
-  const getTotalHoursVal2 = (r: SheetData) => totalHoursCol2 ? String(r[totalHoursCol2] ?? '').trim() : '';
+  const getTimeLogged2 = (r: SheetData) => timeLoggedCol2 ? String(r[timeLoggedCol2] ?? '').trim() : '';
+  const getActionTaken2 = (r: SheetData) => actionTakenCol2 ? String(r[actionTakenCol2] ?? '').trim() : '';
+  const getPerformanceSignal2 = (r: SheetData) => performanceSignalCol2 ? String(r[performanceSignalCol2] ?? '').trim() : '';
+  const getBlocker2 = (r: SheetData) => blockerCol2 ? String(r[blockerCol2] ?? '').trim() : '';
+  const getNextSteps2 = (r: SheetData) => nextStepsCol2 ? String(r[nextStepsCol2] ?? '').trim() : '';
 
   const names = [...new Set(sheet1Data.map(r => String(r[resourceCol] ?? '').trim()).filter(Boolean))].sort();
 
@@ -2129,7 +2197,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
             : { label: 'Occupied',         bg: '#ef4444' };
 
     // Build grouped tasks for dropdown (tab-relevant tasks only, exclude task closed)
-    const grouped: Record<string, { task: string; project: string; status: string; hours: number; taskUrl: string; bucketSet: string; pmStatus: string; totalHoursVal: string; realBucket: string; _raw: SheetData }[]> = {};
+    const grouped: Record<string, { task: string; project: string; status: string; hours: number; taskUrl: string; bucketSet: string; pmStatus: string; timeLogged: string; actionTakenToday: string; performanceSignal: string; blocker: string; nextSteps: string; realBucket: string; _raw: SheetData }[]> = {};
     tabTasks.forEach(r => {
       const st = getStatus(r).toLowerCase();
       if (SKIP_STATUSES.includes(st)) return;
@@ -2141,7 +2209,14 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
       else if (b === 'to be expected') bucket = 'tobeexpected';
       if (!BUCKET_ORDER2.includes(bucket as typeof BUCKET_ORDER2[number])) bucket = 'everyday';
       if (!grouped[bucket]) grouped[bucket] = [];
-      grouped[bucket].push({ task: getTask(r), project: getProj(r), status: getStatus(r), hours: getTime(r), taskUrl: getTaskUrl(r), bucketSet: getBucketSet(r), pmStatus: getPmStatus(r), totalHoursVal: getTotalHoursVal2(r), realBucket: b, _raw: r });
+      grouped[bucket].push({
+        task: getTask(r), project: getProj(r), status: getStatus(r), hours: getTime(r),
+        taskUrl: getTaskUrl(r), bucketSet: getBucketSet(r), pmStatus: getPmStatus(r),
+        timeLogged: getTimeLogged2(r),
+        actionTakenToday: getActionTaken2(r), performanceSignal: getPerformanceSignal2(r),
+        blocker: getBlocker2(r), nextSteps: getNextSteps2(r),
+        realBucket: b, _raw: r,
+      });
     });
 
     return { name, tabHours, displayHours, tabCount, status, grouped };
@@ -2238,7 +2313,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
               Select a team member to see their tasks
             </div>
           ) : (() => {
-        const allTasks: { task: string; project: string; status: string; hours: number; taskUrl: string; bucketSet: string; pmStatus: string; totalHoursVal: string; _raw: SheetData; bucket: string; realBucket?: string }[] = [];
+        const allTasks: { task: string; project: string; status: string; hours: number; taskUrl: string; bucketSet: string; pmStatus: string; timeLogged: string; actionTakenToday: string; performanceSignal: string; blocker: string; nextSteps: string; _raw: SheetData; bucket: string; realBucket?: string }[] = [];
         BUCKET_ORDER2.forEach(bucket => {
           (openRow.grouped[bucket] ?? []).forEach(t => allTasks.push({ ...t, bucket: t.realBucket ?? bucket }));
         });
@@ -2325,7 +2400,9 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
                       <table className="w-full text-xs border-collapse">
                         <thead>
                           <tr style={{ borderBottom: '1px solid var(--cn-border)', background: 'var(--cn-bg-input)' }}>
-                            {['TASK', 'LINK', 'EST.', ...(totalHoursCol2 ? ['TOTAL HOURS'] : []), 'TASK DAILY BUCKET', 'BUCKET SET', 'STATUS', 'PM STATUS'].map(h => (
+                            {['TASK', 'LINK', 'EST.', 'TASK DAILY BUCKET', 'BUCKET SET',
+                              ...(showMarketingCols2 ? ['ACTION TAKEN TODAY', 'PERFORMANCE SIGNAL/INSIGHTS', 'BLOCKER', 'NEXT STEPS'] : []),
+                              'TIME LOGGED ON AC', 'STATUS', 'PM STATUS'].map(h => (
                               <th key={h} className="text-left px-3 py-2 font-semibold tracking-wide whitespace-nowrap" style={{ color: 'var(--cn-text-muted)', fontSize: '11px' }}>{h}</th>
                             ))}
                           </tr>
@@ -2346,11 +2423,6 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
                                     ? <span className="font-bold px-1.5 py-0.5 rounded-full text-[11px]" style={{ background: '#f59e0b22', color: '#f59e0b' }}>{Math.round(t.hours * 10) / 10}h</span>
                                     : <span style={{ color: 'var(--cn-text-faint)' }}>—</span>}
                                 </td>
-                                {totalHoursCol2 && (
-                                  <td className="px-3 py-2.5" style={{ minWidth: 60, color: 'var(--cn-text-muted)' }}>
-                                    {t.totalHoursVal || '—'}
-                                  </td>
-                                )}
                                 <td className="px-3 py-2.5" style={{ minWidth: 110 }}>
                                   <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold"
                                     style={{ background: BUCKET_COLORS2[t.bucket] + '22', color: BUCKET_COLORS2[t.bucket] }}>
@@ -2362,6 +2434,19 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
                                     ? <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>{t.bucketSet}</span>
                                     : <span style={{ color: 'var(--cn-text-faint)' }}>—</span>}
                                 </td>
+                                {showMarketingCols2 && (
+                                  <td className="px-3 py-2.5" style={{ minWidth: 130, color: 'var(--cn-text-muted)' }}>{t.actionTakenToday || '—'}</td>
+                                )}
+                                {showMarketingCols2 && (
+                                  <td className="px-3 py-2.5" style={{ minWidth: 150, color: 'var(--cn-text-muted)' }}>{t.performanceSignal || '—'}</td>
+                                )}
+                                {showMarketingCols2 && (
+                                  <td className="px-3 py-2.5" style={{ minWidth: 110, color: 'var(--cn-text-muted)' }}>{t.blocker || '—'}</td>
+                                )}
+                                {showMarketingCols2 && (
+                                  <td className="px-3 py-2.5" style={{ minWidth: 110, color: 'var(--cn-text-muted)' }}>{t.nextSteps || '—'}</td>
+                                )}
+                                <td className="px-3 py-2.5" style={{ minWidth: 90, color: 'var(--cn-text-muted)' }}>{t.timeLogged || '—'}</td>
                                 <td className="px-3 py-2.5" style={{ minWidth: 120 }}>
                                   <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold"
                                     style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)', border: '1px solid var(--cn-border)' }}>
