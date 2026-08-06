@@ -377,9 +377,73 @@ function ResourceStatusSelect({ value, raw, colName, onStatusChange }: {
   );
 }
 
-function ResourceTimeLoggedEdit({ value, raw, colName, onStatusChange }: {
+const BUCKET_OPTIONS_RO = ['Today', 'Tomorrow', 'Day After Tomorrow', 'Everyday', 'No Action Taken', 'Submitted', 'To Be Expected'];
+const BUCKET_COLORS_RO: Record<string, string> = {
+  today: '#16a34a', tomorrow: '#3b82f6', 'day after tomorrow': '#f59e0b',
+};
+
+function ResourceBucketSelect({ value, raw, colName, onStatusChange }: {
   value: string; raw: SheetData; colName: string;
   onStatusChange: (row: SheetData, col: string, val: string) => Promise<void>;
+}) {
+  const match = BUCKET_OPTIONS_RO.find(o => o.toLowerCase() === value.toLowerCase()) ?? value;
+  const [current, setCurrent] = useState(match || 'No Action Taken');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (!saving) setCurrent(match || 'No Action Taken');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, raw]);
+
+  const color = BUCKET_COLORS_RO[current.toLowerCase()] ?? '#6b7280';
+
+  const handleChange = async (e: ChangeEvent<HTMLSelectElement>) => {
+    const newVal = e.target.value;
+    setCurrent(newVal);
+    setSaving(true);
+    setSaved(false);
+    try {
+      await onStatusChange(raw, colName, newVal);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      setCurrent(match);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <select
+        value={current}
+        onChange={handleChange}
+        disabled={saving}
+        className="text-[10px] font-semibold rounded-full pl-2.5 pr-6 py-0.5 border-0 focus:outline-none cursor-pointer disabled:opacity-60 appearance-none capitalize"
+        style={{
+          backgroundColor: color + '20', color, minWidth: '90px',
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='${encodeURIComponent(color)}' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
+          backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px center',
+        }}
+      >
+        {BUCKET_OPTIONS_RO.map(opt => (
+          <option key={opt} value={opt} style={{ background: '#1a1a1a', color: '#fff' }}>{opt}</option>
+        ))}
+        {current && !BUCKET_OPTIONS_RO.map(o => o.toLowerCase()).includes(current.toLowerCase()) && (
+          <option value={current}>{current}</option>
+        )}
+      </select>
+      {saving && <span className="w-3 h-3 border border-t-transparent rounded-full animate-spin inline-block" style={{ borderColor: 'var(--cn-accent)' }} />}
+      {saved && <span className="text-[10px]" style={{ color: '#22c55e' }}>✓</span>}
+    </div>
+  );
+}
+
+function ResourceTimeLoggedEdit({ value, raw, colName, onStatusChange, widthClass = 'w-16' }: {
+  value: string; raw: SheetData; colName: string;
+  onStatusChange: (row: SheetData, col: string, val: string) => Promise<void>;
+  widthClass?: string;
 }) {
   const [current, setCurrent] = useState(value);
   const [saving, setSaving] = useState(false);
@@ -421,7 +485,7 @@ function ResourceTimeLoggedEdit({ value, raw, colName, onStatusChange }: {
         onBlur={handleSave}
         disabled={saving}
         placeholder="—"
-        className="w-16 px-1.5 py-0.5 text-[10px] rounded border focus:outline-none disabled:opacity-60 transition-colors"
+        className={`${widthClass} px-1.5 py-0.5 text-[10px] rounded border focus:outline-none disabled:opacity-60 transition-colors`}
         style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', borderColor: 'var(--cn-border)' }}
       />
       {saving && <span className="w-3 h-3 border border-t-transparent rounded-full animate-spin shrink-0" style={{ borderColor: 'var(--cn-accent)' }} />}
@@ -430,7 +494,7 @@ function ResourceTimeLoggedEdit({ value, raw, colName, onStatusChange }: {
   );
 }
 
-function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatusColName, canEditPmStatus = true, statusColName, timeLoggedColName, canEditStatus = false, canCopy = false, pmEmailCol, currentUserEmail, showMarketingCols = false, showTimeLogged = true, showTotalHours = false }: {
+function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatusColName, canEditPmStatus = true, statusColName, timeLoggedColName, canEditStatus = false, canCopy = false, pmEmailCol, currentUserEmail, showMarketingCols = false, showTimeLogged = true, showTotalHours = false, bucketColName, totalHoursColName, actionTakenColName, performanceSignalColName, blockerColName, nextStepsColName }: {
   row: ResourceRow; onLeave: boolean;
   isOpen: boolean; onToggle: () => void;
   onStatusChange?: (row: SheetData, col: string, val: string) => Promise<void>;
@@ -445,6 +509,12 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
   showMarketingCols?: boolean;
   showTimeLogged?: boolean;
   showTotalHours?: boolean;
+  bucketColName?: string;
+  totalHoursColName?: string;
+  actionTakenColName?: string;
+  performanceSignalColName?: string;
+  blockerColName?: string;
+  nextStepsColName?: string;
 }) {
   const visibleTasks = row.pendingTasks;
   const open = isOpen;
@@ -723,12 +793,16 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                     {/* Total Hours */}
                     {showTotalHours && (
                       <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
-                        {t.totalHoursVal || '—'}
+                        {onStatusChange && totalHoursColName && canEditStatus ? (
+                          <ResourceTimeLoggedEdit value={t.totalHoursVal} raw={t._raw} colName={totalHoursColName} onStatusChange={onStatusChange} />
+                        ) : (t.totalHoursVal || '—')}
                       </td>
                     )}
                     {/* Task Daily Bucket */}
                     <td className="px-4 py-2">
-                      {t.bucket ? (
+                      {onStatusChange && bucketColName && canEditStatus ? (
+                        <ResourceBucketSelect value={t.bucket || 'No Action Taken'} raw={t._raw} colName={bucketColName} onStatusChange={onStatusChange} />
+                      ) : t.bucket ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize" style={{ background: bColor + '20', color: bColor }}>
                           <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: bColor }} />
                           {normBucket(t.bucket)}
@@ -747,25 +821,33 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                     {/* Action Taken Today */}
                     {showMarketingCols && (
                       <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
-                        <span className="truncate block">{t.actionTakenToday || '—'}</span>
+                        {onStatusChange && actionTakenColName && canEditStatus ? (
+                          <ResourceTimeLoggedEdit value={t.actionTakenToday} raw={t._raw} colName={actionTakenColName} onStatusChange={onStatusChange} widthClass="w-full min-w-[90px]" />
+                        ) : <span className="truncate block">{t.actionTakenToday || '—'}</span>}
                       </td>
                     )}
                     {/* Performance Signal/Insights */}
                     {showMarketingCols && (
                       <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
-                        <span className="truncate block">{t.performanceSignal || '—'}</span>
+                        {onStatusChange && performanceSignalColName && canEditStatus ? (
+                          <ResourceTimeLoggedEdit value={t.performanceSignal} raw={t._raw} colName={performanceSignalColName} onStatusChange={onStatusChange} widthClass="w-full min-w-[90px]" />
+                        ) : <span className="truncate block">{t.performanceSignal || '—'}</span>}
                       </td>
                     )}
                     {/* Blocker */}
                     {showMarketingCols && (
                       <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
-                        <span className="truncate block">{t.blocker || '—'}</span>
+                        {onStatusChange && blockerColName && canEditStatus ? (
+                          <ResourceTimeLoggedEdit value={t.blocker} raw={t._raw} colName={blockerColName} onStatusChange={onStatusChange} widthClass="w-full min-w-[70px]" />
+                        ) : <span className="truncate block">{t.blocker || '—'}</span>}
                       </td>
                     )}
                     {/* Next Steps */}
                     {showMarketingCols && (
                       <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
-                        <span className="truncate block">{t.nextSteps || '—'}</span>
+                        {onStatusChange && nextStepsColName && canEditStatus ? (
+                          <ResourceTimeLoggedEdit value={t.nextSteps} raw={t._raw} colName={nextStepsColName} onStatusChange={onStatusChange} widthClass="w-full min-w-[70px]" />
+                        ) : <span className="truncate block">{t.nextSteps || '—'}</span>}
                       </td>
                     )}
                     {/* Time Logged On AC */}
@@ -828,7 +910,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
 
 
 // ─── Flat Tasks Table (all resources' tasks in a single table, no grouping) ────
-function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus = true, statusColName, timeLoggedColName, canEditStatus = false, canCopy = false, currentUserName, pmEmailCol, currentUserEmail, vinayQaMode = false, showMarketingCols = false, showTimeLogged = true, showTotalHours = false }: {
+function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus = true, statusColName, timeLoggedColName, canEditStatus = false, canCopy = false, currentUserName, pmEmailCol, currentUserEmail, vinayQaMode = false, showMarketingCols = false, showTimeLogged = true, showTotalHours = false, bucketColName, totalHoursColName, actionTakenColName, performanceSignalColName, blockerColName, nextStepsColName }: {
   rows: ResourceRow[];
   onStatusChange?: (row: SheetData, col: string, val: string) => Promise<void>;
   pmStatusColName?: string;
@@ -844,6 +926,12 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
   showMarketingCols?: boolean;
   showTimeLogged?: boolean;
   showTotalHours?: boolean;
+  bucketColName?: string;
+  totalHoursColName?: string;
+  actionTakenColName?: string;
+  performanceSignalColName?: string;
+  blockerColName?: string;
+  nextStepsColName?: string;
 }) {
   const [copiedRowIdx, setCopiedRowIdx] = useState<number | null>(null);
   const [copiedTable, setCopiedTable] = useState(false);
@@ -1026,11 +1114,15 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
                   )}
                   {showTotalHours && !vinayQaMode && (
                     <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
-                      {t.totalHoursVal || '—'}
+                      {onStatusChange && totalHoursColName && rowCanEditStatus ? (
+                        <ResourceTimeLoggedEdit value={t.totalHoursVal} raw={t._raw} colName={totalHoursColName} onStatusChange={onStatusChange} />
+                      ) : (t.totalHoursVal || '—')}
                     </td>
                   )}
                   <td className="px-4 py-2">
-                    {t.bucket ? (
+                    {onStatusChange && bucketColName && rowCanEditStatus ? (
+                      <ResourceBucketSelect value={t.bucket || 'No Action Taken'} raw={t._raw} colName={bucketColName} onStatusChange={onStatusChange} />
+                    ) : t.bucket ? (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize" style={{ background: bColor + '20', color: bColor }}>
                         <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: bColor }} />
                         {normBucket(t.bucket)}
@@ -1049,22 +1141,30 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
                   )}
                   {showMarketingCols && !vinayQaMode && (
                     <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
-                      <span className="truncate block">{t.actionTakenToday || '—'}</span>
+                      {onStatusChange && actionTakenColName && rowCanEditStatus ? (
+                        <ResourceTimeLoggedEdit value={t.actionTakenToday} raw={t._raw} colName={actionTakenColName} onStatusChange={onStatusChange} widthClass="w-full min-w-[90px]" />
+                      ) : <span className="truncate block">{t.actionTakenToday || '—'}</span>}
                     </td>
                   )}
                   {showMarketingCols && !vinayQaMode && (
                     <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
-                      <span className="truncate block">{t.performanceSignal || '—'}</span>
+                      {onStatusChange && performanceSignalColName && rowCanEditStatus ? (
+                        <ResourceTimeLoggedEdit value={t.performanceSignal} raw={t._raw} colName={performanceSignalColName} onStatusChange={onStatusChange} widthClass="w-full min-w-[90px]" />
+                      ) : <span className="truncate block">{t.performanceSignal || '—'}</span>}
                     </td>
                   )}
                   {showMarketingCols && !vinayQaMode && (
                     <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
-                      <span className="truncate block">{t.blocker || '—'}</span>
+                      {onStatusChange && blockerColName && rowCanEditStatus ? (
+                        <ResourceTimeLoggedEdit value={t.blocker} raw={t._raw} colName={blockerColName} onStatusChange={onStatusChange} widthClass="w-full min-w-[70px]" />
+                      ) : <span className="truncate block">{t.blocker || '—'}</span>}
                     </td>
                   )}
                   {showMarketingCols && !vinayQaMode && (
                     <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
-                      <span className="truncate block">{t.nextSteps || '—'}</span>
+                      {onStatusChange && nextStepsColName && rowCanEditStatus ? (
+                        <ResourceTimeLoggedEdit value={t.nextSteps} raw={t._raw} colName={nextStepsColName} onStatusChange={onStatusChange} widthClass="w-full min-w-[70px]" />
+                      ) : <span className="truncate block">{t.nextSteps || '—'}</span>}
                     </td>
                   )}
                   {showTimeLogged && !vinayQaMode && (
@@ -1413,6 +1513,12 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
           showMarketingCols={showMarketingCols}
           showTimeLogged={showTimeLogged}
           showTotalHours={showTotalHours}
+          bucketColName={bucketCol}
+          totalHoursColName={totalHoursCol}
+          actionTakenColName={actionTakenCol}
+          performanceSignalColName={performanceSignalCol}
+          blockerColName={blockerCol}
+          nextStepsColName={nextStepsCol}
         />
       ) : (
         <div className="space-y-2">
@@ -1440,6 +1546,12 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
               showMarketingCols={showMarketingCols}
               showTimeLogged={showTimeLogged}
               showTotalHours={showTotalHours}
+              bucketColName={bucketCol}
+              totalHoursColName={totalHoursCol}
+              actionTakenColName={actionTakenCol}
+              performanceSignalColName={performanceSignalCol}
+              blockerColName={blockerCol}
+              nextStepsColName={nextStepsCol}
             />
           ))}
         </div>
