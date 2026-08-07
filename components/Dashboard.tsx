@@ -1241,31 +1241,13 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 {/* ── Left: Info (40%) ── */}
                 <div className="space-y-5" style={{ flex: '0 0 50%' }}>
 
-                  {/* Header */}
+                  {/* Introduction About Dashboard */}
                   <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-widest mb-0.5" style={{ color: 'var(--cn-accent)' }}>Task Submission</p>
-                    <h2 className="font-bold text-base" style={{ color: 'var(--cn-text-primary)' }}>Instructions &amp; Guidelines</h2>
-                    <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--cn-text-muted)' }}>Follow the steps below to ensure smooth task allocation and team coordination.</p>
-                  </div>
-
-                  <div className="h-px" style={{ background: 'var(--cn-border)' }} />
-
-                  {/* Daily Workflow */}
-                  <div className="space-y-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>Daily Workflow</p>
-                    {[
-                      { step: '01', time: 'Before 9:45 AM', desc: 'Complete this form each morning with all tasks for the day.' },
-                      { step: '02', time: '9:45 – 10:00 AM', desc: 'Standup meeting to review and discuss submitted tasks.' },
-                      { step: '03', time: 'By 10:00 AM', desc: 'Tasks assigned to team. Urgent requests handled on priority.' },
-                    ].map(({ step, time, desc }) => (
-                      <div key={step} className="flex gap-2.5 items-start">
-                        <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5" style={{ background: 'rgba(254,74,35,0.10)', color: 'var(--cn-accent)' }}>{step}</div>
-                        <div>
-                          <p className="text-xs font-semibold leading-tight" style={{ color: 'var(--cn-text-primary)' }}>{time}</p>
-                          <p className="text-[11px] leading-snug mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>{desc}</p>
-                        </div>
-                      </div>
-                    ))}
+                    <p className="text-[10px] font-semibold uppercase tracking-widest mb-0.5" style={{ color: 'var(--cn-accent)' }}>Introduction</p>
+                    <h2 className="font-bold text-base" style={{ color: 'var(--cn-text-primary)' }}>About Dashboard</h2>
+                    <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--cn-text-muted)' }}>
+                      Clickway is Cybernext&apos;s internal workspace for managing tasks, tracking team bandwidth, and keeping every project on schedule across the Web and Marketing teams. Submit a new task using the form on the right — once submitted, it lands in Tasks Assigned and gets picked up by the team.
+                    </p>
                   </div>
 
                   <div className="h-px" style={{ background: 'var(--cn-border)' }} />
@@ -1290,15 +1272,16 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
                   <div className="h-px" style={{ background: 'var(--cn-border)' }} />
 
-                  {/* Dashboard Info */}
+                  {/* Dashboard Features */}
                   <div className="space-y-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>About This Dashboard</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>Dashboard Features</p>
                     <ul className="space-y-1.5">
                       {[
-                        { label: 'Task Board', desc: 'Live view of all active task assignments.' },
-                        { label: 'Resource Availability', desc: 'Workload & availability of each member.' },
-                        { label: 'Dashboard', desc: 'Analytics & progress overview for management.' },
-                        { label: 'Team', desc: 'Member profiles with daily task summaries and bucket.' },
+                        { label: 'Dashboard', desc: 'Analytics and project state overview for management.' },
+                        { label: 'Tasks Assigned', desc: 'Live view of every active task across the team.' },
+                        { label: 'Tasks Overview', desc: 'Per-member workload broken down by daily bucket.' },
+                        { label: 'Team Bandwidth', desc: 'Resource availability and workload at a glance.' },
+                        { label: 'Leaderboard', desc: 'Team performance and recognition.' },
                       ].map(({ label, desc }) => (
                         <li key={label} className="flex gap-1.5 text-[11px]" style={{ color: 'var(--cn-text-muted)' }}>
                           <span className="mt-1.5 w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--cn-accent)' }} />
@@ -1327,6 +1310,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                         </a>
                     </div>
                   </div>
+
+                  {/* Copyright */}
+                  <p className="text-[10px] text-center" style={{ color: 'var(--cn-text-faint)' }}>© Cybernext Since 2014. All Rights Reserved.</p>
 
                 </div>
 
