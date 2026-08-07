@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronLeft, ChevronRight, Clock, CalendarClock, Hourglass, Rocket, Activity } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronLeft, ChevronRight, Clock, CalendarClock, Hourglass, Rocket, Activity, AlertTriangle } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { MultiSelect } from './FilteredDataTable';
 import SearchFilter from './SearchFilter';
@@ -234,6 +234,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const assignedCol = headers.find(h => h.toLowerCase() === 'assigned');
   const totalHoursCol = headers.find(h => h.toLowerCase() === 'total hours');
   const currentMonthHoursCol = headers.find(h => h.toLowerCase() === 'current month hours');
+  const riskMonthHoursCol = headers.find(h => h.toLowerCase() === 'risk month hours');
   const showPmCol = data.some(r => r['__pm']);
 
   // Dropdown columns — canonical lists (matching the sheet's actual data
@@ -333,16 +334,12 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     const num = (v: unknown) => { const n = Number(v); return isNaN(n) ? 0 : n; };
     const totalHours = totalHoursCol ? filtered.reduce((s, r) => s + num(r[totalHoursCol]), 0) : 0;
     const currentMonthHours = currentMonthHoursCol ? filtered.reduce((s, r) => s + num(r[currentMonthHoursCol]), 0) : 0;
-    const pendingHours = currentMonthHoursCol
-      ? filtered.reduce((s, r) => {
-          const isDone = paymentStatusCol && String(r[paymentStatusCol] ?? '').trim().toLowerCase() === 'done';
-          return isDone ? s : s + num(r[currentMonthHoursCol]);
-        }, 0)
-      : 0;
+    const riskMonthHours = riskMonthHoursCol ? filtered.reduce((s, r) => s + num(r[riskMonthHoursCol]), 0) : 0;
+    const pendingHours = totalHours - currentMonthHours;
     const yetToStart = statusCol ? filtered.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'yet to start').length : 0;
     const ongoing = statusCol ? filtered.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'on going').length : 0;
-    return { totalHours, currentMonthHours, pendingHours, yetToStart, ongoing };
-  }, [filtered, totalHoursCol, currentMonthHoursCol, paymentStatusCol, statusCol]);
+    return { totalHours, currentMonthHours, riskMonthHours, pendingHours, yetToStart, ongoing };
+  }, [filtered, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, statusCol]);
 
   const fmtHours = (n: number) => `${Math.round(n * 10) / 10}h`;
 
@@ -396,6 +393,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const statCards = [
     { label: 'Total Hours', value: fmtHours(stats.totalHours), color: '#2563eb', icon: <Clock className="w-4 h-4" /> },
     { label: 'Current Month Hours', value: fmtHours(stats.currentMonthHours), color: '#0891b2', icon: <CalendarClock className="w-4 h-4" /> },
+    { label: 'Risk Month Hours', value: fmtHours(stats.riskMonthHours), color: '#dc2626', icon: <AlertTriangle className="w-4 h-4" /> },
     { label: 'Pending Hours', value: fmtHours(stats.pendingHours), color: '#d97706', icon: <Hourglass className="w-4 h-4" /> },
     { label: 'Project Yet To Start', value: stats.yetToStart, color: '#dc2626', icon: <Rocket className="w-4 h-4" /> },
     { label: 'Project Ongoing', value: stats.ongoing, color: '#16a34a', icon: <Activity className="w-4 h-4" /> },
@@ -404,7 +402,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   return (
     <div className="space-y-4">
       <div className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-px" style={{ background: 'var(--cn-border)' }}>
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-px" style={{ background: 'var(--cn-border)' }}>
           {statCards.map(({ label, value, color, icon }) => (
             <div key={label} className="flex flex-col gap-1.5 p-4" style={{ background: 'var(--cn-bg-card)' }}>
               <div className="flex items-center justify-between">

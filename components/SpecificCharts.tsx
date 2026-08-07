@@ -2687,17 +2687,40 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
     return { name, displayHours, status };
   }).sort((a, b) => a.displayHours - b.displayHours);
 
+  // Grouped into columns by status — lets an admin scan straight to
+  // "who's Available" instead of hunting through one long wrapped row.
+  const GROUP_ORDER = ['Available', 'Partially Available', 'Partially Occupied', 'Occupied', 'Overload', 'On Leave'];
+  const GROUP_COLORS: Record<string, string> = {
+    'Available': '#22c55e', 'Partially Available': '#f59e0b', 'Partially Occupied': '#f59e0b',
+    'Occupied': '#f97316', 'Overload': '#dc2626', 'On Leave': '#8b5cf6',
+  };
+  const groups = GROUP_ORDER
+    .map(label => ({ label, color: GROUP_COLORS[label], members: rows.filter(r => r.status.label === label) }))
+    .filter(g => g.members.length > 0);
+
   return (
-    <div className="rounded-xl border p-3" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
-      <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: 'var(--cn-text-muted)' }}>Resource Bandwidth</p>
-      <div className="flex items-center gap-2 flex-wrap">
-        {rows.map(r => (
-          <div key={r.name}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold"
-            style={{ background: r.status.bg + '18', color: r.status.bg, border: `1px solid ${r.status.bg}33` }}
-          >
-            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: r.status.bg }} />
-            {r.name} · {r.status.label} · {Math.round(r.displayHours * 10) / 10}h
+    <div className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+      <div className="px-4 py-2.5 border-b" style={{ borderColor: 'var(--cn-border)', background: 'var(--cn-bg-input)' }}>
+        <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>Resource Bandwidth</p>
+      </div>
+      <div className="grid gap-px sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5" style={{ background: 'var(--cn-border)' }}>
+        {groups.map(g => (
+          <div key={g.label} className="flex flex-col gap-2 p-3" style={{ background: 'var(--cn-bg-card)' }}>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: g.color }}>{g.label}</span>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full tabular-nums" style={{ background: g.color + '18', color: g.color }}>{g.members.length}</span>
+            </div>
+            <div className="flex flex-col gap-1">
+              {g.members.map(m => (
+                <div key={m.name} className="flex items-center justify-between gap-2 text-[12px] px-2 py-1.5 rounded-lg" style={{ background: 'var(--cn-bg-input)' }}>
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: m.status.bg }} />
+                    <span className="truncate" style={{ color: 'var(--cn-text-primary)' }}>{m.name}</span>
+                  </span>
+                  <span className="tabular-nums font-semibold shrink-0" style={{ color: 'var(--cn-text-muted)' }}>{Math.round(m.displayHours * 10) / 10}h</span>
+                </div>
+              ))}
+            </div>
           </div>
         ))}
       </div>
