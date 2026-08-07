@@ -736,7 +736,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
               <col style={{ width: '70px' }} />   {/* Est. */}
               {showTotalHours && <col style={{ width: '90px' }} />}  {/* Total Hours */}
               <col style={{ width: '120px' }} />  {/* Task Daily Bucket */}
-              <col style={{ width: '110px' }} />  {/* Bucket Set */}
+              <col style={{ width: '150px' }} />  {/* Bucket Set */}
               {showMarketingCols && <col style={{ width: '140px' }} />}  {/* Action Taken Today */}
               {showMarketingCols && <col style={{ width: '160px' }} />}  {/* Performance Signal/Insights */}
               {showMarketingCols && <col style={{ width: '110px' }} />}  {/* Blocker */}
@@ -843,7 +843,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                     {/* Bucket Set */}
                     <td className="px-4 py-2">
                       {t.bucketSet ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize" style={{ background: bColor + '20', color: bColor }}>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize whitespace-nowrap" style={{ background: bColor + '20', color: bColor }}>
                           <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: bColor }} />
                           {t.bucketSet.toLowerCase() === 'tommorow' ? 'Tomorrow' : t.bucketSet}
                         </span>

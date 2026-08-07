@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SheetData } from '@/lib/googleSheets';
-import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, MARKETING_ASSIGNED_PERSONS, WEB_TEAM, RANGE_BANDWIDTH, RANGE_AVAILABILITY, TAB_AVAILABILITY, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
+import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, MARKETING_ASSIGNED_PERSONS, WEB_TEAM, TAB_BANDWIDTH, RANGE_AVAILABILITY, TAB_AVAILABILITY, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
 
 import { AuthUser, SheetId, Team, getAllowedSheets, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, getTasksAssignedLockedTeam } from '@/lib/auth';
 import Sidebar from './Sidebar';
@@ -39,6 +39,38 @@ async function fetchSheet(
     __row: idx + headerRow + 1,
   }));
   return { data, headers };
+}
+
+// Bandwidth Allocation + every archive tab ("Task - <range>"), merged and
+// tagged with __sheet/__id server-side — see /api/bandwidth-tasks. Fetched
+// as one call instead of fetchSheet(RANGE_BANDWIDTH) so new archive tabs
+// show up automatically with no code change.
+async function fetchBandwidthTasks(): Promise<{ data: SheetData[]; headers: string[] }> {
+  const res = await fetch('/api/bandwidth-tasks', { cache: 'no-store' });
+  const json = await res.json();
+  if (!json.success) {
+    throw new Error(json.error ?? `HTTP ${res.status}`);
+  }
+  return { data: json.data ?? [], headers: json.headers ?? [] };
+}
+
+// Parses the sheet's "DD/MM/YYYY HH:mm:ss" Timestamp column. Needed to sort
+// Tasks Assigned correctly now that Bandwidth Allocation is merged with
+// archive tabs — __row alone is only unique within a single tab, so a raw
+// __row sort would interleave old and current rows arbitrarily.
+function parseRowTimestamp(row: SheetData, headers: string[]): number {
+  const tsCol = headers.find(h => h.toLowerCase().includes('timestamp'));
+  if (!tsCol) return 0;
+  const raw = String(row[tsCol] ?? '').trim();
+  if (!raw) return 0;
+  const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (m) {
+    const [, d, mo, y, h, mi, s] = m;
+    const dt = new Date(+y, +mo - 1, +d, +(h ?? 0), +(mi ?? 0), +(s ?? 0));
+    if (!isNaN(dt.getTime())) return dt.getTime();
+  }
+  const dt = new Date(raw);
+  return isNaN(dt.getTime()) ? 0 : dt.getTime();
 }
 
 // ─── AI News Ticker ─────────────────────────────────────────────────────────
@@ -304,15 +336,12 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     try {
       // Core data — 3 calls (all users need this)
       const [bw, av] = await Promise.all([
-        fetchSheet(SHEET_IDS['1'], RANGE_BANDWIDTH),
+        fetchBandwidthTasks(),
         fetchSheet(SHEET_IDS['1'], RANGE_AVAILABILITY, 2),
       ]);
-      // Only include rows that have a Timestamp — excludes empty/formatting-only rows
-      const tsCol = bw.headers.find(h => h.toLowerCase().includes('timestamp'));
-      const validBwData = tsCol
-        ? bw.data.filter(r => String(r[tsCol] ?? '').trim() !== '')
-        : bw.data;
-      setBandwidthData(validBwData);
+      // Blank/formatting-only rows and per-tab tagging are already handled
+      // server-side by /api/bandwidth-tasks
+      setBandwidthData(bw.data);
       setBandwidthHeaders(bw.headers);
       setAvailData(av.data);
       setAvailHeaders(av.headers);
@@ -474,14 +503,18 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
   const handleBandwidthStatusChange = async (row: SheetData, colName: string, newValue: string) => {
     const rowNum = Number(row['__row']);
+    // Bandwidth Allocation + archive tabs share __row numbering per-tab, so
+    // both the write target and the local-state match must go through the
+    // row's own tab (__sheet/__id), not just __row.
+    const sheetName = String(row['__sheet'] ?? TAB_BANDWIDTH);
     const colIndex = bandwidthHeaders.indexOf(colName);
     if (!rowNum || colIndex === -1) return;
     await fetch('/api/update-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ spreadsheetId: SHEET_IDS['1'], row: rowNum, colIndex, value: newValue }),
+      body: JSON.stringify({ spreadsheetId: SHEET_IDS['1'], sheetName, row: rowNum, colIndex, value: newValue }),
     });
-    setBandwidthData(prev => prev.map(r => r['__row'] === rowNum ? { ...r, [colName]: newValue } : r));
+    setBandwidthData(prev => prev.map(r => r['__id'] === row['__id'] ? { ...r, [colName]: newValue } : r));
   };
 
   const handlePmBandwidthChange = async (row: SheetData, colName: string, newValue: string) => {
@@ -551,8 +584,12 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
   // Tasks Assigned — same sort/search pipeline as searchFiltered, scoped to the selected team
   const tasksAssignedTeamData = tasksAssignedTeam === 'web' ? webBandwidthData : marketingTeamData;
+  const tasksAssignedHeadersForSort = tasksAssignedTeam === 'web' ? bandwidthHeaders : marketingTeamHeaders;
   const tasksAssignedSorted = isNewestFirst
-    ? [...tasksAssignedTeamData].sort((a, b) => Number(b['__row']) - Number(a['__row']))
+    ? [...tasksAssignedTeamData].sort((a, b) => {
+        const diff = parseRowTimestamp(b, tasksAssignedHeadersForSort) - parseRowTimestamp(a, tasksAssignedHeadersForSort);
+        return diff !== 0 ? diff : Number(b['__row']) - Number(a['__row']);
+      })
     : tasksAssignedTeamData;
   const tasksAssignedSearchFiltered = searchTerm.trim()
     ? tasksAssignedSorted.filter(row => Object.values(row).some(v => String(v).toLowerCase().includes(searchTerm.toLowerCase())))
