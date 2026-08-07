@@ -44,3 +44,13 @@ export function memberPhoto(name: string): string {
   const key = Object.keys(TEAM_PHOTOS).find(k => lower.includes(k));
   return key ? TEAM_PHOTOS[key] : '';
 }
+
+// PPC + SEO log "Everyday" tasks as a monthly retainer hour block rather than
+// a daily one, so they get Overload/Available thresholds instead of the
+// daily-hour Occupied/Partially Occupied bands used by Web and SMM. The
+// sheet's own Department column only distinguishes PPC/SMM (no SEO value),
+// so this has to be a name-based roster instead.
+export const MONTHLY_BLOCK_MARKETING_NAMES = new Set([
+  'atul', 'shiwangi', 'dheeraj', 'anjali', 'anurag', 'vansh', // PPC
+  'akshay', 'bhavya', 'kshitij', // SEO
+]);

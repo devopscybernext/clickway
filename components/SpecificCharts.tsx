@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import { CheckCircle2, PauseCircle, LayoutGrid, Send, CalendarCheck, CalendarClock, UserCheck, ChevronDown, ChevronUp, AlertTriangle, ThumbsUp, RefreshCw, BadgeCheck, Copy, Check, Search, X } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
-import { memberColor } from '@/lib/memberColors';
+import { memberColor, MONTHLY_BLOCK_MARKETING_NAMES } from '@/lib/memberColors';
 
 // ─── Shared date-filter util (also used per-section) ──────────────────────────
 export type DateFilter = 'all' | 'daily' | 'weekly' | 'monthly';
@@ -236,11 +236,11 @@ export function parseHours(val: string): number {
 }
 
 // Status based on todayHours (today+everyday) — matches the badge shown on the card.
-// PPC (Marketing) is the one department whose "Everyday" tasks carry a full
-// monthly hour block rather than a daily one, so it gets its own thresholds.
+// PPC and SEO (Marketing) log "Everyday" tasks as a monthly retainer hour
+// block rather than a daily one, so they get their own thresholds.
 function resourceStatus(row: ResourceRow, onLeave = false): { label: string; bg: string; text: string } {
   if (onLeave) return { label: 'On Leave', bg: '#ef4444', text: '#fff' };
-  if (row.department.trim().toLowerCase() === 'ppc') {
+  if (MONTHLY_BLOCK_MARKETING_NAMES.has(row.name.trim().toLowerCase())) {
     if (row.todayHours > 130)  return { label: 'Overload',           bg: '#dc2626', text: '#fff' };
     if (row.todayHours >= 120) return { label: 'Occupied',           bg: '#f97316', text: '#fff' };
     if (row.todayHours >= 60)  return { label: 'Partially Available', bg: '#f59e0b', text: '#fff' };
@@ -2255,7 +2255,6 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
 
 
   const resourceCol = findCol(sheet1Headers, 'assigned person', 'assigned to', 'resource');
-  const deptCol     = sheet1Headers.find(h => h.toLowerCase() === 'department');
   const statusCol   = findCol(sheet1Headers, 'task status', 'status');
   const bucketCol   = findCol(sheet1Headers, 'task daily bucket', 'bucket');
   const timeEstCol  = findCol(sheet1Headers, 'time estimation', 'time estimate', 'estimation');
@@ -2301,8 +2300,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
 
   const rows = names.map(name => {
     const myTasks = sheet1Data.filter(r => String(r[resourceCol] ?? '').trim() === name);
-    const personDept = deptCol ? String(myTasks.find(r => String(r[deptCol] ?? '').trim())?.[deptCol] ?? '').trim() : '';
-    const isPPC = personDept.toLowerCase() === 'ppc';
+    const isMonthlyBlock = MONTHLY_BLOCK_MARKETING_NAMES.has(name.trim().toLowerCase());
     // Show tasks filtered by tab — exclude closed tasks and tomorrow/dayafter from Today's tab
     const tabTasks = myTasks.filter(r => {
       const st = getStatus(r).toLowerCase();
@@ -2329,11 +2327,12 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
       if (av) { const v = String(av[availStatusCol] ?? '').trim().toLowerCase(); onLeave = v.includes('leave') || v === 'absent'; }
     }
 
-    // PPC's "Everyday" tasks carry a full monthly hour block rather than a
-    // daily one, so it gets its own thresholds instead of the daily-hours bands.
+    // PPC and SEO's "Everyday" tasks carry a full monthly hour block rather
+    // than a daily one, so they get their own thresholds instead of the
+    // daily-hours bands.
     const status = onLeave
       ? { label: 'On Leave', bg: '#ef4444' }
-      : isPPC
+      : isMonthlyBlock
         ? (displayHours > 130
             ? { label: 'Overload',            bg: '#dc2626' }
             : displayHours >= 120
@@ -2637,6 +2636,75 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
   );
 }
 
+// ─── Resource Bandwidth chips — compact "who has room for a new task" strip,
+// used above Tasks Assigned. Same status thresholds as ResourceStatusGrid
+// (Team Bandwidth), sorted most-available first.
+export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, availHeaders }: {
+  sheet1Data: SheetData[]; sheet1Headers: string[];
+  availData?: SheetData[]; availHeaders?: string[];
+}) {
+  const resourceCol = findCol(sheet1Headers, 'assigned person', 'assigned to', 'resource');
+  const bucketCol   = findCol(sheet1Headers, 'task daily bucket', 'bucket');
+  const timeEstCol  = findCol(sheet1Headers, 'time estimation', 'time estimate', 'estimation');
+  const availNameCol   = availHeaders ? findCol(availHeaders, 'name', 'resource', 'person') : undefined;
+  const availStatusCol = availHeaders ? findCol(availHeaders, 'availability', 'status', 'leave') : undefined;
+
+  if (!sheet1Data.length || !resourceCol) return null;
+
+  const getBucket = (r: SheetData) => bucketCol  ? String(r[bucketCol]  ?? '').trim().toLowerCase() : '';
+  const getTime   = (r: SheetData) => timeEstCol ? parseHours(String(r[timeEstCol] ?? '').trim()) : 0;
+
+  const names = [...new Set(sheet1Data.map(r => String(r[resourceCol] ?? '').trim()).filter(Boolean))];
+
+  const rows = names.map(name => {
+    const displayHours = sheet1Data
+      .filter(r => String(r[resourceCol] ?? '').trim() === name && ['today', 'everyday'].includes(getBucket(r)))
+      .reduce((s, r) => s + getTime(r), 0);
+
+    let onLeave = false;
+    if (availData && availNameCol && availStatusCol) {
+      const av = availData.find(r => String(r[availNameCol] ?? '').trim().toLowerCase() === name.toLowerCase());
+      if (av) { const v = String(av[availStatusCol] ?? '').trim().toLowerCase(); onLeave = v.includes('leave') || v === 'absent'; }
+    }
+
+    const isMonthlyBlock = MONTHLY_BLOCK_MARKETING_NAMES.has(name.trim().toLowerCase());
+    const status = onLeave
+      ? { label: 'On Leave', bg: '#8b5cf6' }
+      : isMonthlyBlock
+        ? (displayHours > 130
+            ? { label: 'Overload',            bg: '#dc2626' }
+            : displayHours >= 120
+              ? { label: 'Occupied',          bg: '#f97316' }
+              : displayHours >= 60
+                ? { label: 'Partially Available', bg: '#f59e0b' }
+                : { label: 'Available',        bg: '#22c55e' })
+        : displayHours === 0
+          ? { label: 'Available',          bg: '#22c55e' }
+          : displayHours <= 6.5
+            ? { label: 'Partially Occupied', bg: '#f59e0b' }
+            : { label: 'Occupied',           bg: displayHours <= 7.3 ? '#f97316' : '#ef4444' };
+
+    return { name, displayHours, status };
+  }).sort((a, b) => a.displayHours - b.displayHours);
+
+  return (
+    <div className="rounded-xl border p-3" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+      <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: 'var(--cn-text-muted)' }}>Resource Bandwidth</p>
+      <div className="flex items-center gap-2 flex-wrap">
+        {rows.map(r => (
+          <div key={r.name}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold"
+            style={{ background: r.status.bg + '18', color: r.status.bg, border: `1px solid ${r.status.bg}33` }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: r.status.bg }} />
+            {r.name} · {r.status.label} · {Math.round(r.displayHours * 10) / 10}h
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Insight Cards (Resource Health / Project Health / Trends) ────────────────
 export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeaders, mode, personFilter }: {
   sheet1Data: SheetData[]; sheet1Headers: string[];
@@ -2739,11 +2807,10 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
   // ── Project Cards (horizontal KPI style) ────────────────────────────────────
   if (mode === 'project-cards') {
     const cards = [
-      { label: "Today's Tasks",        value: todayCount,                       color: '#FE4A23', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
+      { label: 'Today/Everyday Tasks', value: todayCount + everydayCount,       color: '#FE4A23', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
       { label: 'In Progress',          value: inProgressCount,                  color: '#16a34a', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> },
       { label: 'On Hold',              value: onHoldCount,                      color: '#7c3aed', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/></svg> },
-      { label: 'Everyday Tasks',       value: everydayCount,                    color: '#06b6d4', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> },
-      { label: 'Submitted to Akash',   value: submittedAkashCount,              color: '#d97706', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.84 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.77 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8 8.09a16 16 0 0 0 6 6l1.06-1.06a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg> },
+      { label: 'Submitted To Admin',   value: submittedAkashCount,              color: '#d97706', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.84 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.77 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8 8.09a16 16 0 0 0 6 6l1.06-1.06a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg> },
       { label: 'Submitted to PM',      value: submittedPMCount,                 color: '#10b981', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
       { label: 'To Be Expected',       value: toBeExpectedCount,                color: '#d97706', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> },
     ];
@@ -2753,7 +2820,7 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
           <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>Project State</p>
           <DateFilterPills value={filter} onChange={setFilter} />
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-px" style={{ background: 'var(--cn-border)' }}>
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-px" style={{ background: 'var(--cn-border)' }}>
           {cards.map(({ label, value, color, icon }) => (
             <div key={label} className="flex flex-col gap-1.5 p-4" style={{ background: 'var(--cn-bg-card)' }}>
               <div className="flex items-center justify-between">

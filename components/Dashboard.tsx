@@ -7,7 +7,7 @@ import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, MARKETING_TEAM_SHEET_
 import { AuthUser, SheetId, Team, getAllowedSheets, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, getTasksAssignedLockedTeam } from '@/lib/auth';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
-import SpecificCharts, { ResourceOverview, PmStatusOverview, KpiCards, ResourceStatusGrid, InsightCards, PmStatusChart } from './SpecificCharts';
+import SpecificCharts, { ResourceOverview, PmStatusOverview, KpiCards, ResourceStatusGrid, InsightCards, PmStatusChart, ResourceBandwidthChips } from './SpecificCharts';
 import FilteredDataTable from './FilteredDataTable';
 import SearchFilter from './SearchFilter';
 import EmployeeGallery from './EmployeeGallery';
@@ -585,6 +585,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   // Tasks Assigned — same sort/search pipeline as searchFiltered, scoped to the selected team
   const tasksAssignedTeamData = tasksAssignedTeam === 'web' ? webBandwidthData : marketingTeamData;
   const tasksAssignedHeadersForSort = tasksAssignedTeam === 'web' ? bandwidthHeaders : marketingTeamHeaders;
+  const tasksAssignedAvailData = tasksAssignedTeam === 'web' ? webAvailData : marketingAvailData;
+  const tasksAssignedAvailHeaders = tasksAssignedTeam === 'web' ? availHeaders : [];
   const tasksAssignedSorted = isNewestFirst
     ? [...tasksAssignedTeamData].sort((a, b) => {
         const diff = parseRowTimestamp(b, tasksAssignedHeadersForSort) - parseRowTimestamp(a, tasksAssignedHeadersForSort);
@@ -850,6 +852,12 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 ))}
               </div>
             )}
+            <ResourceBandwidthChips
+              sheet1Data={tasksAssignedTeamData}
+              sheet1Headers={tasksAssignedHeadersForSort}
+              availData={tasksAssignedAvailData}
+              availHeaders={tasksAssignedAvailHeaders}
+            />
             <SearchFilter
               searchTerm={searchTerm}
               totalCount={tasksAssignedTeamData.length}
