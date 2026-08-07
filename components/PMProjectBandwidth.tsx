@@ -115,6 +115,74 @@ function EditableCell({ value, colored, editable, onSave }: {
   );
 }
 
+// Sheet stores dates as M/D/YYYY; <input type="date"> needs YYYY-MM-DD.
+function toInputDate(raw: string): string {
+  const m = raw.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return '';
+  const [, mo, d, y] = m;
+  return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+}
+function fromInputDate(iso: string): string {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return iso;
+  const [, y, mo, d] = m;
+  return `${Number(mo)}/${Number(d)}/${y}`;
+}
+const isDateCol = (h: string) => h.toLowerCase().includes('date');
+
+// Calendar date cell — click to edit, opens the browser's native date picker
+// instead of a free-text field.
+function DateCell({ value, editable, onSave }: {
+  value: string; editable: boolean; onSave: (v: string) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      try { inputRef.current.showPicker?.(); } catch { /* not supported — native click still opens it */ }
+    }
+  }, [editing]);
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        type="date"
+        autoFocus
+        defaultValue={toInputDate(value)}
+        onChange={async e => {
+          setEditing(false);
+          const iso = e.target.value;
+          if (!iso) return;
+          const next = fromInputDate(iso);
+          if (next === value) return;
+          setSaving(true);
+          try { await onSave(next); } finally { setSaving(false); }
+        }}
+        onBlur={() => setEditing(false)}
+        className="w-full text-xs rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#FE4A23]"
+        style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}
+      />
+    );
+  }
+
+  const badge = <span className="whitespace-nowrap" style={{ color: 'var(--cn-text-secondary)' }}>{value || '—'}</span>;
+  if (!editable) return badge;
+
+  return (
+    <button
+      onClick={() => setEditing(true)}
+      title="Click to pick a date"
+      className="text-left w-full rounded px-1 py-0.5 -mx-1 transition-colors hover:bg-[var(--cn-bg-hover)] cursor-pointer"
+    >
+      {badge}
+      {saving && <span className="ml-1 text-[10px] opacity-60">saving…</span>}
+    </button>
+  );
+}
+
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 // Canonical dropdown lists, matching the sheet's actual data-validation
@@ -525,7 +593,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                     const val = String(row[h] ?? '');
                     const isUrl = h.toLowerCase().includes('url') || h.toLowerCase().includes('link');
                     return (
-                      <td key={h} className={`px-4 py-2 ${isDropdownCol(h) || isStatusLikeCol(h) ? 'whitespace-nowrap' : 'break-words min-w-[120px] max-w-xs'}`}>
+                      <td key={h} className={`px-4 py-2 ${isDropdownCol(h) || isStatusLikeCol(h) || isDateCol(h) ? 'whitespace-nowrap' : 'break-words min-w-[120px] max-w-xs'}`}>
                         {isUrl && val && !canEdit ? (
                           <a href={val} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: 'var(--cn-accent)' }}>{val}</a>
                         ) : isDropdownCol(h) ? (
@@ -534,6 +602,12 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                             colored={isStatusLikeCol(h)}
                             editable={canEdit && !!onCellChange}
                             options={dropdownOptions[h] ?? []}
+                            onSave={async v => { if (onCellChange) await onCellChange(row, h, v); }}
+                          />
+                        ) : isDateCol(h) ? (
+                          <DateCell
+                            value={val}
+                            editable={canEdit && !!onCellChange}
                             onSave={async v => { if (onCellChange) await onCellChange(row, h, v); }}
                           />
                         ) : (
