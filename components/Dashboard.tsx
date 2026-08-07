@@ -888,6 +888,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 readOnlyPmStatus={isIndividual}
                 defaultPersonFilter={isIndividual ? user.displayName : undefined}
                 editPersonBucket={isAdmin}
+                editProjectTask={isAdmin || isPmTier || isTeamAdmin}
                 hiddenCols={(tasksAssignedTeam === 'web' ? bandwidthHeaders : marketingTeamHeaders).filter(h => h.toLowerCase().includes('time logged'))}
                 showCopy={isAdmin}
                 rowCopy={isAdmin}

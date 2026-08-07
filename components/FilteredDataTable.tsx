@@ -611,6 +611,7 @@ interface Props {
   rowCopy?: boolean;
   restrictToBucketEdit?: boolean;
   editStatusUpdation?: boolean;
+  editProjectTask?: boolean;
   hiddenCols?: string[];
   onlyColTerms?: string[];
   hiddenFilterTerms?: string[];
@@ -646,7 +647,7 @@ function parseTimestamp(v: string): number {
   return new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s)).getTime();
 }
 
-export default function FilteredDataTable({ data, headers, sheetNum, onStatusChange, readOnlyStatus, readOnlyPmStatus, showCopy, defaultPersonFilter, editPersonBucket, readOnlyBucket, readOnlyAssigned, rowCopy, restrictToBucketEdit, editStatusUpdation, hiddenCols, onlyColTerms, hiddenFilterTerms, statusOptions, todayBucketSetOptions, assignedPersonOptions }: Props) {
+export default function FilteredDataTable({ data, headers, sheetNum, onStatusChange, readOnlyStatus, readOnlyPmStatus, showCopy, defaultPersonFilter, editPersonBucket, readOnlyBucket, readOnlyAssigned, rowCopy, restrictToBucketEdit, editStatusUpdation, editProjectTask, hiddenCols, onlyColTerms, hiddenFilterTerms, statusOptions, todayBucketSetOptions, assignedPersonOptions }: Props) {
   const [copiedRow, setCopiedRow] = useState<number | null>(null);
   const effectiveStatusOptions = statusOptions ?? STATUS_OPTIONS;
   const effectiveStatusOptionsLower = effectiveStatusOptions.map(s => s.toLowerCase());
@@ -1088,6 +1089,8 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                       const isAssigned = h.toLowerCase().includes('assigned person') || h.toLowerCase().includes('assigned to');
                       const isBucket = h.toLowerCase().includes('task daily bucket') || (h.toLowerCase().includes('bucket') && !h.toLowerCase().includes('today'));
                       const isTodayBucketSet = h.toLowerCase().includes('today bucket') || h.toLowerCase().includes('bucket set');
+                      const isProjectName = h.toLowerCase().includes('project name');
+                      const isTaskName = h.toLowerCase().includes('task name') || h.toLowerCase().includes('task title');
                       const statusColor = (isStatus || isStatusUpdation) ? STATUS_COLORS[val.toLowerCase()] : isPmStatus ? PM_STATUS_COLORS[val.toLowerCase()] : undefined;
                       return (
                         <td
@@ -1131,6 +1134,13 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                             >
                               Open
                             </a>
+                          ) : (isProjectName || isTaskName) && editProjectTask && onStatusChange ? (
+                            <InlineEditCell
+                              value={val}
+                              row={row}
+                              col={h}
+                              onStatusChange={onStatusChange}
+                            />
                           ) : isPmStatus && onStatusChange && !readOnlyPmStatus && !restrictToBucketEdit ? (
                             <PmStatusSelect
                               value={val}
