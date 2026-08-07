@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronLeft, ChevronRight, Clock, CalendarClock, Hourglass, Rocket, Activity, AlertTriangle } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronLeft, ChevronRight, Clock, CalendarClock, Hourglass, Rocket, Activity, AlertTriangle, Wallet, PhoneCall } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { MultiSelect } from './FilteredDataTable';
 import SearchFilter from './SearchFilter';
 
 const PAGE_SIZE = 30;
+const FOLLOWUP_DUE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days since last follow-up counts as due
 
 const MONTH_ORDER: Record<string, number> = {
   january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
@@ -235,6 +236,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const totalHoursCol = headers.find(h => h.toLowerCase() === 'total hours');
   const currentMonthHoursCol = headers.find(h => h.toLowerCase() === 'current month hours');
   const riskMonthHoursCol = headers.find(h => h.toLowerCase() === 'risk month hours');
+  const followupDateCol = headers.find(h => h.toLowerCase().includes('follow-up date') || h.toLowerCase().includes('followup date'));
   const showPmCol = data.some(r => r['__pm']);
 
   // Dropdown columns — canonical lists (matching the sheet's actual data
@@ -336,10 +338,24 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     const currentMonthHours = currentMonthHoursCol ? filtered.reduce((s, r) => s + num(r[currentMonthHoursCol]), 0) : 0;
     const riskMonthHours = riskMonthHoursCol ? filtered.reduce((s, r) => s + num(r[riskMonthHoursCol]), 0) : 0;
     const pendingHours = totalHours - currentMonthHours;
+    const paymentPendingHours = (paymentStatusCol && currentMonthHoursCol)
+      ? filtered.reduce((s, r) => {
+          const isPending = String(r[paymentStatusCol] ?? '').trim().toLowerCase() === 'pending';
+          return isPending ? s + num(r[currentMonthHoursCol]) : s;
+        }, 0)
+      : 0;
+    const followupDue = followupDateCol
+      ? filtered.filter(r => {
+          const raw = String(r[followupDateCol] ?? '').trim();
+          if (!raw) return true; // never followed up — counts as due
+          const t = parseTimestamp(raw);
+          return t === 0 || (Date.now() - t) > FOLLOWUP_DUE_MS;
+        }).length
+      : 0;
     const yetToStart = statusCol ? filtered.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'yet to start').length : 0;
     const ongoing = statusCol ? filtered.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'on going').length : 0;
-    return { totalHours, currentMonthHours, riskMonthHours, pendingHours, yetToStart, ongoing };
-  }, [filtered, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, statusCol]);
+    return { totalHours, currentMonthHours, riskMonthHours, pendingHours, paymentPendingHours, followupDue, yetToStart, ongoing };
+  }, [filtered, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol]);
 
   const fmtHours = (n: number) => `${Math.round(n * 10) / 10}h`;
 
@@ -395,6 +411,8 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     { label: 'Current Month Hours', value: fmtHours(stats.currentMonthHours), color: '#0891b2', icon: <CalendarClock className="w-4 h-4" /> },
     { label: 'Risk Month Hours', value: fmtHours(stats.riskMonthHours), color: '#dc2626', icon: <AlertTriangle className="w-4 h-4" /> },
     { label: 'Pending Hours', value: fmtHours(stats.pendingHours), color: '#d97706', icon: <Hourglass className="w-4 h-4" /> },
+    { label: 'Payment Pending', value: fmtHours(stats.paymentPendingHours), color: '#dc2626', icon: <Wallet className="w-4 h-4" /> },
+    { label: 'Follow-up Due', value: stats.followupDue, color: '#7c3aed', icon: <PhoneCall className="w-4 h-4" /> },
     { label: 'Project Yet To Start', value: stats.yetToStart, color: '#dc2626', icon: <Rocket className="w-4 h-4" /> },
     { label: 'Project Ongoing', value: stats.ongoing, color: '#16a34a', icon: <Activity className="w-4 h-4" /> },
   ];
@@ -402,7 +420,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   return (
     <div className="space-y-4">
       <div className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-px" style={{ background: 'var(--cn-border)' }}>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-px" style={{ background: 'var(--cn-border)' }}>
           {statCards.map(({ label, value, color, icon }) => (
             <div key={label} className="flex flex-col gap-1.5 p-4" style={{ background: 'var(--cn-bg-card)' }}>
               <div className="flex items-center justify-between">

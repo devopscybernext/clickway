@@ -122,7 +122,7 @@ export const SHEET_LABELS: Record<SheetId, string> = {
   '8': 'QA Testing',
   '9': 'Tasks Overview',
   '10': 'Individual Analysis',
-  '11': 'PM Project Bandwidth',
+  '11': 'PM Projects',
   '12': 'Team Bandwidth',
   '14': 'Tools',
 };
