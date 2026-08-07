@@ -1208,7 +1208,14 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   ] as const).map(tab => (
                     <button
                       key={tab.key}
-                      onClick={() => setAddTaskTeam(tab.key)}
+                      onClick={() => {
+                        // The iframe remounts (key={addTaskTeam}) on tab switch,
+                        // which fires onLoad again — reset the counter so that
+                        // fresh load isn't mistaken for a submission.
+                        iframeLoadCount.current = 0;
+                        setFormSubmitted(false);
+                        setAddTaskTeam(tab.key);
+                      }}
                       className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
                       style={{
                         borderColor: addTaskTeam === tab.key ? 'var(--cn-accent)' : 'transparent',
