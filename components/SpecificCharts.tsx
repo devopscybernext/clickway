@@ -509,7 +509,59 @@ function ResourceTimeLoggedEdit({ value, raw, colName, onStatusChange, widthClas
   );
 }
 
-function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatusColName, canEditPmStatus = true, statusColName, timeLoggedColName, canEditStatus = false, canCopy = false, pmEmailCol, currentUserEmail, showMarketingCols = false, showTimeLogged = true, showTotalHours = false, bucketColName, actionTakenColName, performanceSignalColName, blockerColName, nextStepsColName }: {
+// ─── Time Logged On AC — HH.MM duration entry for the "Push to Admin"
+// self-logging workflow (own tasks only). Stored as "HH.MM" (e.g. "01.30" =
+// 1h30m) — the "." separates literal hours/minutes, it is not a decimal point.
+export const DURATION_HOUR_OPTIONS = Array.from({ length: 13 }, (_, i) => i); // 0-12
+export const DURATION_MINUTE_OPTIONS = [0, 15, 30, 45];
+
+export function parseHHMM(val: string): { h: number; m: number } {
+  const match = val.trim().match(/^(\d{1,2})\.(\d{2})$/);
+  if (!match) return { h: 0, m: 0 };
+  const h = parseInt(match[1], 10);
+  const m = parseInt(match[2], 10);
+  return { h: isNaN(h) ? 0 : h, m: isNaN(m) ? 0 : m };
+}
+export function formatHHMM(h: number, m: number): string {
+  return `${String(h).padStart(2, '0')}.${String(m).padStart(2, '0')}`;
+}
+export function hhmmToDecimalHours(val: string): number {
+  const { h, m } = parseHHMM(val);
+  return h + m / 60;
+}
+
+function ResourceDurationEdit({ value, raw, colName, onStatusChange }: {
+  value: string; raw: SheetData; colName: string;
+  onStatusChange: (row: SheetData, col: string, val: string) => Promise<void>;
+}) {
+  const { h, m } = parseHHMM(value);
+  const [saving, setSaving] = useState(false);
+
+  const commit = async (newH: number, newM: number) => {
+    setSaving(true);
+    try { await onStatusChange(raw, colName, formatHHMM(newH, newM)); }
+    finally { setSaving(false); }
+  };
+
+  const selectStyle = { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', borderColor: 'var(--cn-border)' };
+
+  return (
+    <div className="flex items-center gap-1">
+      <select value={h} onChange={e => commit(Number(e.target.value), m)} disabled={saving}
+        className="text-[10px] rounded border px-1 py-0.5 focus:outline-none disabled:opacity-60 cursor-pointer" style={selectStyle}>
+        {DURATION_HOUR_OPTIONS.map(o => <option key={o} value={o}>{String(o).padStart(2, '0')}</option>)}
+      </select>
+      <span style={{ color: 'var(--cn-text-muted)' }}>.</span>
+      <select value={m} onChange={e => commit(h, Number(e.target.value))} disabled={saving}
+        className="text-[10px] rounded border px-1 py-0.5 focus:outline-none disabled:opacity-60 cursor-pointer" style={selectStyle}>
+        {DURATION_MINUTE_OPTIONS.map(o => <option key={o} value={o}>{String(o).padStart(2, '0')}</option>)}
+      </select>
+      {saving && <span className="w-2.5 h-2.5 border border-t-transparent rounded-full animate-spin shrink-0" style={{ borderColor: 'var(--cn-accent)' }} />}
+    </div>
+  );
+}
+
+function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatusColName, canEditPmStatus = true, statusColName, timeLoggedColName, totalHoursColName, canEditStatus = false, canCopy = false, pmEmailCol, currentUserEmail, showMarketingCols = false, showTimeLogged = true, showTotalHours = false, bucketColName, actionTakenColName, performanceSignalColName, blockerColName, nextStepsColName }: {
   row: ResourceRow; onLeave: boolean;
   isOpen: boolean; onToggle: () => void;
   onStatusChange?: (row: SheetData, col: string, val: string) => Promise<void>;
@@ -517,6 +569,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
   canEditPmStatus?: boolean;
   statusColName?: string;
   timeLoggedColName?: string;
+  totalHoursColName?: string;
   canEditStatus?: boolean;
   canCopy?: boolean;
   pmEmailCol?: string;
@@ -615,6 +668,31 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
     setTimeout(() => setCopiedTable(false), 2500);
   };
 
+  // ─── Push to Admin — Time Logged On AC -> Total Hours (own tasks only) ──────
+  const pushableTasks = (onStatusChange && canEditStatus && timeLoggedColName && totalHoursColName)
+    ? visibleTasks.filter(t => hhmmToDecimalHours(t.timeLogged) > 0)
+    : [];
+  const pushTotalHours = pushableTasks.reduce((s, t) => s + hhmmToDecimalHours(t.timeLogged), 0);
+  const [showPushConfirm, setShowPushConfirm] = useState(false);
+  const [pushing, setPushing] = useState(false);
+
+  const handlePushToAdmin = async () => {
+    if (!onStatusChange || !timeLoggedColName || !totalHoursColName) return;
+    setPushing(true);
+    try {
+      for (const t of pushableTasks) {
+        const logged = hhmmToDecimalHours(t.timeLogged);
+        const existing = parseHours(t.totalHoursVal);
+        const sum = Math.round((existing + logged) * 100) / 100;
+        await onStatusChange(t._raw, totalHoursColName, String(sum));
+        await onStatusChange(t._raw, timeLoggedColName, '');
+      }
+    } finally {
+      setPushing(false);
+      setShowPushConfirm(false);
+    }
+  };
+
   return (
     <div
       className="cn-card rounded-xl overflow-hidden"
@@ -692,6 +770,19 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
         <div className="px-2.5 py-1 rounded-full text-xs font-bold shrink-0" style={{ background: bg + '18', color: bg }}>
           {row.activeTasks + row.onHoldTasks + row.pendingPM + row.toBeStarted}
         </div>
+
+        {/* Push to Admin button */}
+        {pushableTasks.length > 0 && (
+          <button
+            onClick={e => { e.stopPropagation(); setShowPushConfirm(true); }}
+            title="Push logged hours to Total Hours"
+            className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold cursor-pointer transition-all"
+            style={{ background: 'var(--cn-accent)', color: '#fff' }}
+          >
+            <Send className="w-3 h-3" />
+            Push to Admin ({pushableTasks.length})
+          </button>
+        )}
 
         {/* Copy table button */}
         {canCopy && visibleTasks.length > 0 && (
@@ -885,7 +976,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                     {showTimeLogged && (
                       <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
                         {onStatusChange && timeLoggedColName && canEditStatus ? (
-                          <ResourceTimeLoggedEdit
+                          <ResourceDurationEdit
                             value={t.timeLogged}
                             raw={t._raw}
                             colName={timeLoggedColName}
@@ -936,6 +1027,46 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
             </div>
           </div>
           ))}
+        </div>
+      )}
+
+      {/* Push to Admin confirmation */}
+      {showPushConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.6)' }}
+          onClick={e => { e.stopPropagation(); if (!pushing) setShowPushConfirm(false); }}
+        >
+          <div
+            className="rounded-lg w-full max-w-sm p-5 space-y-3"
+            style={{ background: 'var(--cn-bg-card)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="font-semibold text-base" style={{ color: 'var(--cn-text-primary)' }}>Push to Admin</h3>
+            <p className="text-sm leading-relaxed" style={{ color: 'var(--cn-text-muted)' }}>
+              Are you sure you want to push to admin? This adds{' '}
+              <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{Math.round(pushTotalHours * 100) / 100}h</span>{' '}
+              across {pushableTasks.length} task{pushableTasks.length === 1 ? '' : 's'} onto Total Hours, and clears Time Logged On Ac.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={e => { e.stopPropagation(); setShowPushConfirm(false); }}
+                disabled={pushing}
+                className="px-4 py-2 text-sm font-semibold rounded-lg cursor-pointer transition-colors disabled:opacity-50"
+                style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}
+              >
+                No
+              </button>
+              <button
+                onClick={e => { e.stopPropagation(); handlePushToAdmin(); }}
+                disabled={pushing}
+                className="px-4 py-2 text-sm font-semibold rounded-lg cursor-pointer transition-colors disabled:opacity-50"
+                style={{ background: 'var(--cn-accent)', color: '#fff' }}
+              >
+                {pushing ? 'Pushing…' : 'Yes'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -1533,6 +1664,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
               canEditPmStatus={canEditPmStatus}
               statusColName={statusCol}
               timeLoggedColName={timeLoggedCol}
+              totalHoursColName={totalHoursCol}
               canEditStatus={canEditStatus && isMyRow(row)}
               canCopy={canCopy}
               pmEmailCol={restrictPmStatusToOwn ? emailCol : undefined}

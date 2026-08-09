@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronDown as ChevDown, ChevronLeft, ChevronRight, Copy, Check, Pencil, Send } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
-import { STATUS_COLORS, parseHours } from './SpecificCharts';
+import { STATUS_COLORS, parseHours, parseHHMM, formatHHMM, hhmmToDecimalHours, DURATION_HOUR_OPTIONS, DURATION_MINUTE_OPTIONS } from './SpecificCharts';
 
 const PAGE_SIZE = 30;
 
@@ -598,24 +598,8 @@ function InlineEditCell({ value, row, col, onStatusChange }: InlineEditCellProps
 // ─── Time Logged On Ac — HH.MM duration entry ──────────────────────────────────
 // Stored/displayed as "HH.MM" (e.g. "01.30" = 1h30m) — the "." separates literal
 // hours and minutes, it is NOT a decimal point. Converted to true decimal hours
-// only at Push to Admin time.
-const DURATION_HOUR_OPTIONS = Array.from({ length: 13 }, (_, i) => i); // 0-12
-const DURATION_MINUTE_OPTIONS = [0, 15, 30, 45];
-
-function parseHHMM(val: string): { h: number; m: number } {
-  const match = val.trim().match(/^(\d{1,2})\.(\d{2})$/);
-  if (!match) return { h: 0, m: 0 };
-  const h = parseInt(match[1], 10);
-  const m = parseInt(match[2], 10);
-  return { h: isNaN(h) ? 0 : h, m: isNaN(m) ? 0 : m };
-}
-function formatHHMM(h: number, m: number): string {
-  return `${String(h).padStart(2, '0')}.${String(m).padStart(2, '0')}`;
-}
-function hhmmToDecimalHours(val: string): number {
-  const { h, m } = parseHHMM(val);
-  return h + m / 60;
-}
+// only at Push to Admin time. parseHHMM/formatHHMM/hhmmToDecimalHours/option
+// lists are shared with the Tasks Overview Push to Admin flow (SpecificCharts.tsx).
 
 interface DurationEntryCellProps {
   value: string;
