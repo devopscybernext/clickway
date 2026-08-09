@@ -27,7 +27,7 @@ function getAuth() {
 
 export async function fetchSheetData(
   sheetId: string,
-  range: string = 'Sheet1!A1:Z1000'
+  range: string = 'Sheet1!A1:Z10000'
 ): Promise<{ data: SheetData[]; headers: string[] }> {
   const cacheKey = `${sheetId}:${range}`;
   const cached = cache.get(cacheKey);

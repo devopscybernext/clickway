@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const sheetId = searchParams.get('sheetId');
-  const range = searchParams.get('range') ?? 'Sheet1!A1:Z1000';
+  const range = searchParams.get('range') ?? 'Sheet1!A1:Z10000';
 
   if (!sheetId) {
     return NextResponse.json({ success: false, error: 'sheetId is required' }, { status: 400 });

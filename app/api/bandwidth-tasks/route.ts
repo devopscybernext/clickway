@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     if (!taskTabs.includes(TAB_BANDWIDTH)) taskTabs.push(TAB_BANDWIDTH);
 
     const results = await Promise.all(
-      taskTabs.map(tab => fetchSheetData(SHEET_IDS['1'], `'${tab}'!A1:Z2000`))
+      taskTabs.map(tab => fetchSheetData(SHEET_IDS['1'], `'${tab}'!A1:Z10000`))
     );
 
     let headers: string[] = [];

@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const { data: rows, headers } = await fetchSheetData(MARKETING_TEAM_SHEET_ID, `'${TAB_MARKETING_TASKS}'!A1:Z1000`);
+    const { data: rows, headers } = await fetchSheetData(MARKETING_TEAM_SHEET_ID, `'${TAB_MARKETING_TASKS}'!A1:Z10000`);
     const data = rows.map((row, idx) => ({ ...row, __row: idx + 2 }));
 
     return NextResponse.json({ success: true, data, headers });

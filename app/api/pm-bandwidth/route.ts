@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   try {
     const tabs = await fetchSheetTabNames(PM_BANDWIDTH_SHEET_ID);
     const results = await Promise.all(
-      tabs.map(tab => fetchSheetData(PM_BANDWIDTH_SHEET_ID, `'${tab}'!A1:Z1000`))
+      tabs.map(tab => fetchSheetData(PM_BANDWIDTH_SHEET_ID, `'${tab}'!A1:Z10000`))
     );
 
     let headers: string[] = [];
