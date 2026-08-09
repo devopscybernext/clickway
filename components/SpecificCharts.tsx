@@ -900,7 +900,9 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
             const sumEst = tasks.reduce((s, t) => s + parseHours(t.timeEst), 0);
             const sumTotal = tasks.reduce((s, t) => s + parseHours(t.totalHoursVal), 0);
             const pending = sumEst - sumTotal;
-            const pendingLabel = pending < 0 ? `+${Math.abs(pending).toFixed(2)} Hours` : `${pending.toFixed(2)} Hours`;
+            const isSurpassed = pending < 0;
+            const pendingWordLabel = isSurpassed ? 'Surpass Hours' : 'Pending Hours';
+            const pendingValueLabel = isSurpassed ? `+${Math.abs(pending).toFixed(2)}h` : `${pending.toFixed(2)}h`;
             const deadlines = tasks.map(t => parseDeadlineDate(t.deadline)).filter((d): d is Date => d !== null);
             const earliestDeadline = deadlines.length ? new Date(Math.min(...deadlines.map(d => d.getTime()))) : null;
             const today = new Date();
@@ -916,9 +918,9 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
               <div className="flex items-center gap-2 shrink-0">
                 {showProjectStats && (
                   <div className="flex items-center gap-2 text-[10px]">
-                    <span style={{ color: 'var(--cn-text-muted)' }}>Est. <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{sumEst.toFixed(2)}h</span></span>
-                    <span style={{ color: 'var(--cn-text-muted)' }}>Total <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{sumTotal.toFixed(2)}h</span></span>
-                    <span style={{ color: pending < 0 ? '#dc2626' : 'var(--cn-text-muted)' }}>Pending <span className="font-semibold">{pendingLabel}</span></span>
+                    <span style={{ color: 'var(--cn-text-muted)' }}>Est. Hours <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{sumEst.toFixed(2)}h</span></span>
+                    <span style={{ color: 'var(--cn-text-muted)' }}>Spend Hours <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{sumTotal.toFixed(2)}h</span></span>
+                    <span style={{ color: isSurpassed ? '#dc2626' : 'var(--cn-text-muted)' }}>{pendingWordLabel} <span className="font-semibold">{pendingValueLabel}</span></span>
                     {daysLeft !== null && (
                       <span className="px-1.5 py-0.5 rounded-full font-semibold" style={{ background: daysLeftColor + '18', color: daysLeftColor }}>
                         {daysLeft} Day{Math.abs(daysLeft) === 1 ? '' : 's'} Left
