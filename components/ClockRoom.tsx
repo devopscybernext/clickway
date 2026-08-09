@@ -219,22 +219,32 @@ const ALL_ZONES_FLAT: ZoneEntry[] = (Object.keys(COUNTRY_ZONES) as Country[]).fl
   })
 );
 
-// Grouped by country for the dropdown display
-const ZONES_BY_COUNTRY: { country: string; flag: string; entries: ZoneEntry[] }[] =
-  (Object.keys(COUNTRY_ZONES) as Country[]).map(c => ({
-    country: COUNTRY_LABELS[c],
-    flag: COUNTRY_FLAGS[c],
-    entries: ALL_ZONES_FLAT.filter(z => z.country === COUNTRY_LABELS[c]),
-  }));
+const INDIA_ZONE = 'Asia/Kolkata';
+// India excluded — used for the "World Timezone" picker so it can't
+// redundantly select the side the India<->World mode already locks.
+const WORLD_ZONES_FLAT: ZoneEntry[] = ALL_ZONES_FLAT.filter(z => z.country !== 'India');
 
 // ─── Custom searchable zone select ───────────────────────────────────────────
-function ZoneSelect({ value, onChange }: { value: string; onChange: (zone: string) => void }) {
+// `zones` defaults to every zone, but the India<->World converter passes a
+// filtered list (e.g. India excluded) so the "other side" picker can't
+// redundantly select the side that's already locked by the chosen mode.
+function ZoneSelect({ value, onChange, zones = ALL_ZONES_FLAT }: { value: string; onChange: (zone: string) => void; zones?: ZoneEntry[] }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const selected = ALL_ZONES_FLAT.find(z => z.zone === value) ?? ALL_ZONES_FLAT[0];
+  const selected = zones.find(z => z.zone === value) ?? zones[0];
+
+  // Grouped by country for the browse (non-search) view
+  const zonesByCountry = useMemo(() => {
+    const byCountry = new Map<string, { country: string; flag: string; entries: ZoneEntry[] }>();
+    zones.forEach(z => {
+      if (!byCountry.has(z.country)) byCountry.set(z.country, { country: z.country, flag: z.flag, entries: [] });
+      byCountry.get(z.country)!.entries.push(z);
+    });
+    return [...byCountry.values()];
+  }, [zones]);
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
@@ -251,7 +261,7 @@ function ZoneSelect({ value, onChange }: { value: string; onChange: (zone: strin
 
   const q = search.trim().toLowerCase();
   const filtered = q
-    ? ALL_ZONES_FLAT.filter(z =>
+    ? zones.filter(z =>
         z.city.toLowerCase().includes(q) ||
         z.country.toLowerCase().includes(q) ||
         z.sublabel.toLowerCase().includes(q)
@@ -324,7 +334,7 @@ function ZoneSelect({ value, onChange }: { value: string; onChange: (zone: strin
                 ))
               )
             ) : (
-              ZONES_BY_COUNTRY.map(group => (
+              zonesByCountry.map(group => (
                 <div key={group.country}>
                   <div className="px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest sticky top-0"
                     style={{ background: 'var(--cn-bg-card)', color: 'var(--cn-text-muted)', borderBottom: '1px solid var(--cn-border)' }}>
@@ -436,18 +446,20 @@ function zonedWallTimeToUTC(year: number, month: number, day: number, hour: numb
   return new Date(guessUTC - offset * 60000);
 }
 
-function TimeConverter({ zone, onZoneChange, toZone, onToZoneChange, dateTime, onDateTimeChange }: {
-  zone: string; onZoneChange: (z: string) => void;
-  toZone: string; onToZoneChange: (z: string) => void;
+type ConverterMode = 'india-to-world' | 'world-to-india';
+
+function TimeConverter({ mode, onModeChange, worldZone, onWorldZoneChange, dateTime, onDateTimeChange }: {
+  mode: ConverterMode; onModeChange: (m: ConverterMode) => void;
+  worldZone: string; onWorldZoneChange: (z: string) => void;
   dateTime: string; onDateTimeChange: (d: string) => void;
 }) {
-  const fromZone = zone;
-  const setFromZone = onZoneChange;
-  const setToZone = onToZoneChange;
+  // India is locked to whichever side the mode says; only the "other side"
+  // world timezone is user-selectable — the date/time entered always means
+  // the source side's wall-clock time.
+  const fromZone = mode === 'india-to-world' ? INDIA_ZONE : worldZone;
+  const toZone   = mode === 'india-to-world' ? worldZone : INDIA_ZONE;
   const inputDateTime = dateTime;
   const setInputDateTime = onDateTimeChange;
-
-  const swap = () => { setFromZone(toZone); setToZone(fromZone); };
 
   const result = useMemo(() => {
     if (!inputDateTime) return null;
@@ -521,38 +533,47 @@ function TimeConverter({ zone, onZoneChange, toZone, onToZoneChange, dateTime, o
 
   return (
     <div className="cn-card rounded-xl p-5 mt-2" style={{ background: 'var(--cn-bg-card)', border: '1px solid var(--cn-border)' }}>
-      <div className="flex items-center gap-2 mb-4">
-        <ArrowRightLeft className="w-4 h-4" style={{ color: 'var(--cn-accent)' }} />
-        <h3 className="text-sm font-bold" style={{ color: 'var(--cn-text-primary)' }}>Time Converter</h3>
+      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <div className="flex items-center gap-2">
+          <ArrowRightLeft className="w-4 h-4" style={{ color: 'var(--cn-accent)' }} />
+          <h3 className="text-sm font-bold" style={{ color: 'var(--cn-text-primary)' }}>Time Converter</h3>
+        </div>
+
+        {/* Mode toggle — which side the typed date/time belongs to */}
+        <div className="flex items-center gap-1.5">
+          {([
+            ['india-to-world', '🇮🇳 India to World'],
+            ['world-to-india', '🌍 World to India'],
+          ] as const).map(([m, label]) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => onModeChange(m)}
+              className="px-3 py-1.5 text-xs font-semibold rounded-full transition-all cursor-pointer"
+              style={{
+                background: mode === m ? 'var(--cn-accent)' : 'var(--cn-bg-input)',
+                color: mode === m ? '#fff' : 'var(--cn-text-muted)',
+                border: `1px solid ${mode === m ? 'var(--cn-accent)' : 'var(--cn-border)'}`,
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end flex-wrap">
-        {/* Source timezone */}
+        {/* World-side timezone — India is fixed by the mode above */}
         <div className="flex-1 min-w-[220px]">
-          <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--cn-text-muted)' }}>From Timezone</label>
-          <ZoneSelect value={fromZone} onChange={setFromZone} />
+          <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--cn-text-muted)' }}>World Timezone</label>
+          <ZoneSelect value={worldZone} onChange={onWorldZoneChange} zones={WORLD_ZONES_FLAT} />
         </div>
 
-        {/* Swap button */}
-        <button
-          type="button"
-          onClick={swap}
-          title="Swap From/To"
-          className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center cursor-pointer transition-colors hover:opacity-80"
-          style={{ background: 'var(--cn-bg-input)', border: '1px solid var(--cn-border)', color: 'var(--cn-text-muted)' }}
-        >
-          <ArrowRightLeft className="w-4 h-4" />
-        </button>
-
-        {/* Target timezone */}
-        <div className="flex-1 min-w-[220px]">
-          <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--cn-text-muted)' }}>To Timezone</label>
-          <ZoneSelect value={toZone} onChange={setToZone} />
-        </div>
-
-        {/* Date & Time input */}
+        {/* Date & Time input — always means the source side's wall-clock time */}
         <div>
-          <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--cn-text-muted)' }}>Date & Time</label>
+          <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--cn-text-muted)' }}>
+            {mode === 'india-to-world' ? 'India Date & Time' : 'World Date & Time'}
+          </label>
           <input
             type="datetime-local"
             value={inputDateTime}
@@ -640,8 +661,8 @@ export default function ClockRoom() {
   const [now, setNow] = useState(new Date());
   const [search, setSearch] = useState('');
   // Converter state lifted here so it survives tab switches
-  const [converterZone, setConverterZone] = useState(ALL_ZONES_FLAT[0].zone);
-  const [converterToZone, setConverterToZone] = useState('Asia/Kolkata');
+  const [converterMode, setConverterMode] = useState<ConverterMode>('india-to-world');
+  const [converterWorldZone, setConverterWorldZone] = useState(WORLD_ZONES_FLAT[0].zone);
   const [converterDateTime, setConverterDateTime] = useState('');
 
   useEffect(() => {
@@ -692,8 +713,8 @@ export default function ClockRoom() {
       {/* Timezone Converter tab — always mounted to preserve state */}
       <div style={{ display: tab === 'converter' ? 'block' : 'none' }}>
         <TimeConverter
-          zone={converterZone} onZoneChange={setConverterZone}
-          toZone={converterToZone} onToZoneChange={setConverterToZone}
+          mode={converterMode} onModeChange={setConverterMode}
+          worldZone={converterWorldZone} onWorldZoneChange={setConverterWorldZone}
           dateTime={converterDateTime} onDateTimeChange={setConverterDateTime}
         />
       </div>
