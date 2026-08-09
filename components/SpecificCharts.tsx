@@ -5,9 +5,10 @@ import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, Label,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from 'recharts';
-import { CheckCircle2, PauseCircle, LayoutGrid, Send, CalendarCheck, CalendarClock, UserCheck, ChevronDown, ChevronUp, AlertTriangle, ThumbsUp, RefreshCw, BadgeCheck, Copy, Check, Search, X } from 'lucide-react';
+import { CheckCircle2, PauseCircle, LayoutGrid, Send, CalendarCheck, CalendarClock, UserCheck, ChevronDown, ChevronUp, AlertTriangle, ThumbsUp, RefreshCw, BadgeCheck, Copy, Check, Search, X, Pencil } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { memberColor, MONTHLY_BLOCK_MARKETING_NAMES } from '@/lib/memberColors';
+import { MARKETING_STATUS_OPTIONS } from '@/lib/config';
 
 // ─── Shared date-filter util (also used per-section) ──────────────────────────
 export type DateFilter = 'all' | 'daily' | 'weekly' | 'monthly';
@@ -235,6 +236,15 @@ export function parseHours(val: string): number {
   return isNaN(num) ? 0 : num;
 }
 
+// Deadline column is "DD/MM/YYYY" — parse to a local Date, or null if unparseable.
+function parseDeadlineDate(val: string): Date | null {
+  const m = val.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (!m) return null;
+  const [, d, mo, y] = m;
+  const date = new Date(Number(y), Number(mo) - 1, Number(d));
+  return isNaN(date.getTime()) ? null : date;
+}
+
 // Status based on todayHours (today+everyday) — matches the badge shown on the card.
 // PPC and SEO (Marketing) log "Everyday" tasks as a monthly retainer hour
 // block rather than a daily one, so they get their own thresholds.
@@ -265,7 +275,7 @@ interface ResourceRow {
   totalHours: number;
   todayHours: number;
   todayTasks: number;
-  pendingTasks: { task: string; project: string; status: string; pmStatus: string; timeEst: string; taskUrl: string; bucketSet: string; bucket: string; timeLogged: string; totalHoursVal: string; actionTakenToday: string; performanceSignal: string; blocker: string; nextSteps: string; _raw: SheetData }[];
+  pendingTasks: { task: string; project: string; status: string; pmStatus: string; timeEst: string; taskUrl: string; bucketSet: string; bucket: string; timeLogged: string; totalHoursVal: string; actionTakenToday: string; performanceSignal: string; blocker: string; nextSteps: string; deadline: string; _raw: SheetData }[];
 }
 
 const PM_STATUS_OPTIONS_RO = ['No Action Taken', 'Changes', 'Approved', 'Submitted To Client', 'TicketClosed'];
@@ -333,11 +343,12 @@ function ResourcePmSelect({ value, raw, colName, onStatusChange }: {
 
 const STATUS_OPTIONS_RO = ['No Action Taken', 'To Be Started', 'In Progress', 'Testing', 'On Hold', 'Submitted To Akash', 'Submitted To PM'];
 
-function ResourceStatusSelect({ value, raw, colName, onStatusChange }: {
+function ResourceStatusSelect({ value, raw, colName, onStatusChange, options = STATUS_OPTIONS_RO }: {
   value: string; raw: SheetData; colName: string;
   onStatusChange: (row: SheetData, col: string, val: string) => Promise<void>;
+  options?: string[];
 }) {
-  const match = STATUS_OPTIONS_RO.find(o => o.toLowerCase() === value.toLowerCase()) ?? value;
+  const match = options.find(o => o.toLowerCase() === value.toLowerCase()) ?? value;
   const [current, setCurrent] = useState(match || 'No Action Taken');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -379,10 +390,10 @@ function ResourceStatusSelect({ value, raw, colName, onStatusChange }: {
           backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px center',
         }}
       >
-        {STATUS_OPTIONS_RO.map(opt => (
+        {options.map(opt => (
           <option key={opt} value={opt} style={{ background: '#1a1a1a', color: '#fff' }}>{opt}</option>
         ))}
-        {current && !STATUS_OPTIONS_RO.map(o => o.toLowerCase()).includes(current.toLowerCase()) && (
+        {current && !options.map(o => o.toLowerCase()).includes(current.toLowerCase()) && (
           <option value={current}>{current}</option>
         )}
       </select>
@@ -513,7 +524,7 @@ function ResourceTimeLoggedEdit({ value, raw, colName, onStatusChange, widthClas
 // self-logging workflow (own tasks only). Stored as "HH.MM" (e.g. "01.30" =
 // 1h30m) — the "." separates literal hours/minutes, it is not a decimal point.
 export const DURATION_HOUR_OPTIONS = Array.from({ length: 13 }, (_, i) => i); // 0-12
-export const DURATION_MINUTE_OPTIONS = [0, 15, 30, 45];
+export const DURATION_MINUTE_OPTIONS = Array.from({ length: 60 }, (_, i) => i); // 0-59
 
 export function parseHHMM(val: string): { h: number; m: number } {
   const match = val.trim().match(/^(\d{1,2})\.(\d{2})$/);
@@ -583,6 +594,16 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
   blockerColName?: string;
   nextStepsColName?: string;
 }) {
+  // Fields only become editable after clicking "Edit" — Time Logged On AC is
+  // exempt (it's the self-logging field for Push to Admin, always live).
+  const [editMode, setEditMode] = useState(false);
+  const canEditFields = canEditStatus && editMode;
+
+  // PPC/SEO only — Web and SMM project cards don't get the Est/Total/Pending
+  // Hours + Days Left summary (MONTHLY_BLOCK_MARKETING_NAMES is exactly the
+  // PPC+SEO roster already used elsewhere for the monthly-hour-block status).
+  const showProjectStats = showMarketingCols && MONTHLY_BLOCK_MARKETING_NAMES.has(row.name.trim().toLowerCase());
+
   const visibleTasks = row.pendingTasks;
   // Group into one card per project, largest project first — mirrors the
   // Team Bandwidth/Team Workload layout instead of one long flat table.
@@ -624,16 +645,20 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
     setTimeout(() => setCopiedRowIdx(null), 2000);
   };
 
-  // Same columns/format as the Tasks Bucket table (FilteredDataTable.copyTable):
-  // Project Name, Task Name, Task URL, Time Estimation, Time Logged On AC, Task Status
-  const COPY_COLS = ['Project Name', 'Task Name', 'Task URL', 'Time Estimation', 'Time Logged On AC', 'Task Status'];
+  // Same columns/format as the Tasks Bucket table (FilteredDataTable.copyTable)
+  // for Web; Marketing gets its own detail-field set instead.
+  const COPY_COLS = showMarketingCols
+    ? ['Project Name', 'Task Name', 'Est. Hours', 'Total Hours', 'Action Taken Today', 'Performance Signal/Insights', 'Blocker', 'Next Steps', 'Task Status Updation']
+    : ['Project Name', 'Task Name', 'Task URL', 'Time Estimation', 'Time Logged On AC', 'Task Status'];
   const copyTable = async () => {
     // Only Today / Everyday tasks get copied — others (Tomorrow, Submitted, etc.) are excluded
     const copyableTasks = visibleTasks.filter(t => {
       const b = t.bucket.trim().toLowerCase();
       return b === 'today' || b === 'everyday';
     });
-    const rowsToCopy = copyableTasks.map(t => [t.project, t.task, t.taskUrl, t.timeEst, t.timeLogged, t.status]);
+    const rowsToCopy = showMarketingCols
+      ? copyableTasks.map(t => [t.project, t.task, t.timeEst, t.totalHoursVal, t.actionTakenToday, t.performanceSignal, t.blocker, t.nextSteps, t.status])
+      : copyableTasks.map(t => [t.project, t.task, t.taskUrl, t.timeEst, t.timeLogged, t.status]);
     const html = `
 <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;color:#111;">
   <thead>
@@ -771,6 +796,21 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
           {row.activeTasks + row.onHoldTasks + row.pendingPM + row.toBeStarted}
         </div>
 
+        {/* Edit toggle */}
+        {canEditStatus && visibleTasks.length > 0 && (
+          <button
+            onClick={e => { e.stopPropagation(); setEditMode(m => !m); }}
+            title={editMode ? 'Stop editing' : 'Edit'}
+            className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold cursor-pointer transition-all"
+            style={editMode
+              ? { background: 'var(--cn-accent)', color: '#fff' }
+              : { background: 'var(--cn-bg-input)', border: '1px solid var(--cn-border)', color: 'var(--cn-text-primary)' }}
+          >
+            <Pencil className="w-3 h-3" />
+            {editMode ? 'Done' : 'Edit'}
+          </button>
+        )}
+
         {/* Push to Admin button */}
         {pushableTasks.length > 0 && (
           <button
@@ -809,14 +849,76 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
         )}
       </div>
 
+      {/* Push to Admin confirmation bar — sits right below the info bar,
+          left = summary text, right = Yes/No, instead of a centered popup */}
+      {showPushConfirm && (
+        <div
+          className="flex items-center justify-between gap-3 px-4 py-2.5 flex-wrap"
+          style={{ borderTop: '1px solid var(--cn-border)', background: 'var(--cn-accent)' + '0d' }}
+          onClick={e => e.stopPropagation()}
+        >
+          <p className="text-xs leading-snug" style={{ color: 'var(--cn-text-primary)' }}>
+            Are you sure you want to push to admin? This adds{' '}
+            <span className="font-semibold">{Math.round(pushTotalHours * 100) / 100}h</span>{' '}
+            across {pushableTasks.length} task{pushableTasks.length === 1 ? '' : 's'} onto Total Hours, and clears Time Logged On Ac.
+          </p>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={e => { e.stopPropagation(); setShowPushConfirm(false); }}
+              disabled={pushing}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg cursor-pointer transition-colors disabled:opacity-50"
+              style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}
+            >
+              No
+            </button>
+            <button
+              onClick={e => { e.stopPropagation(); handlePushToAdmin(); }}
+              disabled={pushing}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg cursor-pointer transition-colors disabled:opacity-50"
+              style={{ background: 'var(--cn-accent)', color: '#fff' }}
+            >
+              {pushing ? 'Pushing…' : 'Yes'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Expanded task list — grouped into one card per project */}
       {open && visibleTasks.length > 0 && (
         <div style={{ borderTop: '1px solid var(--cn-border)' }} className="p-3 sm:p-4 flex flex-col gap-3">
-          {projectGroups.map(([project, tasks]) => (
+          {projectGroups.map(([project, tasks]) => {
+            const sumEst = tasks.reduce((s, t) => s + parseHours(t.timeEst), 0);
+            const sumTotal = tasks.reduce((s, t) => s + parseHours(t.totalHoursVal), 0);
+            const pending = sumEst - sumTotal;
+            const pendingLabel = pending < 0 ? `+${Math.abs(pending).toFixed(2)} Hours` : `${pending.toFixed(2)} Hours`;
+            const deadlines = tasks.map(t => parseDeadlineDate(t.deadline)).filter((d): d is Date => d !== null);
+            const earliestDeadline = deadlines.length ? new Date(Math.min(...deadlines.map(d => d.getTime()))) : null;
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            yesterday.setHours(0, 0, 0, 0);
+            const daysLeft = earliestDeadline
+              ? Math.round((earliestDeadline.getTime() - yesterday.getTime()) / 86_400_000)
+              : null;
+            const daysLeftColor = daysLeft === null ? 'var(--cn-text-muted)' : daysLeft <= 0 ? '#dc2626' : daysLeft <= 3 ? '#f59e0b' : '#16a34a';
+            return (
           <div key={project} className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--cn-border)', background: 'var(--cn-bg-card)' }}>
-            <div className="px-3 py-2 flex items-center justify-between" style={{ borderBottom: '1px solid var(--cn-border)', background: 'var(--cn-bg-input)' }}>
+            <div className="px-3 py-2 flex items-center justify-between gap-3 flex-wrap" style={{ borderBottom: '1px solid var(--cn-border)', background: 'var(--cn-bg-input)' }}>
               <p className="text-xs font-bold truncate" style={{ color: 'var(--cn-text-primary)' }}>{project}</p>
-              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'var(--cn-bg-card)', color: 'var(--cn-text-muted)' }}>{tasks.length}</span>
+              <div className="flex items-center gap-2 shrink-0">
+                {showProjectStats && (
+                  <div className="flex items-center gap-2 text-[10px]">
+                    <span style={{ color: 'var(--cn-text-muted)' }}>Est. <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{sumEst.toFixed(2)}h</span></span>
+                    <span style={{ color: 'var(--cn-text-muted)' }}>Total <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{sumTotal.toFixed(2)}h</span></span>
+                    <span style={{ color: pending < 0 ? '#dc2626' : 'var(--cn-text-muted)' }}>Pending <span className="font-semibold">{pendingLabel}</span></span>
+                    {daysLeft !== null && (
+                      <span className="px-1.5 py-0.5 rounded-full font-semibold" style={{ background: daysLeftColor + '18', color: daysLeftColor }}>
+                        {daysLeft} Day{Math.abs(daysLeft) === 1 ? '' : 's'} Left
+                      </span>
+                    )}
+                  </div>
+                )}
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'var(--cn-bg-card)', color: 'var(--cn-text-muted)' }}>{tasks.length}</span>
+              </div>
             </div>
             <div className="overflow-x-auto">
           <table className="text-xs table-fixed" style={{ width: '100%', minWidth: cardTableMinWidth }}>
@@ -922,7 +1024,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                     )}
                     {/* Task Daily Bucket */}
                     <td className="px-4 py-2">
-                      {onStatusChange && bucketColName && canEditStatus ? (
+                      {onStatusChange && bucketColName && canEditFields ? (
                         <ResourceBucketSelect value={t.bucket || 'No Action Taken'} raw={t._raw} colName={bucketColName} onStatusChange={onStatusChange} />
                       ) : t.bucket ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize" style={{ background: bColor + '20', color: bColor }}>
@@ -943,7 +1045,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                     {/* Action Taken Today */}
                     {showMarketingCols && (
                       <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
-                        {onStatusChange && actionTakenColName && canEditStatus ? (
+                        {onStatusChange && actionTakenColName && canEditFields ? (
                           <ResourceTimeLoggedEdit value={t.actionTakenToday} raw={t._raw} colName={actionTakenColName} onStatusChange={onStatusChange} widthClass="w-full min-w-[90px]" />
                         ) : <span className="truncate block">{t.actionTakenToday || '—'}</span>}
                       </td>
@@ -951,7 +1053,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                     {/* Performance Signal/Insights */}
                     {showMarketingCols && (
                       <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
-                        {onStatusChange && performanceSignalColName && canEditStatus ? (
+                        {onStatusChange && performanceSignalColName && canEditFields ? (
                           <ResourceTimeLoggedEdit value={t.performanceSignal} raw={t._raw} colName={performanceSignalColName} onStatusChange={onStatusChange} widthClass="w-full min-w-[90px]" />
                         ) : <span className="truncate block">{t.performanceSignal || '—'}</span>}
                       </td>
@@ -959,7 +1061,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                     {/* Blocker */}
                     {showMarketingCols && (
                       <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
-                        {onStatusChange && blockerColName && canEditStatus ? (
+                        {onStatusChange && blockerColName && canEditFields ? (
                           <ResourceTimeLoggedEdit value={t.blocker} raw={t._raw} colName={blockerColName} onStatusChange={onStatusChange} widthClass="w-full min-w-[70px]" />
                         ) : <span className="truncate block">{t.blocker || '—'}</span>}
                       </td>
@@ -967,7 +1069,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                     {/* Next Steps */}
                     {showMarketingCols && (
                       <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
-                        {onStatusChange && nextStepsColName && canEditStatus ? (
+                        {onStatusChange && nextStepsColName && canEditFields ? (
                           <ResourceTimeLoggedEdit value={t.nextSteps} raw={t._raw} colName={nextStepsColName} onStatusChange={onStatusChange} widthClass="w-full min-w-[70px]" />
                         ) : <span className="truncate block">{t.nextSteps || '—'}</span>}
                       </td>
@@ -982,17 +1084,18 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                             colName={timeLoggedColName}
                             onStatusChange={onStatusChange}
                           />
-                        ) : (t.timeLogged || '—')}
+                        ) : (t.timeLogged ? `${t.timeLogged} Hours` : '—')}
                       </td>
                     )}
                     {/* Status */}
                     <td className="px-4 py-2">
-                      {onStatusChange && statusColName && canEditStatus ? (
+                      {onStatusChange && statusColName && canEditFields ? (
                         <ResourceStatusSelect
                           value={t.status || 'No Action Taken'}
                           raw={t._raw}
                           colName={statusColName}
                           onStatusChange={onStatusChange}
+                          options={showMarketingCols ? MARKETING_STATUS_OPTIONS : undefined}
                         />
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize" style={{ background: sColor + '20', color: sColor }}>
@@ -1026,47 +1129,8 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
           </table>
             </div>
           </div>
-          ))}
-        </div>
-      )}
-
-      {/* Push to Admin confirmation */}
-      {showPushConfirm && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.6)' }}
-          onClick={e => { e.stopPropagation(); if (!pushing) setShowPushConfirm(false); }}
-        >
-          <div
-            className="rounded-lg w-full max-w-sm p-5 space-y-3"
-            style={{ background: 'var(--cn-bg-card)' }}
-            onClick={e => e.stopPropagation()}
-          >
-            <h3 className="font-semibold text-base" style={{ color: 'var(--cn-text-primary)' }}>Push to Admin</h3>
-            <p className="text-sm leading-relaxed" style={{ color: 'var(--cn-text-muted)' }}>
-              Are you sure you want to push to admin? This adds{' '}
-              <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{Math.round(pushTotalHours * 100) / 100}h</span>{' '}
-              across {pushableTasks.length} task{pushableTasks.length === 1 ? '' : 's'} onto Total Hours, and clears Time Logged On Ac.
-            </p>
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={e => { e.stopPropagation(); setShowPushConfirm(false); }}
-                disabled={pushing}
-                className="px-4 py-2 text-sm font-semibold rounded-lg cursor-pointer transition-colors disabled:opacity-50"
-                style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}
-              >
-                No
-              </button>
-              <button
-                onClick={e => { e.stopPropagation(); handlePushToAdmin(); }}
-                disabled={pushing}
-                className="px-4 py-2 text-sm font-semibold rounded-lg cursor-pointer transition-colors disabled:opacity-50"
-                style={{ background: 'var(--cn-accent)', color: '#fff' }}
-              >
-                {pushing ? 'Pushing…' : 'Yes'}
-              </button>
-            </div>
-          </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -1116,11 +1180,15 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
 
   const COPY_COLS = vinayQaMode
     ? ['Assigned Person', 'Project Name', 'Task Name', 'Task URL', 'Task Daily Bucket', 'Task Status']
-    : ['Assigned Person', 'Project Name', 'Task Name', 'Task URL', 'Time Estimation', 'Time Logged On AC', 'Task Status'];
+    : showMarketingCols
+      ? ['Assigned Person', 'Project Name', 'Task Name', 'Est. Hours', 'Total Hours', 'Action Taken Today', 'Performance Signal/Insights', 'Blocker', 'Next Steps', 'Task Status Updation']
+      : ['Assigned Person', 'Project Name', 'Task Name', 'Task URL', 'Time Estimation', 'Time Logged On AC', 'Task Status'];
   const copyTable = async () => {
     const rowsToCopy = vinayQaMode
       ? flatTasks.map(t => [t.person, t.project, t.task, t.taskUrl, t.bucket, t.status])
-      : flatTasks.map(t => [t.person, t.project, t.task, t.taskUrl, t.timeEst, t.timeLogged, t.status]);
+      : showMarketingCols
+        ? flatTasks.map(t => [t.person, t.project, t.task, t.timeEst, t.totalHoursVal, t.actionTakenToday, t.performanceSignal, t.blocker, t.nextSteps, t.status])
+        : flatTasks.map(t => [t.person, t.project, t.task, t.taskUrl, t.timeEst, t.timeLogged, t.status]);
     const html = `
 <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;color:#111;">
   <thead>
@@ -1299,7 +1367,7 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
                   )}
                   <td className="px-4 py-2">
                     {onStatusChange && statusColName && rowCanEditStatus ? (
-                      <ResourceStatusSelect value={t.status || 'No Action Taken'} raw={t._raw} colName={statusColName} onStatusChange={onStatusChange} />
+                      <ResourceStatusSelect value={t.status || 'No Action Taken'} raw={t._raw} colName={statusColName} onStatusChange={onStatusChange} options={showMarketingCols ? MARKETING_STATUS_OPTIONS : undefined} />
                     ) : (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize" style={{ background: sColor + '20', color: sColor }}>
                         <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: sColor }} />
@@ -1370,6 +1438,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
   const bucketSetCol = headers.find(h => h.toLowerCase().includes('today bucket set') || h.toLowerCase().includes('bucket set'));
   const bucketCol    = headers.find(h => h.toLowerCase().includes('task daily bucket') || h.toLowerCase().includes('daily bucket'));
   const timeLoggedCol = headers.find(h => h.toLowerCase().includes('time logged'));
+  const deadlineCol  = headers.find(h => h.toLowerCase().includes('deadline'));
   // "Total Hours" on the Marketing Tasks sheet, "Total Time" on Bandwidth Allocation
   const totalHoursCol = headers.find(h => h.toLowerCase().includes('total hours') || h.toLowerCase().includes('total time'));
   // Marketing-only fields — absent from Bandwidth Allocation, present on the Marketing Tasks sheet
@@ -1419,6 +1488,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
     const getPerformanceSignal = (r: SheetData) => performanceSignalCol ? String(r[performanceSignalCol] ?? '').trim() : '';
     const getBlocker = (r: SheetData) => blockerCol ? String(r[blockerCol] ?? '').trim() : '';
     const getNextSteps = (r: SheetData) => nextStepsCol ? String(r[nextStepsCol] ?? '').trim() : '';
+    const getDeadline = (r: SheetData) => deadlineCol ? String(r[deadlineCol] ?? '').trim() : '';
 
     const activeTasks  = myTasks.filter(r => getStatus(r) === 'in progress').length;
     const onHoldTasks  = myTasks.filter(r => getStatus(r) === 'on hold').length;
@@ -1446,7 +1516,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
         taskUrl: getTaskUrl(r), bucketSet: getBucketSet(r), bucket: getBucket(r),
         timeLogged: getTimeLogged(r), totalHoursVal: getTotalHoursVal(r),
         actionTakenToday: getActionTaken(r), performanceSignal: getPerformanceSignal(r),
-        blocker: getBlocker(r), nextSteps: getNextSteps(r),
+        blocker: getBlocker(r), nextSteps: getNextSteps(r), deadline: getDeadline(r),
         _raw: r,
       }))
       .slice(0, 20);
