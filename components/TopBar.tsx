@@ -7,11 +7,22 @@ import { memberPhoto } from '@/lib/memberColors';
 import ThemeToggle from './ThemeToggle';
 
 const USER_DESIGNATIONS: Record<string, string> = {
-  akash: 'Senior UI/UX Designer', kiran: 'Project Manager',
-  lovepreet: 'Web Designer', manpreet: 'Web Designer',
-  shubham: 'Web Designer', dhruv: 'CMS Developer',
-  pawan: 'Web Developer - Team Lead', vinay: 'QA Analyst',
-  robin: 'Web Designer',
+  // Web — Development
+  lovepreet: 'Web Development', shubham: 'Web Development',
+  dhruv: 'Web Development', pawan: 'Web Development',
+  // Web — UI/UX Design
+  akash: 'UI/UX Design', robin: 'UI/UX Design',
+  // Project Management
+  yash: 'Project Management', kiran: 'Project Management',
+  muskan: 'Project Management', moon: 'Project Management',
+  sameer: 'Project Management',
+  // Marketing — PPC
+  atul: 'PPC', anjali: 'PPC', anurag: 'PPC',
+  vansh: 'PPC', dheeraj: 'PPC', shiwangi: 'PPC',
+  // Marketing — SMM
+  payal: 'SMM', akanksha: 'SMM',
+  // Marketing — SEO
+  akshay: 'SEO', bhavya: 'SEO', kshitij: 'SEO',
 };
 function getUserDesignation(username: string, role: string): string {
   const key = Object.keys(USER_DESIGNATIONS).find(k => username.toLowerCase().includes(k));
