@@ -1303,22 +1303,26 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   {/* Introduction About Dashboard */}
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-widest mb-0.5" style={{ color: 'var(--cn-accent)' }}>Introduction</p>
-                    <h2 className="font-bold text-base" style={{ color: 'var(--cn-text-primary)' }}>About Dashboard</h2>
+                    <h2 className="font-bold text-base" style={{ color: 'var(--cn-text-primary)' }}>About the Dashboard</h2>
                     <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--cn-text-muted)' }}>
-                      Clickway is Cybernext&apos;s internal workspace for managing tasks, tracking team bandwidth, and keeping every project on schedule across the Web and Marketing teams. Submit a new task using the form on the right — once submitted, it lands in Tasks Assigned and gets picked up by the team.
+                      Clickway is Cybernext&apos;s internal workspace for managing tasks, tracking team workload, and keeping projects on schedule across the Web and Marketing teams.
+                    </p>
+                    <p className="text-xs mt-2 leading-relaxed" style={{ color: 'var(--cn-text-muted)' }}>
+                      To create a new task, complete the task request form on the right. Once submitted, the task will automatically appear in <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>Tasks Assigned</span>, where it will be reviewed and assigned to the appropriate team member.
                     </p>
                   </div>
 
                   <div className="h-px" style={{ background: 'var(--cn-border)' }} />
 
-                  {/* Priority Levels */}
+                  {/* Priority Levels — Web only */}
+                  {addTaskTeam === 'web' && (<>
                   <div className="space-y-2">
                     <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>Priority Levels</p>
                     <div className="grid grid-cols-2 gap-2">
                       {[
-                        { label: 'Urgent', color: '#ef4444', bg: 'rgba(239,68,68,0.08)', deadline: "Today" },
-                        { label: 'High',   color: '#f97316', bg: 'rgba(249,115,22,0.08)', deadline: '1–2 Days' },
-                        { label: 'Medium', color: '#eab308', bg: 'rgba(234,179,8,0.08)',  deadline: '2–3 Days' },
+                        { label: 'Urgent', color: '#ef4444', bg: 'rgba(239,68,68,0.08)', deadline: 'Complete Today' },
+                        { label: 'High',   color: '#f97316', bg: 'rgba(249,115,22,0.08)', deadline: 'Within 1–2 Days' },
+                        { label: 'Medium', color: '#eab308', bg: 'rgba(234,179,8,0.08)',  deadline: 'Within 2–3 Days' },
                         { label: 'Low',    color: '#22c55e', bg: 'rgba(34,197,94,0.08)',  deadline: '3+ Days' },
                       ].map(({ label, color, bg, deadline }) => (
                         <div key={label} className="flex items-center justify-between rounded px-2.5 py-1.5" style={{ background: bg }}>
@@ -1330,17 +1334,18 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   </div>
 
                   <div className="h-px" style={{ background: 'var(--cn-border)' }} />
+                  </>)}
 
                   {/* Dashboard Features */}
                   <div className="space-y-2">
                     <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>Dashboard Features</p>
                     <ul className="space-y-1.5">
                       {[
-                        { label: 'Dashboard', desc: 'Analytics and project state overview for management.' },
-                        { label: 'Tasks Assigned', desc: 'Live view of every active task across the team.' },
-                        { label: 'Tasks Overview', desc: 'Per-member workload broken down by daily bucket.' },
-                        { label: 'Team Bandwidth', desc: 'Resource availability and workload at a glance.' },
-                        { label: 'Leaderboard', desc: 'Team performance and recognition.' },
+                        { label: 'Dashboard', desc: 'View project analytics, key metrics, and overall project status.' },
+                        { label: 'Tasks Assigned', desc: 'Monitor all active tasks assigned across the team.' },
+                        { label: 'Tasks Overview', desc: "Review each team member's workload based on daily task allocation." },
+                        { label: 'Team Bandwidth', desc: 'Check resource availability and workload distribution.' },
+                        ...(addTaskTeam === 'web' ? [{ label: 'Leaderboard', desc: 'Track team performance and recognize top contributors.' }] : []),
                       ].map(({ label, desc }) => (
                         <li key={label} className="flex gap-1.5 text-[11px]" style={{ color: 'var(--cn-text-muted)' }}>
                           <span className="mt-1.5 w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--cn-accent)' }} />
@@ -1354,8 +1359,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
                   {/* Fallback Access */}
                   <div className="rounded-lg px-3 py-3 space-y-2" style={{ background: 'rgba(254,74,35,0.06)', border: '1px solid rgba(254,74,35,0.15)' }}>
-                    <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>Having Trouble?</p>
-                    <p className="text-[11px] leading-snug" style={{ color: 'var(--cn-text-muted)' }}>If entries aren't visible or the form isn't loading, use the direct links below.</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>Need Help?</p>
+                    <p className="text-[11px] leading-snug" style={{ color: 'var(--cn-text-muted)' }}>If the dashboard is not displaying entries or the task request form is not loading, use the direct link below to access the form.</p>
                     <div className="flex flex-col gap-1">
                         <a
                           href={`${addTaskFormUrl}/viewform`}
@@ -1365,13 +1370,13 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                           style={{ color: 'var(--cn-accent)' }}
                         >
                           <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                          Open Google Form Directly
+                          Open Google Form
                         </a>
                     </div>
                   </div>
 
                   {/* Copyright */}
-                  <p className="text-[10px] text-center" style={{ color: 'var(--cn-text-faint)' }}>© Cybernext Since 2014. All Rights Reserved.</p>
+                  <p className="text-[10px] text-center" style={{ color: 'var(--cn-text-faint)' }}>© Cybernext | Since 2014</p>
 
                 </div>
 
