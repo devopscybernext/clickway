@@ -1525,8 +1525,8 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
     const totalHours = myTasks
       .filter(r => !NON_PENDING.includes(getStatus(r)))
       .reduce((sum, r) => sum + parseHours(getTimeEst(r)), 0);
-    // Sum hours + count for today + everyday tasks only
-    const todayFiltered = myTasks.filter(r => { const b = getBucket(r); return b === 'today' || b === 'everyday'; });
+    // Sum hours + count for today + everyday tasks only, excluding closed/n/a
+    const todayFiltered = myTasks.filter(r => { const b = getBucket(r); return (b === 'today' || b === 'everyday') && !NON_PENDING.includes(getStatus(r)); });
     const todayHours = todayFiltered.reduce((sum, r) => sum + parseHours(getTimeEst(r)), 0);
     const todayTasks = todayFiltered.length;
 
@@ -1600,7 +1600,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
         const pendingPM     = myTasks.filter(t => t.status.toLowerCase() === 'submitted to pm').length;
         const toBeStarted   = myTasks.filter(t => t.status.toLowerCase() === 'to be started').length;
         const activeProject = myTasks.find(t => t.status.toLowerCase() === 'in progress')?.project || row.activeProject;
-        const todayFiltered = myTasks.filter(r => { const b = r.bucket.toLowerCase(); return b === 'today' || b === 'everyday'; });
+        const todayFiltered = myTasks.filter(r => { const b = r.bucket.toLowerCase(); return (b === 'today' || b === 'everyday') && !NON_PENDING.includes(r.status.trim().toLowerCase()); });
         const todayHours = todayFiltered.reduce((sum, r) => sum + parseHours(r.timeEst), 0);
         const todayTasks = todayFiltered.length;
         return { ...row, pendingTasks: myTasks, activeTasks, onHoldTasks, pendingPM, toBeStarted, activeProject, todayHours, todayTasks };
@@ -2542,9 +2542,10 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
       if (tab === 'dayafter') return (b === 'day after tomorrow' || b === 'dayafter' || b === 'day after' || b === 'everyday');
       return true;
     });
-    // Hours = Today + Everyday bucket tasks only (for both status and header display)
+    // Hours = Today + Everyday bucket tasks only, excluding closed/n/a tasks
+    // (for both status and header display)
     const displayHours = myTasks
-      .filter(r => { const b = getBucket(r); return b === 'today' || b === 'everyday'; })
+      .filter(r => { const b = getBucket(r); return (b === 'today' || b === 'everyday') && !SKIP_STATUSES.includes(getStatus(r).toLowerCase()); })
       .reduce((s, r) => s + getTime(r), 0);
     const tabHours = displayHours;
     const tabCount = tabTasks.length;
@@ -2874,6 +2875,7 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
   const resourceCol = findCol(sheet1Headers, 'assigned person', 'assigned to', 'resource');
   const bucketCol   = findCol(sheet1Headers, 'task daily bucket', 'bucket');
   const timeEstCol  = findCol(sheet1Headers, 'time estimation', 'time estimate', 'estimation');
+  const statusCol   = findCol(sheet1Headers, 'task status', 'status');
   const availNameCol   = availHeaders ? findCol(availHeaders, 'name', 'resource', 'person') : undefined;
   const availStatusCol = availHeaders ? findCol(availHeaders, 'availability', 'status', 'leave') : undefined;
 
@@ -2881,12 +2883,15 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
 
   const getBucket = (r: SheetData) => bucketCol  ? String(r[bucketCol]  ?? '').trim().toLowerCase() : '';
   const getTime   = (r: SheetData) => timeEstCol ? parseHours(String(r[timeEstCol] ?? '').trim()) : 0;
+  const getStatus = (r: SheetData) => statusCol  ? String(r[statusCol]  ?? '').trim().toLowerCase() : '';
 
   const names = [...new Set(sheet1Data.map(r => String(r[resourceCol] ?? '').trim()).filter(Boolean))];
 
   const rows = names.map(name => {
+    // Closed tasks no longer count toward someone's bandwidth — a task
+    // marked Task Closed shouldn't keep occupying their hours.
     const displayHours = sheet1Data
-      .filter(r => String(r[resourceCol] ?? '').trim() === name && ['today', 'everyday'].includes(getBucket(r)))
+      .filter(r => String(r[resourceCol] ?? '').trim() === name && ['today', 'everyday'].includes(getBucket(r)) && !SKIP_STATUSES.includes(getStatus(r)))
       .reduce((s, r) => s + getTime(r), 0);
 
     let onLeave = false;

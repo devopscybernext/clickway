@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronDown as ChevDown, ChevronLeft, ChevronRight, Copy, Check, Pencil } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
-import { STATUS_COLORS } from './SpecificCharts';
+import { STATUS_COLORS, parseHours, parseHHMM, formatHHMM, DURATION_HOUR_OPTIONS, DURATION_MINUTE_OPTIONS } from './SpecificCharts';
 
 const PAGE_SIZE = 30;
 
@@ -111,6 +111,7 @@ const FILTER_CONFIG: Record<'1' | '2', { term: string; label: string }[]> = {
 // sheet's own column order doesn't match this display order.
 const SHEET1_COL_ORDER = [
   'project name', 'task name', 'task url', 'time estimation', 'task estimation',
+  'total hours', 'total time',
   'assigned person', 'assigned to', 'task daily bucket', 'today bucket set',
   'time logged', 'task status', 'status updation', 'pm status',
 ];
@@ -455,6 +456,7 @@ const STATUS_OPTIONS: string[] = [
   'On Hold',
   'Submitted To Akash',
   'Submitted To PM',
+  'Task Closed',
 ];
 const STATUS_OPTIONS_LOWER = STATUS_OPTIONS.map(s => s.toLowerCase());
 
@@ -591,6 +593,63 @@ function InlineEditCell({ value, row, col, onStatusChange }: InlineEditCellProps
       {saved && (
         <span className="text-xs shrink-0" style={{ color: '#22c55e' }}>✓</span>
       )}
+    </div>
+  );
+}
+
+// ─── Time Estimation / Task Estimation — HH.MM duration entry ─────────────────
+// Existing values are free text like "1 Hour" / "0.5 Hour" (not the
+// "HH.MM" format formatHHMM writes) — fall back to parseHours()'s decimal
+// and convert to H/M so editing an old estimate doesn't reset it to 00.00.
+function toHM(val: string): { h: number; m: number } {
+  const strict = parseHHMM(val);
+  if (strict.h || strict.m) return strict;
+  const decimal = parseHours(val);
+  if (!decimal) return { h: 0, m: 0 };
+  const h = Math.floor(decimal);
+  const m = Math.round((decimal - h) * 60);
+  return m === 60 ? { h: h + 1, m: 0 } : { h, m };
+}
+
+function TimeEstDurationCell({ value, row, col, onStatusChange }: {
+  value: string; row: SheetData; col: string;
+  onStatusChange: (row: SheetData, col: string, newValue: string) => Promise<void>;
+}) {
+  const { h, m } = toHM(value);
+  const [saving, setSaving] = useState(false);
+
+  const commit = async (newH: number, newM: number) => {
+    setSaving(true);
+    try { await onStatusChange(row, col, formatHHMM(newH, newM)); }
+    finally { setSaving(false); }
+  };
+
+  const selectStyle = {
+    background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)',
+  };
+
+  return (
+    <div className="flex items-center gap-1">
+      <select
+        value={h}
+        onChange={e => commit(Number(e.target.value), m)}
+        disabled={saving}
+        className="text-xs rounded px-1.5 py-1 focus:outline-none disabled:opacity-60 cursor-pointer"
+        style={selectStyle}
+      >
+        {DURATION_HOUR_OPTIONS.map(o => <option key={o} value={o}>{String(o).padStart(2, '0')}</option>)}
+      </select>
+      <span style={{ color: 'var(--cn-text-muted)' }}>.</span>
+      <select
+        value={m}
+        onChange={e => commit(h, Number(e.target.value))}
+        disabled={saving}
+        className="text-xs rounded px-1.5 py-1 focus:outline-none disabled:opacity-60 cursor-pointer"
+        style={selectStyle}
+      >
+        {DURATION_MINUTE_OPTIONS.map(o => <option key={o} value={o}>{String(o).padStart(2, '0')}</option>)}
+      </select>
+      {saving && <span className="w-3 h-3 border border-t-transparent rounded-full animate-spin shrink-0" style={{ borderColor: 'var(--cn-accent)' }} />}
     </div>
   );
 }
@@ -1236,12 +1295,14 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                               onStatusChange={onStatusChange}
                             />
                           ) : isTimeEst && onStatusChange && canEditPersonBucket ? (
-                            <InlineEditCell
+                            <TimeEstDurationCell
                               value={val}
                               row={row}
                               col={h}
                               onStatusChange={onStatusChange}
                             />
+                          ) : isTimeEst ? (
+                            val.trim() ? <span className="whitespace-nowrap">{formatHHMM(toHM(val).h, toHM(val).m)}</span> : '—'
                           ) : isBucket ? (BUCKET_OPTIONS.find(o => o.toLowerCase() === normalizeBucket(val)) ?? val) || '—'
                           : val || '—'}
                         </td>
