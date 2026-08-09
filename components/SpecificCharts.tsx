@@ -2703,9 +2703,9 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
       <div className="px-4 py-2.5 border-b" style={{ borderColor: 'var(--cn-border)', background: 'var(--cn-bg-input)' }}>
         <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>Resource Bandwidth</p>
       </div>
-      <div className="grid gap-px sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5" style={{ background: 'var(--cn-border)' }}>
+      <div className="flex flex-wrap gap-px" style={{ background: 'var(--cn-border)' }}>
         {groups.map(g => (
-          <div key={g.label} className="flex flex-col gap-2 p-3" style={{ background: 'var(--cn-bg-card)' }}>
+          <div key={g.label} className="flex-1 min-w-[200px] flex flex-col gap-2 p-3" style={{ background: 'var(--cn-bg-card)' }}>
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: g.color }}>{g.label}</span>
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full tabular-nums" style={{ background: g.color + '18', color: g.color }}>{g.members.length}</span>

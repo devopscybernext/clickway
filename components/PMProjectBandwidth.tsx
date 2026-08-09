@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronLeft, ChevronRight, Clock, CalendarClock, Hourglass, Rocket, Activity, AlertTriangle, Wallet, PhoneCall } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronLeft, ChevronRight, Clock, CalendarClock, Hourglass, Rocket, Activity, AlertTriangle, Wallet, PhoneCall, Pencil } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { MultiSelect } from './FilteredDataTable';
 import SearchFilter from './SearchFilter';
@@ -282,6 +282,9 @@ interface Props {
 
 export default function PMProjectBandwidth({ data, headers, canEdit = false, onCellChange, allData }: Props) {
   const optionSourceData = allData ?? data;
+  // Cells only become editable after clicking "Edit", same pattern as Tasks Assigned
+  const [editMode, setEditMode] = useState(false);
+  const isEditable = canEdit && editMode;
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   const [sortCol, setSortCol] = useState('');
@@ -533,10 +536,25 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
         )}
       </div>
 
-      <p style={{ color: 'var(--cn-text-muted)' }} className="text-sm">
-        <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{sorted.length}</span> of {data.length} records
-        {activeFilterCount > 0 && <span className="text-[#FE4A23]"> (filtered)</span>}
-      </p>
+      <div className="flex items-center justify-between gap-3">
+        <p style={{ color: 'var(--cn-text-muted)' }} className="text-sm">
+          <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{sorted.length}</span> of {data.length} records
+          {activeFilterCount > 0 && <span className="text-[#FE4A23]"> (filtered)</span>}
+        </p>
+        {canEdit && (
+          <button
+            onClick={() => setEditMode(m => !m)}
+            title={editMode ? 'Stop editing' : 'Edit'}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg cursor-pointer transition-all text-xs font-semibold"
+            style={editMode
+              ? { background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }
+              : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            {editMode ? 'Done Editing' : 'Edit'}
+          </button>
+        )}
+      </div>
 
       <div style={{ borderColor: 'var(--cn-border)' }} className="overflow-x-auto rounded-md border">
         <table className="w-full text-xs text-left">
@@ -594,27 +612,27 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                     const isUrl = h.toLowerCase().includes('url') || h.toLowerCase().includes('link');
                     return (
                       <td key={h} className={`px-4 py-2 ${isDropdownCol(h) || isStatusLikeCol(h) || isDateCol(h) ? 'whitespace-nowrap' : 'break-words min-w-[120px] max-w-xs'}`}>
-                        {isUrl && val && !canEdit ? (
+                        {isUrl && val && !isEditable ? (
                           <a href={val} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: 'var(--cn-accent)' }}>{val}</a>
                         ) : isDropdownCol(h) ? (
                           <SelectCell
                             value={val}
                             colored={isStatusLikeCol(h)}
-                            editable={canEdit && !!onCellChange}
+                            editable={isEditable && !!onCellChange}
                             options={dropdownOptions[h] ?? []}
                             onSave={async v => { if (onCellChange) await onCellChange(row, h, v); }}
                           />
                         ) : isDateCol(h) ? (
                           <DateCell
                             value={val}
-                            editable={canEdit && !!onCellChange}
+                            editable={isEditable && !!onCellChange}
                             onSave={async v => { if (onCellChange) await onCellChange(row, h, v); }}
                           />
                         ) : (
                           <EditableCell
                             value={val}
                             colored={isStatusLikeCol(h)}
-                            editable={canEdit && !!onCellChange}
+                            editable={isEditable && !!onCellChange}
                             onSave={async v => { if (onCellChange) await onCellChange(row, h, v); }}
                           />
                         )}
