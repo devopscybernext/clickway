@@ -715,7 +715,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
         const logged = hhmmToDecimalHours(t.timeLogged);
         const existing = parseHours(t.totalHoursVal);
         const sum = Math.round((existing + logged) * 100) / 100;
-        await onStatusChange(t._raw, totalHoursColName, String(sum));
+        await onStatusChange(t._raw, totalHoursColName, `${sum} Hours`);
         await onStatusChange(t._raw, timeLoggedColName, '');
       }
     } finally {
