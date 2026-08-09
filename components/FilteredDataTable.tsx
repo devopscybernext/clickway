@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronDown as ChevDown, ChevronLeft, ChevronRight, Copy, Check } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronDown as ChevDown, ChevronLeft, ChevronRight, Copy, Check, Pencil } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { STATUS_COLORS } from './SpecificCharts';
 
@@ -653,6 +653,16 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
   const effectiveStatusOptionsLower = effectiveStatusOptions.map(s => s.toLowerCase());
   const effectiveTodayBucketSetOptions = todayBucketSetOptions ?? TODAY_BUCKET_SET_OPTIONS;
 
+  // Cells only become editable after clicking "Edit Task" — avoids accidental
+  // edits from a stray click while just browsing the table.
+  const [editMode, setEditMode] = useState(false);
+  const hasAnyEditPermission = !!editPersonBucket || !!editStatusUpdation || !!editProjectTask || !readOnlyPmStatus || !readOnlyStatus;
+  const canEditPersonBucket    = !!editPersonBucket && editMode;
+  const canEditStatusUpdation  = !!(editPersonBucket || editStatusUpdation) && editMode;
+  const canEditPmStatus        = !readOnlyPmStatus && editMode;
+  const canEditStatus          = !readOnlyStatus && editMode;
+  const canEditProjectTask     = !!editProjectTask && editMode;
+
   const copyRow = (row: SheetData) => {
     const projectCol = headers.find(h => h.toLowerCase().includes('project'));
     const urlCol     = headers.find(h => h.toLowerCase().includes('url') || h.toLowerCase().includes('link'));
@@ -996,18 +1006,33 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
           <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{sorted.length}</span> of {filteredData.length} records
           {activeFilterCount > 0 && <span className="text-[#FE4A23]"> (filtered)</span>}
         </p>
-        {showCopy && (
-          <button
-            onClick={copyTable}
-            title="Copy table"
-            className="w-8 h-8 inline-flex items-center justify-center rounded-lg cursor-pointer transition-all"
-            style={copied
-              ? { background: '#16a34a18', border: '1px solid #16a34a40', color: '#16a34a' }
-              : { background: 'var(--cn-bg-input)', border: '1px solid var(--cn-border)', color: 'var(--cn-text-muted)' }}
-          >
-            {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {hasAnyEditPermission && (
+            <button
+              onClick={() => setEditMode(m => !m)}
+              title={editMode ? 'Stop editing' : 'Edit Task'}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg cursor-pointer transition-all text-xs font-semibold"
+              style={editMode
+                ? { background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }
+                : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              {editMode ? 'Done Editing' : 'Edit Task'}
+            </button>
+          )}
+          {showCopy && (
+            <button
+              onClick={copyTable}
+              title="Copy table"
+              className="w-8 h-8 inline-flex items-center justify-center rounded-lg cursor-pointer transition-all"
+              style={copied
+                ? { background: '#16a34a18', border: '1px solid #16a34a40', color: '#16a34a' }
+                : { background: 'var(--cn-bg-input)', border: '1px solid var(--cn-border)', color: 'var(--cn-text-muted)' }}
+            >
+              {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Table */}
@@ -1098,7 +1123,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                           style={!isStatus && !isStatusUpdation ? { color: 'var(--cn-text-secondary)' } : undefined}
                           className="px-4 py-2 break-words min-w-[120px] max-w-xs"
                         >
-                          {isAssigned && editPersonBucket && !readOnlyAssigned && !restrictToBucketEdit && onStatusChange ? (
+                          {isAssigned && canEditPersonBucket && !readOnlyAssigned && !restrictToBucketEdit && onStatusChange ? (
                             <AssignedPersonSelect
                               value={val}
                               options={personOptions}
@@ -1106,7 +1131,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                               col={h}
                               onStatusChange={onStatusChange}
                             />
-                          ) : isBucket && editPersonBucket && !readOnlyBucket && !restrictToBucketEdit && onStatusChange ? (
+                          ) : isBucket && canEditPersonBucket && !readOnlyBucket && !restrictToBucketEdit && onStatusChange ? (
                             <InlineSelectCell
                               value={BUCKET_OPTIONS.find(o => o.toLowerCase() === normalizeBucket(val)) ?? val}
                               options={bucketOptions}
@@ -1114,7 +1139,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                               col={h}
                               onStatusChange={onStatusChange}
                             />
-                          ) : isTodayBucketSet && editPersonBucket && !restrictToBucketEdit && onStatusChange ? (
+                          ) : isTodayBucketSet && canEditPersonBucket && !restrictToBucketEdit && onStatusChange ? (
                             <InlineSelectCell
                               value={val}
                               options={effectiveTodayBucketSetOptions}
@@ -1134,14 +1159,14 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                             >
                               Open
                             </a>
-                          ) : (isProjectName || isTaskName) && editProjectTask && onStatusChange ? (
+                          ) : (isProjectName || isTaskName) && canEditProjectTask && onStatusChange ? (
                             <InlineEditCell
                               value={val}
                               row={row}
                               col={h}
                               onStatusChange={onStatusChange}
                             />
-                          ) : isPmStatus && onStatusChange && !readOnlyPmStatus && !restrictToBucketEdit ? (
+                          ) : isPmStatus && onStatusChange && canEditPmStatus && !restrictToBucketEdit ? (
                             <PmStatusSelect
                               value={val}
                               row={row}
@@ -1161,7 +1186,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                                 </span>
                               );
                             })()
-                          ) : isStatusUpdation && (editPersonBucket || editStatusUpdation) && onStatusChange ? (
+                          ) : isStatusUpdation && canEditStatusUpdation && onStatusChange ? (
                             <StatusSelect
                               value={val}
                               row={row}
@@ -1182,7 +1207,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                                 </span>
                               );
                             })()
-                          ) : isStatus && onStatusChange && !readOnlyStatus && !restrictToBucketEdit ? (
+                          ) : isStatus && onStatusChange && canEditStatus && !restrictToBucketEdit ? (
                             <StatusSelect
                               value={val}
                               row={row}
@@ -1203,14 +1228,14 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                                 </span>
                               );
                             })()
-                          ) : isTimeLogged && onStatusChange && (editPersonBucket || editStatusUpdation) ? (
+                          ) : isTimeLogged && onStatusChange && canEditStatusUpdation ? (
                             <InlineEditCell
                               value={val}
                               row={row}
                               col={h}
                               onStatusChange={onStatusChange}
                             />
-                          ) : isTimeEst && onStatusChange && editPersonBucket ? (
+                          ) : isTimeEst && onStatusChange && canEditPersonBucket ? (
                             <InlineEditCell
                               value={val}
                               row={row}

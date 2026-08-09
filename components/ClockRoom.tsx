@@ -413,13 +413,18 @@ function BigStaticClock({ h, m, size = 160, accentColor = '#27272a' }: { h: numb
   );
 }
 
-function TimeConverter({ now, zone, onZoneChange, dateTime, onDateTimeChange }: {
-  now: Date; zone: string; onZoneChange: (z: string) => void; dateTime: string; onDateTimeChange: (d: string) => void;
+function TimeConverter({ now, zone, onZoneChange, toZone, onToZoneChange, dateTime, onDateTimeChange }: {
+  now: Date; zone: string; onZoneChange: (z: string) => void;
+  toZone: string; onToZoneChange: (z: string) => void;
+  dateTime: string; onDateTimeChange: (d: string) => void;
 }) {
   const fromZone = zone;
   const setFromZone = onZoneChange;
+  const setToZone = onToZoneChange;
   const inputDateTime = dateTime;
   const setInputDateTime = onDateTimeChange;
+
+  const swap = () => { setFromZone(toZone); setToZone(fromZone); };
 
   const result = useMemo(() => {
     if (!inputDateTime) return null;
@@ -435,22 +440,22 @@ function TimeConverter({ now, zone, onZoneChange, dateTime, onDateTimeChange }: 
 
     const fakeLocal = new Date(`${datePart}T${paddedH}:${paddedM}:00`);
     const fromOffset = (new Date(now.toLocaleString('en-US', { timeZone: fromZone })).getTime() - now.getTime());
-    const istOffset  = (new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })).getTime() - now.getTime());
-    const istDate = new Date(fakeLocal.getTime() + (istOffset - fromOffset));
+    const toOffset    = (new Date(now.toLocaleString('en-US', { timeZone: toZone })).getTime() - now.getTime());
+    const toDate = new Date(fakeLocal.getTime() + (toOffset - fromOffset));
 
-    // IST h/m for clock hands
-    const istParts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Asia/Kolkata', hour: 'numeric', minute: 'numeric', hour12: false,
-    }).formatToParts(istDate);
-    const istH = Number(istParts.find(p => p.type === 'hour')?.value ?? 0) % 24;
-    const istM = Number(istParts.find(p => p.type === 'minute')?.value ?? 0);
+    // Target h/m for clock hands
+    const toParts = new Intl.DateTimeFormat('en-US', {
+      timeZone: toZone, hour: 'numeric', minute: 'numeric', hour12: false,
+    }).formatToParts(toDate);
+    const toH = Number(toParts.find(p => p.type === 'hour')?.value ?? 0) % 24;
+    const toM = Number(toParts.find(p => p.type === 'minute')?.value ?? 0);
 
-    const istTime = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true,
-    }).format(istDate);
-    const istDateStr = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Asia/Kolkata', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
-    }).format(istDate);
+    const toTime = new Intl.DateTimeFormat('en-US', {
+      timeZone: toZone, hour: '2-digit', minute: '2-digit', hour12: true,
+    }).format(toDate);
+    const toDateStr = new Intl.DateTimeFormat('en-US', {
+      timeZone: toZone, weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
+    }).format(toDate);
 
     // Source display time
     const srcTime = new Intl.DateTimeFormat('en-US', {
@@ -460,7 +465,7 @@ function TimeConverter({ now, zone, onZoneChange, dateTime, onDateTimeChange }: 
       weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
     }).format(fakeLocal);
 
-    const istStatus = getDayStatus(istH);
+    const toStatus = getDayStatus(toH);
     const srcStatus = getDayStatus(srcH24);
 
     const srcEntry = ALL_ZONES_FLAT.find(z => z.zone === fromZone);
@@ -468,22 +473,27 @@ function TimeConverter({ now, zone, onZoneChange, dateTime, onDateTimeChange }: 
     const srcSubLabel = srcEntry?.sublabel ?? fromZone;
     const srcFlag     = srcEntry?.flag ?? '🌍';
 
+    const toEntry = ALL_ZONES_FLAT.find(z => z.zone === toZone);
+    const toCity     = toEntry?.city ?? 'Target';
+    const toSubLabel = toEntry?.sublabel ?? toZone;
+    const toFlag      = toEntry?.flag ?? '🌍';
+
     // offset label
-    const diffMin = Math.round((istOffset - fromOffset) / 60000);
+    const diffMin = Math.round((toOffset - fromOffset) / 60000);
     const diffH = Math.floor(Math.abs(diffMin) / 60);
     const diffM = Math.abs(diffMin) % 60;
-    const offsetLabel = diffMin === 0 ? 'Same time as India'
+    const offsetLabel = diffMin === 0 ? 'Same time as source'
       : `${diffH > 0 ? `${diffH}h ` : ''}${diffM > 0 ? `${diffM}m ` : ''}${diffMin > 0 ? 'ahead of source' : 'behind source'}`;
 
     return { srcH24, srcM, srcTime, srcDateStr, srcCity, srcSubLabel, srcFlag, srcStatus,
-             istH, istM, istTime, istDateStr, istStatus, offsetLabel };
-  }, [inputDateTime, fromZone, now]);
+             toH, toM, toTime, toDateStr, toStatus, toCity, toSubLabel, toFlag, offsetLabel };
+  }, [inputDateTime, fromZone, toZone, now]);
 
   return (
     <div className="cn-card rounded-xl p-5 mt-2" style={{ background: 'var(--cn-bg-card)', border: '1px solid var(--cn-border)' }}>
       <div className="flex items-center gap-2 mb-4">
         <ArrowRightLeft className="w-4 h-4" style={{ color: 'var(--cn-accent)' }} />
-        <h3 className="text-sm font-bold" style={{ color: 'var(--cn-text-primary)' }}>Time Converter → India (IST)</h3>
+        <h3 className="text-sm font-bold" style={{ color: 'var(--cn-text-primary)' }}>Time Converter</h3>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end flex-wrap">
@@ -491,6 +501,23 @@ function TimeConverter({ now, zone, onZoneChange, dateTime, onDateTimeChange }: 
         <div className="flex-1 min-w-[220px]">
           <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--cn-text-muted)' }}>From Timezone</label>
           <ZoneSelect value={fromZone} onChange={setFromZone} />
+        </div>
+
+        {/* Swap button */}
+        <button
+          type="button"
+          onClick={swap}
+          title="Swap From/To"
+          className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center cursor-pointer transition-colors hover:opacity-80"
+          style={{ background: 'var(--cn-bg-input)', border: '1px solid var(--cn-border)', color: 'var(--cn-text-muted)' }}
+        >
+          <ArrowRightLeft className="w-4 h-4" />
+        </button>
+
+        {/* Target timezone */}
+        <div className="flex-1 min-w-[220px]">
+          <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--cn-text-muted)' }}>To Timezone</label>
+          <ZoneSelect value={toZone} onChange={setToZone} />
         </div>
 
         {/* Date & Time input */}
@@ -542,26 +569,23 @@ function TimeConverter({ now, zone, onZoneChange, dateTime, onDateTimeChange }: 
             </span>
           </div>
 
-          {/* IST clock */}
+          {/* Target clock */}
           <div className="rounded-2xl p-6 flex flex-col items-center text-center"
             style={{ background: '#FE4A2308', border: '2px solid #FE4A2340' }}>
             <div className="flex items-center gap-2 mb-4">
-              <span className="text-2xl">🇮🇳</span>
+              <span className="text-2xl">{result.toFlag}</span>
               <div className="text-left">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-bold leading-tight" style={{ color: 'var(--cn-text-primary)' }}>Mumbai / Delhi</p>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded font-bold" style={{ background: '#FE4A23', color: '#fff' }}>IST</span>
-                </div>
-                <p className="text-[11px]" style={{ color: 'var(--cn-text-muted)' }}>Indian Standard Time</p>
+                <p className="text-sm font-bold leading-tight" style={{ color: 'var(--cn-text-primary)' }}>{result.toCity}</p>
+                <p className="text-[11px]" style={{ color: 'var(--cn-text-muted)' }}>{result.toSubLabel}</p>
               </div>
             </div>
-            <BigStaticClock h={result.istH} m={result.istM} size={180} accentColor="#FE4A23" />
-            <p className="text-3xl font-bold tabular-nums tracking-tight mt-4" style={{ color: '#FE4A23' }}>{result.istTime}</p>
-            <p className="text-xs mt-1" style={{ color: 'var(--cn-text-muted)' }}>{result.istDateStr}</p>
+            <BigStaticClock h={result.toH} m={result.toM} size={180} accentColor="#FE4A23" />
+            <p className="text-3xl font-bold tabular-nums tracking-tight mt-4" style={{ color: '#FE4A23' }}>{result.toTime}</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--cn-text-muted)' }}>{result.toDateStr}</p>
             <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1 rounded-full mt-3"
-              style={{ background: `${result.istStatus.color}18`, color: result.istStatus.color }}>
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: result.istStatus.color }} />
-              {result.istStatus.label}
+              style={{ background: `${result.toStatus.color}18`, color: result.toStatus.color }}>
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: result.toStatus.color }} />
+              {result.toStatus.label}
             </span>
           </div>
 
@@ -587,6 +611,7 @@ export default function ClockRoom() {
   const [search, setSearch] = useState('');
   // Converter state lifted here so it survives tab switches
   const [converterZone, setConverterZone] = useState(ALL_ZONES_FLAT[0].zone);
+  const [converterToZone, setConverterToZone] = useState('Asia/Kolkata');
   const [converterDateTime, setConverterDateTime] = useState('');
 
   useEffect(() => {
@@ -636,7 +661,12 @@ export default function ClockRoom() {
 
       {/* Timezone Converter tab — always mounted to preserve state */}
       <div style={{ display: tab === 'converter' ? 'block' : 'none' }}>
-        <TimeConverter now={now} zone={converterZone} onZoneChange={setConverterZone} dateTime={converterDateTime} onDateTimeChange={setConverterDateTime} />
+        <TimeConverter
+          now={now}
+          zone={converterZone} onZoneChange={setConverterZone}
+          toZone={converterToZone} onToZoneChange={setConverterToZone}
+          dateTime={converterDateTime} onDateTimeChange={setConverterDateTime}
+        />
       </div>
 
       {/* Clock Room tab */}

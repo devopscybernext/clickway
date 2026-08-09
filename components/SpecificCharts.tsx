@@ -2712,7 +2712,7 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
             </div>
             <div className="flex flex-col gap-1">
               {g.members.map(m => (
-                <div key={m.name} className="flex items-center justify-between gap-2 text-[12px] px-2 py-1.5 rounded-lg" style={{ background: 'var(--cn-bg-input)' }}>
+                <div key={m.name} className="flex items-center justify-between gap-2 text-[12px] px-2 py-1.5 rounded-lg border" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
                   <span className="flex items-center gap-1.5 min-w-0">
                     <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: m.status.bg }} />
                     <span className="truncate" style={{ color: 'var(--cn-text-primary)' }}>{m.name}</span>

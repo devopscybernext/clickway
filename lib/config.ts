@@ -18,6 +18,15 @@ export const USER_DETAILS_SHEET_ID = '1OFJyXJ89MTi7sFH4L0or-wGtrZi3a7zRFVtFMOCIt
 // End Date, Payment Status, Last (Project) Follow-up Date, Comments
 export const PM_BANDWIDTH_SHEET_ID = '1WBzXb7xfCtzlzeVzxYB6ZtkSCyN4FUzz1Eg9McgPbLM';
 
+// "Add New Project" intake form — one Google Form per PM, matched against
+// the logged-in user's display name (same name used for the __pm tab tag).
+export const PM_PROJECT_FORM_URLS: Record<string, string> = {
+  Kiran:  'https://forms.gle/KRGCcDvVooDnP8LE6',
+  Muskan: 'https://forms.gle/hbu2jJdW3pkuWk7K6',
+  Moon:   'https://forms.gle/Bwru5hhor9rCY6fK6',
+  Yash:   'https://forms.gle/mey4kAfqDwcDqRvb7',
+};
+
 // Tab names inside the Sheet 1 spreadsheet
 export const TAB_BANDWIDTH    = 'Bandwidth Allocation';
 export const TAB_AVAILABILITY = 'Resource Availability';

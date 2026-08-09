@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SheetData } from '@/lib/googleSheets';
-import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, MARKETING_ASSIGNED_PERSONS, WEB_TEAM, TAB_BANDWIDTH, RANGE_AVAILABILITY, TAB_AVAILABILITY, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
+import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, PM_PROJECT_FORM_URLS, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, MARKETING_ASSIGNED_PERSONS, WEB_TEAM, TAB_BANDWIDTH, RANGE_AVAILABILITY, TAB_AVAILABILITY, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
 
 import { AuthUser, SheetId, Team, getAllowedSheets, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, getTasksAssignedLockedTeam } from '@/lib/auth';
 import Sidebar from './Sidebar';
@@ -295,6 +295,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [analysisSubTab, setAnalysisSubTab] = useState<'resources' | 'pm'>('resources');
   const [toolsSubTab, setToolsSubTab] = useState<'clock' | 'holiday' | 'ai'>('clock');
   const [pmBandwidthSubTab, setPmBandwidthSubTab] = useState<'all' | 'mine'>('all');
+  const [showAddProjectForm, setShowAddProjectForm] = useState(false);
   const [teamBandwidthSubTab, setTeamBandwidthSubTab] = useState<Team>(lockedTeamBandwidthTeam ?? 'web');
   const [tasksOverviewTeam, setTasksOverviewTeam] = useState<Team>(lockedTasksOverviewTeam ?? 'web');
   const [tasksAssignedTeam, setTasksAssignedTeam] = useState<Team>(lockedTasksAssignedTeam ?? 'web');
@@ -558,6 +559,11 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const isPmBandwidth       = selectedSheet === '11';
   const isTeamBandwidth     = selectedSheet === '12';
   const isTools             = selectedSheet === '14';
+
+  // "Add New Project" form — only PMs with a configured intake form get the button
+  const myProjectFormEntry = Object.entries(PM_PROJECT_FORM_URLS)
+    .find(([name]) => name.trim().toLowerCase() === user.displayName.trim().toLowerCase());
+  const myProjectFormUrl = myProjectFormEntry?.[1];
 
   // ── Team roster filtering (Web/Marketing split for Team Bandwidth & Tasks Overview) ──
   const filterByRoster = (rows: SheetData[], rowHeaders: string[], roster: string[]) => {
@@ -1020,24 +1026,35 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               className="cn-card rounded-lg border transition-colors"
               style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
             >
-              <div className="flex items-center gap-3 px-4 sm:px-6 pt-4 sm:pt-5 pb-0 flex-wrap">
-                {([
-                  { key: 'all', label: 'All Projects' },
-                  { key: 'mine', label: 'My Projects' },
-                ] as const).map(tab => (
+              <div className="flex items-center justify-between gap-3 px-4 sm:px-6 pt-4 sm:pt-5 pb-0 flex-wrap">
+                <div className="flex items-center gap-3 flex-wrap">
+                  {([
+                    { key: 'all', label: 'All Projects' },
+                    { key: 'mine', label: 'My Projects' },
+                  ] as const).map(tab => (
+                    <button
+                      key={tab.key}
+                      onClick={() => setPmBandwidthSubTab(tab.key)}
+                      className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
+                      style={{
+                        borderColor: pmBandwidthSubTab === tab.key ? 'var(--cn-accent)' : 'transparent',
+                        color: pmBandwidthSubTab === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
+                        background: 'transparent',
+                      }}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+                {myProjectFormUrl && (
                   <button
-                    key={tab.key}
-                    onClick={() => setPmBandwidthSubTab(tab.key)}
-                    className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
-                    style={{
-                      borderColor: pmBandwidthSubTab === tab.key ? 'var(--cn-accent)' : 'transparent',
-                      color: pmBandwidthSubTab === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
-                      background: 'transparent',
-                    }}
+                    onClick={() => setShowAddProjectForm(true)}
+                    className="px-4 py-2 mb-2 text-sm font-semibold rounded-lg cursor-pointer transition-colors"
+                    style={{ background: 'var(--cn-accent)', color: '#fff' }}
                   >
-                    {tab.label}
+                    + Add New Project
                   </button>
-                ))}
+                )}
               </div>
               <div style={{ borderTop: '1px solid var(--cn-border)' }} />
               <div className="p-3 sm:p-6">
@@ -1054,6 +1071,40 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 />
               </div>
             </section>
+          )}
+
+          {/* ── Add New Project modal — PM's own intake form ── */}
+          {isPmBandwidth && showAddProjectForm && myProjectFormUrl && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              style={{ background: 'rgba(0,0,0,0.6)' }}
+              onClick={() => setShowAddProjectForm(false)}
+            >
+              <div
+                className="rounded-lg w-full flex flex-col"
+                style={{ background: 'var(--cn-bg-card)', maxWidth: 720, height: '85vh' }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between px-5 py-3 border-b" style={{ borderColor: 'var(--cn-border)' }}>
+                  <h2 className="font-semibold text-base" style={{ color: 'var(--cn-text-primary)' }}>Add New Project</h2>
+                  <button
+                    onClick={() => setShowAddProjectForm(false)}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors hover:opacity-80"
+                    style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}
+                  >
+                    ✕
+                  </button>
+                </div>
+                <iframe
+                  key={myProjectFormUrl}
+                  src={myProjectFormUrl}
+                  className="flex-1 w-full"
+                  style={{ border: 'none', borderRadius: '0 0 8px 8px' }}
+                >
+                  Loading…
+                </iframe>
+              </div>
+            </div>
           )}
 
           {/* ── Team Bandwidth: Web / Marketing team workload ── */}
