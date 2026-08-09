@@ -532,14 +532,17 @@ export const DURATION_HOUR_OPTIONS = Array.from({ length: 13 }, (_, i) => i); //
 export const DURATION_MINUTE_OPTIONS = Array.from({ length: 60 }, (_, i) => i); // 0-59
 
 export function parseHHMM(val: string): { h: number; m: number } {
-  const match = val.trim().match(/^(\d{1,2})\.(\d{2})$/);
+  // Tolerates a trailing " Hours" (or anything else) after the HH.MM part —
+  // formatHHMM writes "03.45 Hours", but older/manually-entered values may
+  // be bare "03.45".
+  const match = val.trim().match(/^(\d{1,2})\.(\d{2})/);
   if (!match) return { h: 0, m: 0 };
   const h = parseInt(match[1], 10);
   const m = parseInt(match[2], 10);
   return { h: isNaN(h) ? 0 : h, m: isNaN(m) ? 0 : m };
 }
 export function formatHHMM(h: number, m: number): string {
-  return `${String(h).padStart(2, '0')}.${String(m).padStart(2, '0')}`;
+  return `${String(h).padStart(2, '0')}.${String(m).padStart(2, '0')} Hours`;
 }
 export function hhmmToDecimalHours(val: string): number {
   const { h, m } = parseHHMM(val);
@@ -1090,7 +1093,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                             colName={timeLoggedColName}
                             onStatusChange={onStatusChange}
                           />
-                        ) : (t.timeLogged ? `${t.timeLogged} Hours` : '—')}
+                        ) : (t.timeLogged || '—')}
                       </td>
                     )}
                     {/* Status */}
