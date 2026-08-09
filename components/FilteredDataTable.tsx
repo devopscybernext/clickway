@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronDown as ChevDown, ChevronLeft, ChevronRight, Copy, Check, Pencil, Send } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronDown as ChevDown, ChevronLeft, ChevronRight, Copy, Check, Pencil } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
-import { STATUS_COLORS, parseHours, parseHHMM, formatHHMM, hhmmToDecimalHours, DURATION_HOUR_OPTIONS, DURATION_MINUTE_OPTIONS } from './SpecificCharts';
+import { STATUS_COLORS } from './SpecificCharts';
 
 const PAGE_SIZE = 30;
 
@@ -595,59 +595,6 @@ function InlineEditCell({ value, row, col, onStatusChange }: InlineEditCellProps
   );
 }
 
-// ─── Time Logged On Ac — HH.MM duration entry ──────────────────────────────────
-// Stored/displayed as "HH.MM" (e.g. "01.30" = 1h30m) — the "." separates literal
-// hours and minutes, it is NOT a decimal point. Converted to true decimal hours
-// only at Push to Admin time. parseHHMM/formatHHMM/hhmmToDecimalHours/option
-// lists are shared with the Tasks Overview Push to Admin flow (SpecificCharts.tsx).
-
-interface DurationEntryCellProps {
-  value: string;
-  row: SheetData;
-  col: string;
-  onStatusChange: (row: SheetData, col: string, newValue: string) => Promise<void>;
-}
-
-function DurationEntryCell({ value, row, col, onStatusChange }: DurationEntryCellProps) {
-  const { h, m } = parseHHMM(value);
-  const [saving, setSaving] = useState(false);
-
-  const commit = async (newH: number, newM: number) => {
-    setSaving(true);
-    try { await onStatusChange(row, col, formatHHMM(newH, newM)); }
-    finally { setSaving(false); }
-  };
-
-  const selectStyle = {
-    background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)',
-  };
-
-  return (
-    <div className="flex items-center gap-1">
-      <select
-        value={h}
-        onChange={e => commit(Number(e.target.value), m)}
-        disabled={saving}
-        className="text-xs rounded px-1.5 py-1 focus:outline-none disabled:opacity-60 cursor-pointer"
-        style={selectStyle}
-      >
-        {DURATION_HOUR_OPTIONS.map(o => <option key={o} value={o}>{String(o).padStart(2, '0')}</option>)}
-      </select>
-      <span style={{ color: 'var(--cn-text-muted)' }}>.</span>
-      <select
-        value={m}
-        onChange={e => commit(h, Number(e.target.value))}
-        disabled={saving}
-        className="text-xs rounded px-1.5 py-1 focus:outline-none disabled:opacity-60 cursor-pointer"
-        style={selectStyle}
-      >
-        {DURATION_MINUTE_OPTIONS.map(o => <option key={o} value={o}>{String(o).padStart(2, '0')}</option>)}
-      </select>
-      {saving && <span className="w-3 h-3 border border-t-transparent rounded-full animate-spin shrink-0" style={{ borderColor: 'var(--cn-accent)' }} />}
-    </div>
-  );
-}
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 interface Props {
   data: SheetData[];
@@ -665,11 +612,6 @@ interface Props {
   restrictToBucketEdit?: boolean;
   editStatusUpdation?: boolean;
   editProjectTask?: boolean;
-  // Individual-tier only: lets the viewer log their own hours (HH.MM
-  // dropdowns on Time Logged On Ac) and "Push to Admin" — adds the logged
-  // duration onto Total Hours and clears Time Logged On Ac, for every row
-  // assigned to them (matched against defaultPersonFilter).
-  enableTimeLoggedPush?: boolean;
   hiddenCols?: string[];
   onlyColTerms?: string[];
   hiddenFilterTerms?: string[];
@@ -705,7 +647,7 @@ function parseTimestamp(v: string): number {
   return new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s)).getTime();
 }
 
-export default function FilteredDataTable({ data, headers, sheetNum, onStatusChange, readOnlyStatus, readOnlyPmStatus, showCopy, defaultPersonFilter, editPersonBucket, readOnlyBucket, readOnlyAssigned, rowCopy, restrictToBucketEdit, editStatusUpdation, editProjectTask, enableTimeLoggedPush, hiddenCols, onlyColTerms, hiddenFilterTerms, statusOptions, todayBucketSetOptions, assignedPersonOptions }: Props) {
+export default function FilteredDataTable({ data, headers, sheetNum, onStatusChange, readOnlyStatus, readOnlyPmStatus, showCopy, defaultPersonFilter, editPersonBucket, readOnlyBucket, readOnlyAssigned, rowCopy, restrictToBucketEdit, editStatusUpdation, editProjectTask, hiddenCols, onlyColTerms, hiddenFilterTerms, statusOptions, todayBucketSetOptions, assignedPersonOptions }: Props) {
   const [copiedRow, setCopiedRow] = useState<number | null>(null);
   const effectiveStatusOptions = statusOptions ?? STATUS_OPTIONS;
   const effectiveStatusOptionsLower = effectiveStatusOptions.map(s => s.toLowerCase());
@@ -758,52 +700,6 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
     }
     return vals.sort();
   }, [data, personColHeader]);
-
-  // ─── Push to Admin — Time Logged On Ac -> Total Hours ────────────────────────
-  const timeLoggedColHeader = useMemo(() => headers.find(h => h.toLowerCase().includes('time logged')), [headers]);
-  const totalHoursColHeader = useMemo(
-    () => headers.find(h => h.toLowerCase().includes('total hours') || h.toLowerCase().includes('total time')),
-    [headers]
-  );
-  const isOwnRow = (row: SheetData) =>
-    !!defaultPersonFilter && !!personColHeader &&
-    String(row[personColHeader] ?? '').trim().toLowerCase() === defaultPersonFilter.trim().toLowerCase();
-
-  const pushableRows = useMemo(() => {
-    if (!enableTimeLoggedPush || !timeLoggedColHeader || !personColHeader || !defaultPersonFilter) return [];
-    const me = defaultPersonFilter.trim().toLowerCase();
-    return data.filter(r =>
-      String(r[personColHeader] ?? '').trim().toLowerCase() === me &&
-      hhmmToDecimalHours(String(r[timeLoggedColHeader] ?? '')) > 0
-    );
-  }, [data, enableTimeLoggedPush, timeLoggedColHeader, personColHeader, defaultPersonFilter]);
-
-  const pushTotalHours = useMemo(
-    () => timeLoggedColHeader
-      ? pushableRows.reduce((s, r) => s + hhmmToDecimalHours(String(r[timeLoggedColHeader] ?? '')), 0)
-      : 0,
-    [pushableRows, timeLoggedColHeader]
-  );
-
-  const [showPushConfirm, setShowPushConfirm] = useState(false);
-  const [pushing, setPushing] = useState(false);
-
-  const handlePushToAdmin = async () => {
-    if (!onStatusChange || !timeLoggedColHeader || !totalHoursColHeader) return;
-    setPushing(true);
-    try {
-      for (const row of pushableRows) {
-        const logged = hhmmToDecimalHours(String(row[timeLoggedColHeader] ?? ''));
-        const existing = parseHours(String(row[totalHoursColHeader] ?? ''));
-        const sum = Math.round((existing + logged) * 100) / 100;
-        await onStatusChange(row, totalHoursColHeader, String(sum));
-        await onStatusChange(row, timeLoggedColHeader, '');
-      }
-    } finally {
-      setPushing(false);
-      setShowPushConfirm(false);
-    }
-  };
 
   // Bucket options: fixed list only — avoids surfacing typos from sheet data
   const bucketColHeader = useMemo(
@@ -1124,18 +1020,6 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
               {editMode ? 'Done Editing' : 'Edit Task'}
             </button>
           )}
-          {enableTimeLoggedPush && (
-            <button
-              onClick={() => setShowPushConfirm(true)}
-              disabled={pushableRows.length === 0 || pushing}
-              title={pushableRows.length === 0 ? 'No logged hours to push' : 'Push logged hours to Total Hours'}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg cursor-pointer transition-all text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }}
-            >
-              <Send className="w-3.5 h-3.5" />
-              Push to Admin{pushableRows.length > 0 ? ` (${pushableRows.length})` : ''}
-            </button>
-          )}
           {showCopy && (
             <button
               onClick={copyTable}
@@ -1150,46 +1034,6 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
           )}
         </div>
       </div>
-
-      {/* Push to Admin confirmation */}
-      {showPushConfirm && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.6)' }}
-          onClick={() => !pushing && setShowPushConfirm(false)}
-        >
-          <div
-            className="rounded-lg w-full max-w-sm p-5 space-y-3"
-            style={{ background: 'var(--cn-bg-card)' }}
-            onClick={e => e.stopPropagation()}
-          >
-            <h3 className="font-semibold text-base" style={{ color: 'var(--cn-text-primary)' }}>Push to Admin</h3>
-            <p className="text-sm leading-relaxed" style={{ color: 'var(--cn-text-muted)' }}>
-              Are you sure you want to push to admin? This adds{' '}
-              <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{Math.round(pushTotalHours * 100) / 100}h</span>{' '}
-              across {pushableRows.length} task{pushableRows.length === 1 ? '' : 's'} onto Total Hours, and clears Time Logged On Ac.
-            </p>
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setShowPushConfirm(false)}
-                disabled={pushing}
-                className="px-4 py-2 text-sm font-semibold rounded-lg cursor-pointer transition-colors disabled:opacity-50"
-                style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}
-              >
-                No
-              </button>
-              <button
-                onClick={handlePushToAdmin}
-                disabled={pushing}
-                className="px-4 py-2 text-sm font-semibold rounded-lg cursor-pointer transition-colors disabled:opacity-50"
-                style={{ background: 'var(--cn-accent)', color: '#fff' }}
-              >
-                {pushing ? 'Pushing…' : 'Yes'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Table */}
       <div style={{ borderColor: 'var(--cn-border)' }} className="overflow-x-auto rounded-md border">
@@ -1384,8 +1228,8 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                                 </span>
                               );
                             })()
-                          ) : isTimeLogged && enableTimeLoggedPush && onStatusChange && isOwnRow(row) ? (
-                            <DurationEntryCell
+                          ) : isTimeLogged && onStatusChange && canEditStatusUpdation ? (
+                            <InlineEditCell
                               value={val}
                               row={row}
                               col={h}

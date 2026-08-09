@@ -895,8 +895,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 defaultPersonFilter={isIndividual ? user.displayName : undefined}
                 editPersonBucket={isAdmin || isPmTier || isTeamAdmin}
                 editProjectTask={isAdmin || isPmTier || isTeamAdmin}
-                enableTimeLoggedPush={isIndividual}
-                hiddenCols={isIndividual ? [] : (tasksAssignedTeam === 'web' ? bandwidthHeaders : marketingTeamHeaders).filter(h => h.toLowerCase().includes('time logged'))}
+                hiddenCols={(tasksAssignedTeam === 'web' ? bandwidthHeaders : marketingTeamHeaders).filter(h => h.toLowerCase().includes('time logged'))}
                 showCopy={isAdmin}
                 rowCopy={isAdmin}
               />

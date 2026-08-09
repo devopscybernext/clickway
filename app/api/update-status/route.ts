@@ -2,6 +2,7 @@ import { google } from 'googleapis';
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySession, COOKIE_NAME } from '@/lib/session';
 import { TAB_USERS } from '@/lib/config';
+import { invalidateSheetCache } from '@/lib/googleSheets';
 
 // Convert 0-based column index to A1 letter(s): 0→A, 25→Z, 26→AA …
 function colToLetter(idx: number): string {
@@ -61,6 +62,10 @@ export async function POST(req: NextRequest) {
       valueInputOption: 'RAW',
       requestBody: { values: [[value]] },
     });
+
+    // A page refresh right after this write should show the new value, not
+    // whatever was cached from before the edit.
+    invalidateSheetCache(spreadsheetId);
 
     return NextResponse.json({ success: true, range });
   } catch (err: unknown) {

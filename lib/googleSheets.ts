@@ -59,6 +59,17 @@ export async function fetchSheetData(
   return { data, headers };
 }
 
+// Drops every cached read for a spreadsheet so the next fetch goes straight
+// to the Sheets API instead of serving up-to-60s-stale data. Call this after
+// any write (e.g. /api/update-status) so a page refresh right after an edit
+// reflects it immediately rather than showing the pre-edit value until the
+// cache entry naturally expires.
+export function invalidateSheetCache(sheetId: string): void {
+  for (const key of cache.keys()) {
+    if (key.startsWith(`${sheetId}:`)) cache.delete(key);
+  }
+}
+
 interface TabListCacheEntry {
   tabs: string[];
   timestamp: number;
