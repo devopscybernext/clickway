@@ -541,8 +541,9 @@ export const DURATION_MINUTE_OPTIONS = Array.from({ length: 60 }, (_, i) => i); 
 export function parseHHMM(val: string): { h: number; m: number } {
   // Tolerates a trailing " Hours" (or anything else) after the HH.MM part —
   // formatHHMM writes "03.45 Hours", but older/manually-entered values may
-  // be bare "03.45".
-  const match = val.trim().match(/^(\d{1,2})\.(\d{2})/);
+  // be bare "03.45". Hours allows up to 3 digits since PM Projects totals
+  // can run into the hundreds (e.g. "500.00 Hours").
+  const match = val.trim().match(/^(\d{1,3})\.(\d{2})/);
   if (!match) return { h: 0, m: 0 };
   const h = parseInt(match[1], 10);
   const m = parseInt(match[2], 10);

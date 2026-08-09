@@ -5,6 +5,7 @@ import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronLeft, ChevronRight, C
 import { SheetData } from '@/lib/googleSheets';
 import { MultiSelect } from './FilteredDataTable';
 import SearchFilter from './SearchFilter';
+import { parseHHMM, formatHHMM, hhmmToDecimalHours, DURATION_MINUTE_OPTIONS } from './SpecificCharts';
 
 const PAGE_SIZE = 30;
 const FOLLOWUP_DUE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days since last follow-up counts as due
@@ -183,6 +184,65 @@ function DateCell({ value, editable, onSave }: {
   );
 }
 
+// Total Hours / Current Month Hours / Risk Month Hours — HH.MM dropdown
+// entry, same "." notation as Time Logged/Time Estimation (MM is literal
+// minutes 00-59, never a decimal fraction: "12.50" means 12h50m, not
+// 12.5h). Project-level totals routinely exceed 12h, so the hour dropdown
+// goes 0-500 here (unlike the 0-12 used for single-task fields).
+const PM_HOUR_OPTIONS = Array.from({ length: 501 }, (_, i) => i); // 0-500
+
+// Existing cells may hold a plain legacy number ("30" = 30h 0m) or the new
+// "HH.MM Hours" text — this is for AGGREGATE MATH ONLY (KPI sums, sorting):
+// "12.50 Hours" must contribute 12 + 50/60 decimal hours, not 12.50.
+function parseDurationDecimal(val: unknown): number {
+  const trimmed = String(val ?? '').trim();
+  if (!trimmed) return 0;
+  if (trimmed.includes('.')) return hhmmToDecimalHours(trimmed);
+  const n = Number(trimmed);
+  return isNaN(n) ? 0 : n;
+}
+// Same idea, but for populating the H/M dropdowns when opening a cell to edit.
+function toHMLiteral(val: string): { h: number; m: number } {
+  const trimmed = val.trim();
+  if (!trimmed) return { h: 0, m: 0 };
+  if (trimmed.includes('.')) return parseHHMM(trimmed);
+  const h = parseInt(trimmed, 10);
+  return { h: isNaN(h) ? 0 : h, m: 0 };
+}
+
+function PmDurationCell({ value, editable, onSave }: {
+  value: string; editable: boolean; onSave: (v: string) => Promise<void>;
+}) {
+  const { h, m } = toHMLiteral(value);
+  const [saving, setSaving] = useState(false);
+
+  const commit = async (newH: number, newM: number) => {
+    setSaving(true);
+    try { await onSave(formatHHMM(newH, newM)); } finally { setSaving(false); }
+  };
+
+  if (!editable) {
+    return <span className="whitespace-nowrap" style={{ color: 'var(--cn-text-secondary)' }}>{value.trim() ? formatHHMM(h, m) : '—'}</span>;
+  }
+
+  const selectStyle = { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' };
+
+  return (
+    <div className="flex items-center gap-1">
+      <select value={h} onChange={e => commit(Number(e.target.value), m)} disabled={saving}
+        className="text-xs rounded px-1.5 py-1 focus:outline-none disabled:opacity-60 cursor-pointer" style={selectStyle}>
+        {PM_HOUR_OPTIONS.map(o => <option key={o} value={o}>{String(o).padStart(2, '0')}</option>)}
+      </select>
+      <span style={{ color: 'var(--cn-text-muted)' }}>.</span>
+      <select value={m} onChange={e => commit(h, Number(e.target.value))} disabled={saving}
+        className="text-xs rounded px-1.5 py-1 focus:outline-none disabled:opacity-60 cursor-pointer" style={selectStyle}>
+        {DURATION_MINUTE_OPTIONS.map(o => <option key={o} value={o}>{String(o).padStart(2, '0')}</option>)}
+      </select>
+      {saving && <span className="w-3 h-3 border border-t-transparent rounded-full animate-spin shrink-0" style={{ borderColor: 'var(--cn-accent)' }} />}
+    </div>
+  );
+}
+
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 // Canonical dropdown lists, matching the sheet's actual data-validation
@@ -309,6 +369,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const riskMonthHoursCol = headers.find(h => h.toLowerCase() === 'risk month hours');
   const followupDateCol = headers.find(h => h.toLowerCase().includes('follow-up date') || h.toLowerCase().includes('followup date'));
   const showPmCol = data.some(r => r['__pm']);
+  const isDurationCol = (h: string) => h === totalHoursCol || h === currentMonthHoursCol || h === riskMonthHoursCol;
 
   // Dropdown columns — canonical lists (matching the sheet's actual data
   // validation) unioned with anything already in the data, so a value that
@@ -404,15 +465,14 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   // Top KPI cards — scoped to the currently filtered/searched rows, same as
   // the "N of M records" count below.
   const stats = useMemo(() => {
-    const num = (v: unknown) => { const n = Number(v); return isNaN(n) ? 0 : n; };
-    const totalHours = totalHoursCol ? filtered.reduce((s, r) => s + num(r[totalHoursCol]), 0) : 0;
-    const currentMonthHours = currentMonthHoursCol ? filtered.reduce((s, r) => s + num(r[currentMonthHoursCol]), 0) : 0;
-    const riskMonthHours = riskMonthHoursCol ? filtered.reduce((s, r) => s + num(r[riskMonthHoursCol]), 0) : 0;
+    const totalHours = totalHoursCol ? filtered.reduce((s, r) => s + parseDurationDecimal(r[totalHoursCol]), 0) : 0;
+    const currentMonthHours = currentMonthHoursCol ? filtered.reduce((s, r) => s + parseDurationDecimal(r[currentMonthHoursCol]), 0) : 0;
+    const riskMonthHours = riskMonthHoursCol ? filtered.reduce((s, r) => s + parseDurationDecimal(r[riskMonthHoursCol]), 0) : 0;
     const pendingHours = totalHours - currentMonthHours;
     const paymentPendingHours = (paymentStatusCol && currentMonthHoursCol)
       ? filtered.reduce((s, r) => {
           const isPending = String(r[paymentStatusCol] ?? '').trim().toLowerCase() === 'pending';
-          return isPending ? s + num(r[currentMonthHoursCol]) : s;
+          return isPending ? s + parseDurationDecimal(r[currentMonthHoursCol]) : s;
         }, 0)
       : 0;
     const followupDue = followupDateCol
@@ -444,13 +504,20 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
         return timestampCol ? parseTimestamp(String(b[timestampCol] ?? '')) - parseTimestamp(String(a[timestampCol] ?? '')) : 0;
       });
     }
+    if (sortCol === totalHoursCol || sortCol === currentMonthHoursCol || sortCol === riskMonthHoursCol) {
+      return [...filtered].sort((a, b) => {
+        const av = parseDurationDecimal(a[sortCol]);
+        const bv = parseDurationDecimal(b[sortCol]);
+        return sortDir === 'asc' ? av - bv : bv - av;
+      });
+    }
     return [...filtered].sort((a, b) => {
       const av = a[sortCol] ?? '';
       const bv = b[sortCol] ?? '';
       if (typeof av === 'number' && typeof bv === 'number') return sortDir === 'asc' ? av - bv : bv - av;
       return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
     });
-  }, [filtered, sortCol, sortDir, yearCol, monthCol, timestampCol]);
+  }, [filtered, sortCol, sortDir, yearCol, monthCol, timestampCol, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -611,7 +678,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                     const val = String(row[h] ?? '');
                     const isUrl = h.toLowerCase().includes('url') || h.toLowerCase().includes('link');
                     return (
-                      <td key={h} className={`px-4 py-2 ${isDropdownCol(h) || isStatusLikeCol(h) || isDateCol(h) ? 'whitespace-nowrap' : 'break-words min-w-[120px] max-w-xs'}`}>
+                      <td key={h} className={`px-4 py-2 ${isDropdownCol(h) || isStatusLikeCol(h) || isDateCol(h) || isDurationCol(h) ? 'whitespace-nowrap' : 'break-words min-w-[120px] max-w-xs'}`}>
                         {isUrl && val && !isEditable ? (
                           <a href={val} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: 'var(--cn-accent)' }}>{val}</a>
                         ) : isDropdownCol(h) ? (
@@ -624,6 +691,12 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                           />
                         ) : isDateCol(h) ? (
                           <DateCell
+                            value={val}
+                            editable={isEditable && !!onCellChange}
+                            onSave={async v => { if (onCellChange) await onCellChange(row, h, v); }}
+                          />
+                        ) : isDurationCol(h) ? (
+                          <PmDurationCell
                             value={val}
                             editable={isEditable && !!onCellChange}
                             onSave={async v => { if (onCellChange) await onCellChange(row, h, v); }}
