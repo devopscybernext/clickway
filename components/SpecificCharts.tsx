@@ -10,6 +10,10 @@ import { SheetData } from '@/lib/googleSheets';
 import { memberColor, MONTHLY_BLOCK_MARKETING_NAMES } from '@/lib/memberColors';
 import { MARKETING_STATUS_OPTIONS } from '@/lib/config';
 
+// "Task Closed" is a Tasks Assigned-only action — Tasks Overview (team's own
+// view of their work) doesn't offer it.
+const MARKETING_STATUS_OPTIONS_OVERVIEW = MARKETING_STATUS_OPTIONS.filter(o => o !== 'Task Closed');
+
 // ─── Shared date-filter util (also used per-section) ──────────────────────────
 export type DateFilter = 'all' | 'daily' | 'weekly' | 'monthly';
 export function filterByDate(data: SheetData[], headers: string[], filter: DateFilter): SheetData[] {
@@ -236,11 +240,12 @@ export function parseHours(val: string): number {
   return isNaN(num) ? 0 : num;
 }
 
-// Deadline column is "DD/MM/YYYY" — parse to a local Date, or null if unparseable.
+// Deadline column is "M/D/YYYY" (confirmed against the live Marketing sheet,
+// e.g. "8/31/2026" = Aug 31) — parse to a local Date, or null if unparseable.
 function parseDeadlineDate(val: string): Date | null {
   const m = val.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   if (!m) return null;
-  const [, d, mo, y] = m;
+  const [, mo, d, y] = m;
   const date = new Date(Number(y), Number(mo) - 1, Number(d));
   return isNaN(date.getTime()) ? null : date;
 }
@@ -594,8 +599,9 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
   blockerColName?: string;
   nextStepsColName?: string;
 }) {
-  // Fields only become editable after clicking "Edit" — Time Logged On AC is
-  // exempt (it's the self-logging field for Push to Admin, always live).
+  // Fields (including Time Logged On AC) only become editable after clicking
+  // "Edit" — Push to Admin only appears once Edit mode is off again, so
+  // logging hours and pushing them are two clearly separate steps.
   const [editMode, setEditMode] = useState(false);
   const canEditFields = canEditStatus && editMode;
 
@@ -811,8 +817,9 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
           </button>
         )}
 
-        {/* Push to Admin button */}
-        {pushableTasks.length > 0 && (
+        {/* Push to Admin button — only once Edit mode is off, so logging
+            hours and pushing them are two clearly separate steps */}
+        {!editMode && pushableTasks.length > 0 && (
           <button
             onClick={e => { e.stopPropagation(); setShowPushConfirm(true); }}
             title="Push logged hours to Total Hours"
@@ -893,11 +900,10 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
             const pendingLabel = pending < 0 ? `+${Math.abs(pending).toFixed(2)} Hours` : `${pending.toFixed(2)} Hours`;
             const deadlines = tasks.map(t => parseDeadlineDate(t.deadline)).filter((d): d is Date => d !== null);
             const earliestDeadline = deadlines.length ? new Date(Math.min(...deadlines.map(d => d.getTime()))) : null;
-            const yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
-            yesterday.setHours(0, 0, 0, 0);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
             const daysLeft = earliestDeadline
-              ? Math.round((earliestDeadline.getTime() - yesterday.getTime()) / 86_400_000)
+              ? Math.round((earliestDeadline.getTime() - today.getTime()) / 86_400_000)
               : null;
             const daysLeftColor = daysLeft === null ? 'var(--cn-text-muted)' : daysLeft <= 0 ? '#dc2626' : daysLeft <= 3 ? '#f59e0b' : '#16a34a';
             return (
@@ -1077,7 +1083,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                     {/* Time Logged On AC */}
                     {showTimeLogged && (
                       <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
-                        {onStatusChange && timeLoggedColName && canEditStatus ? (
+                        {onStatusChange && timeLoggedColName && canEditFields ? (
                           <ResourceDurationEdit
                             value={t.timeLogged}
                             raw={t._raw}
@@ -1095,7 +1101,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                           raw={t._raw}
                           colName={statusColName}
                           onStatusChange={onStatusChange}
-                          options={showMarketingCols ? MARKETING_STATUS_OPTIONS : undefined}
+                          options={showMarketingCols ? MARKETING_STATUS_OPTIONS_OVERVIEW : undefined}
                         />
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize" style={{ background: sColor + '20', color: sColor }}>
@@ -1367,7 +1373,7 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
                   )}
                   <td className="px-4 py-2">
                     {onStatusChange && statusColName && rowCanEditStatus ? (
-                      <ResourceStatusSelect value={t.status || 'No Action Taken'} raw={t._raw} colName={statusColName} onStatusChange={onStatusChange} options={showMarketingCols ? MARKETING_STATUS_OPTIONS : undefined} />
+                      <ResourceStatusSelect value={t.status || 'No Action Taken'} raw={t._raw} colName={statusColName} onStatusChange={onStatusChange} options={showMarketingCols ? MARKETING_STATUS_OPTIONS_OVERVIEW : undefined} />
                     ) : (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize" style={{ background: sColor + '20', color: sColor }}>
                         <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: sColor }} />
