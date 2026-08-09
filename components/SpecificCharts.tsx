@@ -2543,11 +2543,13 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
       if (tab === 'dayafter') return (b === 'day after tomorrow' || b === 'dayafter' || b === 'day after' || b === 'everyday');
       return true;
     });
-    // Hours = Today + Everyday bucket tasks only, excluding closed/n/a tasks
-    // (for both status and header display)
-    const displayHours = myTasks
-      .filter(r => { const b = getBucket(r); return (b === 'today' || b === 'everyday') && !SKIP_STATUSES.includes(getStatus(r).toLowerCase()); })
-      .reduce((s, r) => s + getTime(r), 0);
+    // Hours drive both the status badge and the header display, so they're
+    // summed straight from tabTasks (the same set tabCount and the task list
+    // use) rather than re-filtering myTasks — otherwise a resource with only
+    // e.g. a Today task and nothing for Tomorrow would show "0 Tasks" on the
+    // Tomorrow tab while the badge still read "Partially Occupied" from
+    // stale Today hours.
+    const displayHours = tabTasks.reduce((s, r) => s + getTime(r), 0);
     const tabHours = displayHours;
     const tabCount = tabTasks.length;
 
