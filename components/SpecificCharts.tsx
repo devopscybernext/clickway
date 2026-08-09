@@ -632,6 +632,11 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
     });
     return [...map.entries()].sort((a, b) => b[1].length - a[1].length);
   })();
+  // Web and SMM just get one flat list of rows — grouping by project (with
+  // the Est/Total/Pending/Days Left header) is PPC/SEO-only, same gate as
+  // showProjectStats.
+  const groupByProject = showProjectStats;
+  const displayGroups: typeof projectGroups = groupByProject ? projectGroups : [['', visibleTasks]];
   // Fixed per-column pixel widths so the table never squishes/overlaps —
   // once the sum exceeds the container, overflow-x-auto scrolls instead.
   const cardTableMinWidth =
@@ -900,10 +905,11 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
         </div>
       )}
 
-      {/* Expanded task list — grouped into one card per project */}
+      {/* Expanded task list — grouped into one card per project for PPC/SEO,
+          one flat list of rows for Web/SMM */}
       {open && visibleTasks.length > 0 && (
         <div style={{ borderTop: '1px solid var(--cn-border)' }} className="p-3 sm:p-4 flex flex-col gap-3">
-          {projectGroups.map(([project, tasks]) => {
+          {displayGroups.map(([project, tasks]) => {
             const sumEst = tasks.reduce((s, t) => s + parseHours(t.timeEst), 0);
             const sumTotal = tasks.reduce((s, t) => s + parseHours(t.totalHoursVal), 0);
             const pending = sumEst - sumTotal;
@@ -919,25 +925,27 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
               : null;
             const daysLeftColor = daysLeft === null ? 'var(--cn-text-muted)' : daysLeft <= 0 ? '#dc2626' : daysLeft <= 3 ? '#f59e0b' : '#16a34a';
             return (
-          <div key={project} className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--cn-border)', background: 'var(--cn-bg-card)' }}>
-            <div className="px-3 py-2 flex items-center justify-between gap-3 flex-wrap" style={{ borderBottom: '1px solid var(--cn-border)', background: 'var(--cn-bg-input)' }}>
-              <p className="text-xs font-bold truncate" style={{ color: 'var(--cn-text-primary)' }}>{project}</p>
-              <div className="flex items-center gap-2 shrink-0">
-                {showProjectStats && (
-                  <div className="flex items-center gap-2 text-[10px]">
-                    <span style={{ color: 'var(--cn-text-muted)' }}>Est. Hours <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{sumEst.toFixed(2)}h</span></span>
-                    <span style={{ color: 'var(--cn-text-muted)' }}>Spend Hours <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{sumTotal.toFixed(2)}h</span></span>
-                    <span style={{ color: isSurpassed ? '#dc2626' : 'var(--cn-text-muted)' }}>{pendingWordLabel} <span className="font-semibold">{pendingValueLabel}</span></span>
-                    {daysLeft !== null && (
-                      <span className="px-1.5 py-0.5 rounded-full font-semibold" style={{ background: daysLeftColor + '18', color: daysLeftColor }}>
-                        {daysLeft} Day{Math.abs(daysLeft) === 1 ? '' : 's'} Left
-                      </span>
-                    )}
-                  </div>
-                )}
-                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'var(--cn-bg-card)', color: 'var(--cn-text-muted)' }}>{tasks.length}</span>
+          <div key={project || 'flat'} className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--cn-border)', background: 'var(--cn-bg-card)' }}>
+            {groupByProject && (
+              <div className="px-3 py-2 flex items-center justify-between gap-3 flex-wrap" style={{ borderBottom: '1px solid var(--cn-border)', background: 'var(--cn-bg-input)' }}>
+                <p className="text-xs font-bold truncate" style={{ color: 'var(--cn-text-primary)' }}>{project}</p>
+                <div className="flex items-center gap-2 shrink-0">
+                  {showProjectStats && (
+                    <div className="flex items-center gap-2 text-[10px]">
+                      <span style={{ color: 'var(--cn-text-muted)' }}>Est. Hours <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{sumEst.toFixed(2)}h</span></span>
+                      <span style={{ color: 'var(--cn-text-muted)' }}>Spend Hours <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{sumTotal.toFixed(2)}h</span></span>
+                      <span style={{ color: isSurpassed ? '#dc2626' : 'var(--cn-text-muted)' }}>{pendingWordLabel} <span className="font-semibold">{pendingValueLabel}</span></span>
+                      {daysLeft !== null && (
+                        <span className="px-1.5 py-0.5 rounded-full font-semibold" style={{ background: daysLeftColor + '18', color: daysLeftColor }}>
+                          {daysLeft} Day{Math.abs(daysLeft) === 1 ? '' : 's'} Left
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'var(--cn-bg-card)', color: 'var(--cn-text-muted)' }}>{tasks.length}</span>
+                </div>
               </div>
-            </div>
+            )}
             <div className="overflow-x-auto">
           <table className="text-xs table-fixed" style={{ width: '100%', minWidth: cardTableMinWidth }}>
             <colgroup>
