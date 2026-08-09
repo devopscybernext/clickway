@@ -413,8 +413,31 @@ function BigStaticClock({ h, m, size = 160, accentColor = '#27272a' }: { h: numb
   );
 }
 
-function TimeConverter({ now, zone, onZoneChange, toZone, onToZoneChange, dateTime, onDateTimeChange }: {
-  now: Date; zone: string; onZoneChange: (z: string) => void;
+// Returns the UTC offset in minutes for `timeZone` at the instant `date`
+// (i.e. wall-clock-in-zone = date + offset). DST-aware and independent of
+// the browser's own local timezone — unlike parsing a formatted string back
+// through `new Date(...)`, which implicitly reinterprets it as browser-local.
+function zoneOffsetMinutes(date: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone, hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(date);
+  const get = (type: string) => Number(parts.find(p => p.type === type)?.value ?? 0);
+  const asUTC = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
+  return (asUTC - date.getTime()) / 60000;
+}
+
+// Resolves a wall-clock date/time that's stated to be IN `timeZone` to the
+// true UTC instant it represents (accurate outside DST-transition edge cases).
+function zonedWallTimeToUTC(year: number, month: number, day: number, hour: number, minute: number, timeZone: string): Date {
+  const guessUTC = Date.UTC(year, month - 1, day, hour, minute);
+  const offset = zoneOffsetMinutes(new Date(guessUTC), timeZone);
+  return new Date(guessUTC - offset * 60000);
+}
+
+function TimeConverter({ zone, onZoneChange, toZone, onToZoneChange, dateTime, onDateTimeChange }: {
+  zone: string; onZoneChange: (z: string) => void;
   toZone: string; onToZoneChange: (z: string) => void;
   dateTime: string; onDateTimeChange: (d: string) => void;
 }) {
@@ -430,40 +453,46 @@ function TimeConverter({ now, zone, onZoneChange, toZone, onToZoneChange, dateTi
     if (!inputDateTime) return null;
     const [datePart, timePart] = inputDateTime.split('T');
     if (!datePart || !timePart) return null;
+    const [yStr, moStr, dStr] = datePart.split('-');
     const [hStr, mStr] = timePart.split(':');
+    const y  = parseInt(yStr ?? '0', 10);
+    const mo = parseInt(moStr ?? '0', 10);
+    const d  = parseInt(dStr ?? '0', 10);
     const srcH24 = parseInt(hStr ?? '0', 10);
     const srcM   = parseInt(mStr ?? '0', 10);
-    if (isNaN(srcH24) || isNaN(srcM)) return null;
+    if ([y, mo, d, srcH24, srcM].some(n => isNaN(n))) return null;
 
-    const paddedH = String(srcH24).padStart(2, '0');
-    const paddedM = String(srcM).padStart(2, '0');
-
-    const fakeLocal = new Date(`${datePart}T${paddedH}:${paddedM}:00`);
-    const fromOffset = (new Date(now.toLocaleString('en-US', { timeZone: fromZone })).getTime() - now.getTime());
-    const toOffset    = (new Date(now.toLocaleString('en-US', { timeZone: toZone })).getTime() - now.getTime());
-    const toDate = new Date(fakeLocal.getTime() + (toOffset - fromOffset));
+    // The datetime-local input's wall-clock time is stated to be IN
+    // fromZone — resolve it to the real UTC instant it represents, then
+    // format that single instant natively in both zones. (Previously this
+    // parsed the input as browser-local time and re-formatted with an
+    // explicit target timeZone, double-applying the offset — it only
+    // "worked" when the viewer's browser zone happened to match whichever
+    // zone was being displayed.)
+    const trueInstant = zonedWallTimeToUTC(y, mo, d, srcH24, srcM, fromZone);
 
     // Target h/m for clock hands
     const toParts = new Intl.DateTimeFormat('en-US', {
       timeZone: toZone, hour: 'numeric', minute: 'numeric', hour12: false,
-    }).formatToParts(toDate);
+    }).formatToParts(trueInstant);
     const toH = Number(toParts.find(p => p.type === 'hour')?.value ?? 0) % 24;
     const toM = Number(toParts.find(p => p.type === 'minute')?.value ?? 0);
 
     const toTime = new Intl.DateTimeFormat('en-US', {
       timeZone: toZone, hour: '2-digit', minute: '2-digit', hour12: true,
-    }).format(toDate);
+    }).format(trueInstant);
     const toDateStr = new Intl.DateTimeFormat('en-US', {
       timeZone: toZone, weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
-    }).format(toDate);
+    }).format(trueInstant);
 
-    // Source display time
+    // Source display — same true instant, formatted back in fromZone
+    // (round-trips exactly to what was typed)
     const srcTime = new Intl.DateTimeFormat('en-US', {
-      hour: '2-digit', minute: '2-digit', hour12: true,
-    }).format(fakeLocal);
+      timeZone: fromZone, hour: '2-digit', minute: '2-digit', hour12: true,
+    }).format(trueInstant);
     const srcDateStr = new Intl.DateTimeFormat('en-US', {
-      weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
-    }).format(fakeLocal);
+      timeZone: fromZone, weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
+    }).format(trueInstant);
 
     const toStatus = getDayStatus(toH);
     const srcStatus = getDayStatus(srcH24);
@@ -478,8 +507,9 @@ function TimeConverter({ now, zone, onZoneChange, toZone, onToZoneChange, dateTi
     const toSubLabel = toEntry?.sublabel ?? toZone;
     const toFlag      = toEntry?.flag ?? '🌍';
 
-    // offset label
-    const diffMin = Math.round((toOffset - fromOffset) / 60000);
+    // offset label — computed at the actual selected instant, so it's
+    // correct even when from/to observe DST differently at that date
+    const diffMin = Math.round(zoneOffsetMinutes(trueInstant, toZone) - zoneOffsetMinutes(trueInstant, fromZone));
     const diffH = Math.floor(Math.abs(diffMin) / 60);
     const diffM = Math.abs(diffMin) % 60;
     const offsetLabel = diffMin === 0 ? 'Same time as source'
@@ -487,7 +517,7 @@ function TimeConverter({ now, zone, onZoneChange, toZone, onToZoneChange, dateTi
 
     return { srcH24, srcM, srcTime, srcDateStr, srcCity, srcSubLabel, srcFlag, srcStatus,
              toH, toM, toTime, toDateStr, toStatus, toCity, toSubLabel, toFlag, offsetLabel };
-  }, [inputDateTime, fromZone, toZone, now]);
+  }, [inputDateTime, fromZone, toZone]);
 
   return (
     <div className="cn-card rounded-xl p-5 mt-2" style={{ background: 'var(--cn-bg-card)', border: '1px solid var(--cn-border)' }}>
@@ -662,7 +692,6 @@ export default function ClockRoom() {
       {/* Timezone Converter tab — always mounted to preserve state */}
       <div style={{ display: tab === 'converter' ? 'block' : 'none' }}>
         <TimeConverter
-          now={now}
           zone={converterZone} onZoneChange={setConverterZone}
           toZone={converterToZone} onToZoneChange={setConverterToZone}
           dateTime={converterDateTime} onDateTimeChange={setConverterDateTime}
