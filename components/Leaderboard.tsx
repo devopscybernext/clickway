@@ -5,6 +5,7 @@ import { SheetData } from '@/lib/googleSheets';
 import { Trophy, RefreshCw } from 'lucide-react';
 import { memberColor } from '@/lib/memberColors';
 import { AuthUser } from '@/lib/auth';
+import { parseHours } from './SpecificCharts';
 
 interface Props {
   bandwidthData: SheetData[];
@@ -64,13 +65,6 @@ function getMonthStart(): Date {
   return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
 }
 
-// ─── Hour parser ──────────────────────────────────────────────────────────────
-function parseHours(val: unknown): number {
-  const s = String(val ?? '').trim().toLowerCase();
-  const n = parseFloat(s);
-  return isNaN(n) ? 0 : n;
-}
-
 // ─── Score calculator ─────────────────────────────────────────────────────────
 export function calcLeaderboard(
   bandwidthData: SheetData[],
@@ -121,7 +115,7 @@ export function calcLeaderboard(
       const status   = statusCol   ? String(task[statusCol]   ?? '').trim().toLowerCase() : '';
       const pmStatus = pmStatusCol ? String(task[pmStatusCol] ?? '').trim().toLowerCase() : '';
       const taskName = String(task['Task Name'] ?? '').trim().toLowerCase();
-      let hours      = timeEstCol  ? parseHours(task[timeEstCol]) : 0;
+      let hours      = timeEstCol  ? parseHours(String(task[timeEstCol] ?? '')) : 0;
 
       // Check if task is QA/Testing — only applies to Vinay
       // Deduct 70%, keep 30% of hours. Points = actualHours × 2 (base rate only, no TC/PA rates)

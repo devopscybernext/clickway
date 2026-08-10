@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronDown as ChevDown, ChevronLeft, ChevronRight, Copy, Check, Pencil } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
-import { STATUS_COLORS, parseHours, parseHHMM, formatHHMM, DURATION_HOUR_OPTIONS, DURATION_MINUTE_OPTIONS } from './SpecificCharts';
+import { STATUS_COLORS, formatHHMM, toHM, DURATION_HOUR_OPTIONS, DURATION_MINUTE_OPTIONS } from './SpecificCharts';
 
 const PAGE_SIZE = 30;
 
@@ -597,20 +597,6 @@ function InlineEditCell({ value, row, col, onStatusChange }: InlineEditCellProps
   );
 }
 
-// ─── Time Estimation / Task Estimation — HH.MM duration entry ─────────────────
-// Existing values are free text like "1 Hour" / "0.5 Hour" (not the
-// "HH.MM" format formatHHMM writes) — fall back to parseHours()'s decimal
-// and convert to H/M so editing an old estimate doesn't reset it to 00.00.
-function toHM(val: string): { h: number; m: number } {
-  const strict = parseHHMM(val);
-  if (strict.h || strict.m) return strict;
-  const decimal = parseHours(val);
-  if (!decimal) return { h: 0, m: 0 };
-  const h = Math.floor(decimal);
-  const m = Math.round((decimal - h) * 60);
-  return m === 60 ? { h: h + 1, m: 0 } : { h, m };
-}
-
 function TimeEstDurationCell({ value, row, col, onStatusChange }: {
   value: string; row: SheetData; col: string;
   onStatusChange: (row: SheetData, col: string, newValue: string) => Promise<void>;
@@ -1170,6 +1156,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                       const isPmStatus = h.toLowerCase().includes('pm status');
                       const isTimeLogged = h.toLowerCase().includes('time logged');
                       const isTimeEst = h.toLowerCase().includes('time estim') || h.toLowerCase().includes('task estim');
+                      const isTotalHours = h.toLowerCase().includes('total hours') || h.toLowerCase().includes('total time');
                       const isAssigned = h.toLowerCase().includes('assigned person') || h.toLowerCase().includes('assigned to');
                       const isBucket = h.toLowerCase().includes('task daily bucket') || (h.toLowerCase().includes('bucket') && !h.toLowerCase().includes('today'));
                       const isTodayBucketSet = h.toLowerCase().includes('today bucket') || h.toLowerCase().includes('bucket set');
@@ -1302,6 +1289,8 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                               onStatusChange={onStatusChange}
                             />
                           ) : isTimeEst ? (
+                            val.trim() ? <span className="whitespace-nowrap">{formatHHMM(toHM(val).h, toHM(val).m)}</span> : '—'
+                          ) : isTotalHours ? (
                             val.trim() ? <span className="whitespace-nowrap">{formatHHMM(toHM(val).h, toHM(val).m)}</span> : '—'
                           ) : isBucket ? (BUCKET_OPTIONS.find(o => o.toLowerCase() === normalizeBucket(val)) ?? val) || '—'
                           : val || '—'}

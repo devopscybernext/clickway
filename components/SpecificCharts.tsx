@@ -235,13 +235,24 @@ function teamPhoto(name: string): string {
   return key ? TEAM_PHOTOS[key] : '';
 }
 
-// Parse time strings like "3 Hours", "0.5 Hour", "1.5 Hours", "90 min", "3" → number of hours
+// Parse time strings like "3 Hours", "0.5 Hour", "1.5 Hours", "90 min", "3",
+// or the new "HH.MM Hours" literal-minutes notation ("01.30 Hours" = 1h30m =
+// 1.5 decimal hours here, not 1.3) → number of decimal hours. Every "Time
+// Estimation"/"Total Hours" sum in the app (bandwidth thresholds, PPC/SEO
+// stat cards, Push to Admin) goes through this, so it must recognize
+// whichever notation the cell actually holds.
 export function parseHours(val: string): number {
   if (!val) return 0;
-  const lower = val.trim().toLowerCase();
+  const trimmed = val.trim();
+  const { h, m } = parseHHMM(trimmed);
+  if (h || m) return h + m / 60;
+  const lower = trimmed.toLowerCase();
   // "X hour(s)" or "X hr(s)"
   const hourMatch = lower.match(/^([\d.]+)\s*h/);
   if (hourMatch) return parseFloat(hourMatch[1]) || 0;
+  // "X min(s)" — minutes only, no hour part
+  const minMatch = lower.match(/^([\d.]+)\s*m/);
+  if (minMatch) return (parseFloat(minMatch[1]) || 0) / 60;
   // plain number
   const num = parseFloat(lower);
   return isNaN(num) ? 0 : num;
@@ -569,6 +580,17 @@ export function formatHHMM(h: number, m: number): string {
 export function hhmmToDecimalHours(val: string): number {
   const { h, m } = parseHHMM(val);
   return h + m / 60;
+}
+// H/M pair for display — tries the strict HH.MM read first, falls back to
+// converting a legacy decimal-hours value (e.g. "1.5 Hour" -> 1h30m).
+export function toHM(val: string): { h: number; m: number } {
+  const strict = parseHHMM(val);
+  if (strict.h || strict.m) return strict;
+  const decimal = parseHours(val);
+  if (!decimal) return { h: 0, m: 0 };
+  const h = Math.floor(decimal);
+  const m = Math.round((decimal - h) * 60);
+  return m === 60 ? { h: h + 1, m: 0 } : { h, m };
 }
 
 function ResourceDurationEdit({ value, raw, colName, onStatusChange }: {
@@ -1055,12 +1077,12 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                     </td>
                     {/* Est. */}
                     <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
-                      {t.timeEst || '—'}
+                      {t.timeEst.trim() ? formatHHMM(toHM(t.timeEst).h, toHM(t.timeEst).m) : '—'}
                     </td>
                     {/* Total Hours — always read-only, sourced from the sheet */}
                     {showTotalHours && (
                       <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
-                        {t.totalHoursVal || '—'}
+                        {t.totalHoursVal.trim() ? formatHHMM(toHM(t.totalHoursVal).h, toHM(t.totalHoursVal).m) : '—'}
                       </td>
                     )}
                     {/* Task Daily Bucket */}
@@ -1378,12 +1400,12 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
                   </td>
                   {!vinayQaMode && !showMarketingCols && (
                     <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
-                      {t.timeEst || '—'}
+                      {t.timeEst.trim() ? formatHHMM(toHM(t.timeEst).h, toHM(t.timeEst).m) : '—'}
                     </td>
                   )}
                   {showTotalHours && !vinayQaMode && !showMarketingCols && (
                     <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
-                      {t.totalHoursVal || '—'}
+                      {t.totalHoursVal.trim() ? formatHHMM(toHM(t.totalHoursVal).h, toHM(t.totalHoursVal).m) : '—'}
                     </td>
                   )}
                   <td className="px-4 py-2">
@@ -2826,7 +2848,9 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
                                     : <span style={{ color: 'var(--cn-text-faint)' }}>—</span>}
                                 </td>
                                 {showTotalHours2 && (
-                                  <td className="px-3 py-2.5" style={{ minWidth: 60, color: 'var(--cn-text-muted)' }}>{t.totalHoursVal || '—'}</td>
+                                  <td className="px-3 py-2.5" style={{ minWidth: 60, color: 'var(--cn-text-muted)' }}>
+                                    {t.totalHoursVal.trim() ? formatHHMM(toHM(t.totalHoursVal).h, toHM(t.totalHoursVal).m) : '—'}
+                                  </td>
                                 )}
                                 <td className="px-3 py-2.5" style={{ minWidth: 110 }}>
                                   <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold"
