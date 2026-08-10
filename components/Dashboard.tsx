@@ -1258,7 +1258,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
             >
               <div className="px-4 sm:px-6 pt-4 sm:pt-5 pb-3">
                 <h2 className="text-sm font-semibold" style={{ color: 'var(--cn-text-primary)' }}>Leave Status</h2>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>Click a status to edit it.</p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>Click Edit to change a status. Anything other than &quot;No Action Taken&quot; overrides that resource&apos;s status everywhere.</p>
               </div>
               <div style={{ borderTop: '1px solid var(--cn-border)' }} />
               <LeaveStatus data={availData} headers={availHeaders} onUpdate={handleAvailUpdate} loading={loading} />

@@ -247,6 +247,15 @@ export function parseHours(val: string): number {
   return isNaN(num) ? 0 : num;
 }
 
+// The Leave sheet's Leave column holds free text ("No Action Taken" = not on
+// leave, anything else the admin types — "Two Days Leave", "Half Day",
+// whatever — = on leave) rather than a fixed yes/no enum, so any non-blank
+// value other than the default overrides a resource's status everywhere.
+function isOnLeaveText(v: string): boolean {
+  const t = v.trim().toLowerCase();
+  return t !== '' && t !== 'no action taken';
+}
+
 // Deadline column is "M/D/YYYY" (confirmed against the live Marketing sheet,
 // e.g. "8/31/2026" = Aug 31) — parse to a local Date, or null if unparseable.
 function parseDeadlineDate(val: string): Date | null {
@@ -1450,7 +1459,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
       const name   = availNameCol ? String(r[availNameCol] ?? '').trim().toLowerCase() : '';
       const status = availStatusCol ? String(r[availStatusCol] ?? '').trim().toLowerCase() : '';
       const leave  = availLeaveCol  ? String(r[availLeaveCol]  ?? '').trim().toLowerCase() : '';
-      if (name && (status.includes('leave') || leave.includes('leave') || leave === 'yes' || leave === 'true' || leave === '1')) {
+      if (name && (status.includes('leave') || isOnLeaveText(leave))) {
         leaveSet.add(name);
       }
     });
@@ -2558,7 +2567,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
     let onLeave = false;
     if (availData && availNameCol && availStatusCol) {
       const av = availData.find(r => String(r[availNameCol] ?? '').trim().toLowerCase() === name.toLowerCase());
-      if (av) { const v = String(av[availStatusCol] ?? '').trim().toLowerCase(); onLeave = v.includes('leave') || v === 'absent'; }
+      if (av) { const v = String(av[availStatusCol] ?? '').trim().toLowerCase(); onLeave = isOnLeaveText(v); }
     }
 
     // PPC and SEO's "Everyday" tasks carry a full monthly hour block rather
@@ -2902,7 +2911,7 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
     let onLeave = false;
     if (availData && availNameCol && availStatusCol) {
       const av = availData.find(r => String(r[availNameCol] ?? '').trim().toLowerCase() === name.toLowerCase());
-      if (av) { const v = String(av[availStatusCol] ?? '').trim().toLowerCase(); onLeave = v.includes('leave') || v === 'absent'; }
+      if (av) { const v = String(av[availStatusCol] ?? '').trim().toLowerCase(); onLeave = isOnLeaveText(v); }
     }
 
     const isMonthlyBlock = MONTHLY_BLOCK_MARKETING_NAMES.has(name.trim().toLowerCase());
@@ -3002,7 +3011,7 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
       const av = availData.find(r => String(r[availNameCol] ?? '').trim().toLowerCase() === name.toLowerCase());
       if (!av) return false;
       const v = String(av[availStatusCol] ?? '').trim().toLowerCase();
-      return v.includes('leave') || v === 'absent';
+      return isOnLeaveText(v);
     })();
     if (isLeave) { onLeave++; return; }
     const todayH = sheet1Data
