@@ -29,11 +29,21 @@ export const PM_PROJECT_FORM_URLS: Record<string, string> = {
 
 // Tab names inside the Sheet 1 spreadsheet
 export const TAB_BANDWIDTH    = 'Bandwidth Allocation';
+// No longer fetched directly (see LEAVE_SHEET_ID below) — kept only so
+// /api/bandwidth-tasks' tab auto-discovery keeps excluding it by name for
+// as long as the tab still exists in the spreadsheet.
 export const TAB_AVAILABILITY = 'Resource Availability';
 
-// Ranges — Resource Availability has a title in row 1, so start from row 2
-export const RANGE_BANDWIDTH    = `'${TAB_BANDWIDTH}'!A1:Z10000`;
-export const RANGE_AVAILABILITY = `'${TAB_AVAILABILITY}'!A2:Z10000`;
+export const RANGE_BANDWIDTH = `'${TAB_BANDWIDTH}'!A1:Z10000`;
+
+// Leave-status spreadsheet — a separate sheet an admin maintains directly,
+// replacing the old in-spreadsheet "Resource Availability" tab. Its
+// "UserDetails" tab is unrelated to the login-credentials UserDetails sheet
+// (USER_DETAILS_SHEET_ID) — same tab name, different spreadsheet. Columns:
+// Team (holds the person's name), Email ID, Leave
+export const LEAVE_SHEET_ID = '1jfq6IC01IMfrvw4VjZLu3qnOwpC-opwz4qsIeExKItU';
+export const TAB_LEAVE   = 'UserDetails';
+export const RANGE_LEAVE = `'${TAB_LEAVE}'!A1:Z10000`;
 
 // Leaderboard manual-points tab (inside Sheet 1 spreadsheet)
 export const TAB_LEADERBOARD   = 'Leaderboard';

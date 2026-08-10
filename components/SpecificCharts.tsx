@@ -1438,8 +1438,10 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
   // Find the email column in the sheet (used to match tasks to the logged-in PM)
   const emailCol = headers.find(h => h.toLowerCase().includes('email'));
 
-  // Build leave map from availability sheet
-  const availNameCol   = availHeaders.find(h => h.toLowerCase().includes('name'));
+  // Build leave map from the Leave spreadsheet — its name column is
+  // literally headed "Team" (despite holding a person's name), and its
+  // status is free text like "Two Days Leave", not a fixed yes/no enum.
+  const availNameCol   = availHeaders.find(h => h.toLowerCase().includes('name') || h.toLowerCase() === 'team');
   const availStatusCol = availHeaders.find(h => h.toLowerCase().includes('daily status'));
   const availLeaveCol  = availHeaders.find(h => h.toLowerCase().includes('leave zone') || h.toLowerCase().includes('leave'));
   const leaveSet = new Set<string>();
@@ -1448,7 +1450,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
       const name   = availNameCol ? String(r[availNameCol] ?? '').trim().toLowerCase() : '';
       const status = availStatusCol ? String(r[availStatusCol] ?? '').trim().toLowerCase() : '';
       const leave  = availLeaveCol  ? String(r[availLeaveCol]  ?? '').trim().toLowerCase() : '';
-      if (name && (status.includes('leave') || leave === 'yes' || leave === 'true' || leave === '1')) {
+      if (name && (status.includes('leave') || leave.includes('leave') || leave === 'yes' || leave === 'true' || leave === '1')) {
         leaveSet.add(name);
       }
     });
@@ -2499,7 +2501,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
   // shows whenever the sheet has it, independent of team.
   const showTotalHours2 = !!totalHoursCol2;
   const pmEmailCol   = findCol(sheet1Headers, 'pm email', 'email');
-  const availNameCol   = availHeaders ? findCol(availHeaders, 'name', 'resource', 'person') : undefined;
+  const availNameCol   = availHeaders ? findCol(availHeaders, 'name', 'resource', 'person', 'team') : undefined;
   const availStatusCol = availHeaders ? findCol(availHeaders, 'availability', 'status', 'leave') : undefined;
 
   // Auto-open the first card once data is available (opt-in — the main
@@ -2879,7 +2881,7 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
   const bucketCol   = findCol(sheet1Headers, 'task daily bucket', 'bucket');
   const timeEstCol  = findCol(sheet1Headers, 'time estimation', 'time estimate', 'estimation');
   const statusCol   = findCol(sheet1Headers, 'task status', 'status');
-  const availNameCol   = availHeaders ? findCol(availHeaders, 'name', 'resource', 'person') : undefined;
+  const availNameCol   = availHeaders ? findCol(availHeaders, 'name', 'resource', 'person', 'team') : undefined;
   const availStatusCol = availHeaders ? findCol(availHeaders, 'availability', 'status', 'leave') : undefined;
 
   if (!sheet1Data.length || !resourceCol) return null;
@@ -2982,7 +2984,7 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
   if (!sheet1Data.length) return null;
   const timeEstCol  = findCol(sheet1Headers, 'time estimation', 'time estimate', 'estimation');
   const projectCol  = findCol(sheet1Headers, 'project name', 'project');
-  const availNameCol   = availHeaders ? findCol(availHeaders, 'name', 'resource', 'person') : undefined;
+  const availNameCol   = availHeaders ? findCol(availHeaders, 'name', 'resource', 'person', 'team') : undefined;
   const availStatusCol = availHeaders ? findCol(availHeaders, 'availability', 'status', 'leave') : undefined;
 
   const getStatus  = (r: SheetData) => statusCol   ? String(r[statusCol]   ?? '').trim().toLowerCase() : '';

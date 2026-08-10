@@ -1,7 +1,7 @@
 import { google } from 'googleapis';
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySession, COOKIE_NAME } from '@/lib/session';
-import { TAB_USERS } from '@/lib/config';
+import { TAB_USERS, USER_DETAILS_SHEET_ID } from '@/lib/config';
 import { invalidateSheetCache } from '@/lib/googleSheets';
 
 // Convert 0-based column index to A1 letter(s): 0→A, 25→Z, 26→AA …
@@ -35,8 +35,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Credentials live only behind /api/login — never writable through this route.
-    if (sheetName && sheetName.trim().toLowerCase() === TAB_USERS.toLowerCase()) {
+    // Credentials live only behind /api/login — never writable through this
+    // route. Scoped to the actual credentials spreadsheet (not just the tab
+    // name) since other spreadsheets — e.g. the Leave sheet — happen to
+    // reuse "UserDetails" as a tab name for unrelated data.
+    if (spreadsheetId === USER_DETAILS_SHEET_ID && sheetName && sheetName.trim().toLowerCase() === TAB_USERS.toLowerCase()) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

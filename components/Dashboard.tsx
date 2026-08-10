@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SheetData } from '@/lib/googleSheets';
-import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, PM_PROJECT_FORM_URLS, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, MARKETING_ASSIGNED_PERSONS, WEB_TEAM, TAB_BANDWIDTH, RANGE_AVAILABILITY, TAB_AVAILABILITY, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
+import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, PM_PROJECT_FORM_URLS, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, MARKETING_ASSIGNED_PERSONS, WEB_TEAM, TAB_BANDWIDTH, LEAVE_SHEET_ID, TAB_LEAVE, RANGE_LEAVE, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
 
 import { AuthUser, SheetId, Team, getAllowedSheets, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, getTasksAssignedLockedTeam } from '@/lib/auth';
 import Sidebar from './Sidebar';
@@ -16,6 +16,7 @@ import HolidayCalendar from './HolidayCalendar';
 import AITools from './AITools';
 import Leaderboard, { calcLeaderboard, PersonStats } from './Leaderboard';
 import PMProjectBandwidth from './PMProjectBandwidth';
+import LeaveStatus from './LeaveStatus';
 import { AlertCircle, Sparkles, ChevronUp, ChevronDown, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 const REFRESH_INTERVAL    = 300_000;       // 5 min — core data (tasks, availability)
@@ -338,7 +339,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
       // Core data — 3 calls (all users need this)
       const [bw, av] = await Promise.all([
         fetchBandwidthTasks(),
-        fetchSheet(SHEET_IDS['1'], RANGE_AVAILABILITY, 2),
+        fetchSheet(LEAVE_SHEET_ID, RANGE_LEAVE),
       ]);
       // Blank/formatting-only rows and per-tab tagging are already handled
       // server-side by /api/bandwidth-tasks
@@ -497,7 +498,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     await fetch('/api/update-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ spreadsheetId: SHEET_IDS['1'], sheetName: TAB_AVAILABILITY, row: rowNum, colIndex, value: newValue }),
+      body: JSON.stringify({ spreadsheetId: LEAVE_SHEET_ID, sheetName: TAB_LEAVE, row: rowNum, colIndex, value: newValue }),
     });
     setAvailData(prev => prev.map(r => r['__row'] === rowNum ? { ...r, [colName]: newValue } : r));
   };
@@ -558,6 +559,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const isIndividualAnalysis = selectedSheet === '10';
   const isPmBandwidth       = selectedSheet === '11';
   const isTeamBandwidth     = selectedSheet === '12';
+  const isLeaveStatus       = selectedSheet === '2';
   const isTools             = selectedSheet === '14';
 
   // "Add New Project" form — only PMs with a configured intake form get the button
@@ -567,7 +569,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
   // ── Team roster filtering (Web/Marketing split for Team Bandwidth & Tasks Overview) ──
   const filterByRoster = (rows: SheetData[], rowHeaders: string[], roster: string[]) => {
-    const col = rowHeaders.find(h => h.toLowerCase().includes('assigned person') || h.toLowerCase().includes('assigned to') || h.toLowerCase() === 'name');
+    // 'team' matches the Leave spreadsheet's name column (header literally
+    // reads "Team" there, despite holding a person's name)
+    const col = rowHeaders.find(h => h.toLowerCase().includes('assigned person') || h.toLowerCase().includes('assigned to') || h.toLowerCase() === 'name' || h.toLowerCase() === 'team');
     if (!col || roster.length === 0) return [];
     const rosterLower = roster.map(r => r.toLowerCase());
     return rows.filter(r => rosterLower.includes(String(r[col] ?? '').trim().toLowerCase()));
@@ -1243,6 +1247,21 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   />
                 )}
               </div>
+            </section>
+          )}
+
+          {/* ── Leave Status — separate spreadsheet an admin maintains directly ── */}
+          {isLeaveStatus && (
+            <section
+              className="cn-card rounded-lg border transition-colors"
+              style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
+            >
+              <div className="px-4 sm:px-6 pt-4 sm:pt-5 pb-3">
+                <h2 className="text-sm font-semibold" style={{ color: 'var(--cn-text-primary)' }}>Leave Status</h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>Click a status to edit it.</p>
+              </div>
+              <div style={{ borderTop: '1px solid var(--cn-border)' }} />
+              <LeaveStatus data={availData} headers={availHeaders} onUpdate={handleAvailUpdate} loading={loading} />
             </section>
           )}
 

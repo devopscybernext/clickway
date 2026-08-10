@@ -92,14 +92,20 @@ const TEAM_MEMBER: SheetId[]     = ['3', '9', '7', '14'];
 const NO_PM_BANDWIDTH_NO_LB: SheetId[] = ['3', '6', '1', '9', '12', '14'];
 const TEAM_MEMBER_NO_LB: SheetId[]     = ['3', '9', '14'];
 
+// Leave Status ('2') — admin/PM/team-admin tiers only, not individual
+// contributors (WebTeam/MarketingTeam) or the legacy unmigrated role slugs.
+const FULL_ACCESS_WITH_LEAVE: SheetId[]        = ['3', '6', '1', '9', '11', '12', '2', '7', '14'];
+const NO_PM_BANDWIDTH_WITH_LEAVE: SheetId[]    = ['3', '6', '1', '9', '12', '2', '7', '14'];
+const NO_PM_BANDWIDTH_NO_LB_WITH_LEAVE: SheetId[] = ['3', '6', '1', '9', '12', '2', '14'];
+
 export const ROLE_SHEETS: Record<Role, SheetId[]> = {
-  HM:    FULL_ACCESS,
-  Admin: FULL_ACCESS,
-  Mod:   FULL_ACCESS,
-  PMWebAdmin:       FULL_ACCESS,
-  PMMarketingAdmin: FULL_ACCESS,
-  WebAdmin:       NO_PM_BANDWIDTH,
-  MarketingAdmin: NO_PM_BANDWIDTH_NO_LB,
+  HM:    FULL_ACCESS_WITH_LEAVE,
+  Admin: FULL_ACCESS_WITH_LEAVE,
+  Mod:   FULL_ACCESS_WITH_LEAVE,
+  PMWebAdmin:       FULL_ACCESS_WITH_LEAVE,
+  PMMarketingAdmin: FULL_ACCESS_WITH_LEAVE,
+  WebAdmin:       NO_PM_BANDWIDTH_WITH_LEAVE,
+  MarketingAdmin: NO_PM_BANDWIDTH_NO_LB_WITH_LEAVE,
   WebTeam:       TEAM_MEMBER,
   MarketingTeam: TEAM_MEMBER_NO_LB,
   // legacy
@@ -113,7 +119,7 @@ export const ROLE_SHEETS: Record<Role, SheetId[]> = {
 
 export const SHEET_LABELS: Record<SheetId, string> = {
   '1': 'Tasks Assigned',
-  '2': 'Resource Availability',
+  '2': 'Leave Status',
   '3': 'Dashboard',
   '4': 'Team',
   '5': 'Daily Bucket',
