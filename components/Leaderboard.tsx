@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { SheetData } from '@/lib/googleSheets';
 import { Trophy, RefreshCw } from 'lucide-react';
 import { memberColor } from '@/lib/memberColors';
-import { AuthUser } from '@/lib/auth';
+import { AuthUser, isAdminTierRole } from '@/lib/auth';
 import { parseHours } from './SpecificCharts';
 
 interface Props {
@@ -987,7 +987,7 @@ export default function Leaderboard({ bandwidthData, bandwidthHeaders, leaderboa
             {/* Detail panel — sticky on right */}
             <div className="lg:sticky lg:self-start min-w-0 overflow-hidden" style={{ top: 24 }}>
               {selectedStats && (
-                <DetailPanel stats={selectedStats} rank={selectedRank} maxPts={maxPts} isAdmin={['akash','admin','high','mod'].includes(user?.role ?? '')} />
+                <DetailPanel stats={selectedStats} rank={selectedRank} maxPts={maxPts} isAdmin={!!user && isAdminTierRole(user.role)} />
               )}
             </div>
 
@@ -1003,7 +1003,7 @@ export default function Leaderboard({ bandwidthData, bandwidthHeaders, leaderboa
       />
 
       {/* ── Admin Full Resources Table ── */}
-      {['akash', 'admin', 'high', 'mod'].includes(user?.role ?? '') && rankings.length > 0 && (
+      {!!user && isAdminTierRole(user.role) && rankings.length > 0 && (
         <div className="cn-card rounded-2xl border overflow-hidden"
           style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
           <div className="px-5 py-4 border-b flex items-center justify-between gap-4" style={{ borderColor: 'var(--cn-border)' }}>
