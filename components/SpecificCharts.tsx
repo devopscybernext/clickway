@@ -556,7 +556,12 @@ export function parseHHMM(val: string): { h: number; m: number } {
   if (!match) return { h: 0, m: 0 };
   const h = parseInt(match[1], 10);
   const m = parseInt(match[2], 10);
-  return { h: isNaN(h) ? 0 : h, m: isNaN(m) ? 0 : m };
+  // Minutes above 59 mean this wasn't actually HH.MM — e.g. a pre-existing
+  // decimal-hours value like "0.75 Hour" (legacy, meaning 45 minutes) has a
+  // 2-digit fraction that would otherwise misparse as "0h 75m". Reject it so
+  // callers (toHM()) fall back to decimal parsing instead.
+  if (isNaN(h) || isNaN(m) || m > 59) return { h: 0, m: 0 };
+  return { h, m };
 }
 export function formatHHMM(h: number, m: number): string {
   return `${String(h).padStart(2, '0')}.${String(m).padStart(2, '0')} Hours`;
