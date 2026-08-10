@@ -706,7 +706,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
   // Same columns/format as the Tasks Bucket table (FilteredDataTable.copyTable)
   // for Web; Marketing gets its own detail-field set instead.
   const COPY_COLS = showMarketingCols
-    ? ['Project Name', 'Task Name', 'Est. Hours', 'Total Hours', 'Action Taken Today', 'Performance Signal/Insights', 'Blocker', 'Next Steps', 'Task Status Updation']
+    ? ['Project Name', 'Task Name', 'Est. Hours', 'Total Hours', 'Time Logged On AC', 'Action Taken Today', 'Performance Signal/Insights', 'Blocker', 'Next Steps', 'Task Status Updation']
     : ['Project Name', 'Task Name', 'Task URL', 'Time Estimation', 'Time Logged On AC', 'Task Status'];
   const copyTable = async () => {
     // Only Today / Everyday tasks get copied — others (Tomorrow, Submitted, etc.) are excluded
@@ -715,7 +715,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
       return b === 'today' || b === 'everyday';
     });
     const rowsToCopy = showMarketingCols
-      ? copyableTasks.map(t => [t.project, t.task, t.timeEst, t.totalHoursVal, t.actionTakenToday, t.performanceSignal, t.blocker, t.nextSteps, t.status])
+      ? copyableTasks.map(t => [t.project, t.task, t.timeEst, t.totalHoursVal, t.timeLogged, t.actionTakenToday, t.performanceSignal, t.blocker, t.nextSteps, t.status])
       : copyableTasks.map(t => [t.project, t.task, t.taskUrl, t.timeEst, t.timeLogged, t.status]);
     const html = `
 <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;color:#111;">
@@ -1244,13 +1244,13 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
   const COPY_COLS = vinayQaMode
     ? ['Assigned Person', 'Project Name', 'Task Name', 'Task URL', 'Task Daily Bucket', 'Task Status']
     : showMarketingCols
-      ? ['Assigned Person', 'Project Name', 'Task Name', 'Est. Hours', 'Total Hours', 'Action Taken Today', 'Performance Signal/Insights', 'Blocker', 'Next Steps', 'Task Status Updation']
+      ? ['Assigned Person', 'Project Name', 'Task Name', 'Est. Hours', 'Total Hours', 'Time Logged On AC', 'Action Taken Today', 'Performance Signal/Insights', 'Blocker', 'Next Steps', 'Task Status Updation']
       : ['Assigned Person', 'Project Name', 'Task Name', 'Task URL', 'Time Estimation', 'Time Logged On AC', 'Task Status'];
   const copyTable = async () => {
     const rowsToCopy = vinayQaMode
       ? flatTasks.map(t => [t.person, t.project, t.task, t.taskUrl, t.bucket, t.status])
       : showMarketingCols
-        ? flatTasks.map(t => [t.person, t.project, t.task, t.timeEst, t.totalHoursVal, t.actionTakenToday, t.performanceSignal, t.blocker, t.nextSteps, t.status])
+        ? flatTasks.map(t => [t.person, t.project, t.task, t.timeEst, t.totalHoursVal, t.timeLogged, t.actionTakenToday, t.performanceSignal, t.blocker, t.nextSteps, t.status])
         : flatTasks.map(t => [t.person, t.project, t.task, t.taskUrl, t.timeEst, t.timeLogged, t.status]);
     const html = `
 <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;color:#111;">
