@@ -579,24 +579,27 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const webBandwidthData = filterByRoster(activeBandwidthData, bandwidthHeaders, WEB_TEAM);
   const webAvailData     = filterByRoster(availData, availHeaders, WEB_TEAM);
 
-  // Marketing — real data from the Marketing Team spreadsheet's single
-  // "Marketing Tasks" tab (Department column distinguishes SEO/PPC/SMM).
-  // No separate availability sheet exists for Marketing.
-  const marketingAvailData: SheetData[] = [];
+  // Marketing — tasks come from the separate Marketing Team spreadsheet's
+  // single "Marketing Tasks" tab (Department column distinguishes SEO/PPC/
+  // SMM), but the Leave spreadsheet covers every resource in one table, so
+  // it's the same availData filtered to the Marketing roster.
+  const marketingAvailData = filterByRoster(availData, availHeaders, MARKETING_ASSIGNED_PERSONS);
 
   // Dashboard analytics (sheet 3) — same Web/Marketing split as the other pages,
   // reusing the same generic (header-driven) components either way.
   const analyticsData         = analyticsTeam === 'web' ? activeBandwidthData : marketingTeamData;
   const analyticsHeaders      = analyticsTeam === 'web' ? bandwidthHeaders : marketingTeamHeaders;
   const analyticsAvailData    = analyticsTeam === 'web' ? availData : marketingAvailData;
-  const analyticsAvailHeaders = analyticsTeam === 'web' ? availHeaders : [];
+  // Leave data is one unified sheet/column-set for every team, so the
+  // headers are the same regardless of which team's rows are selected.
+  const analyticsAvailHeaders = availHeaders;
   const analyticsOnStatusChange = analyticsTeam === 'web' ? handleBandwidthStatusChange : handleMarketingTeamChange;
 
   // Tasks Assigned — same sort/search pipeline as searchFiltered, scoped to the selected team
   const tasksAssignedTeamData = tasksAssignedTeam === 'web' ? webBandwidthData : marketingTeamData;
   const tasksAssignedHeadersForSort = tasksAssignedTeam === 'web' ? bandwidthHeaders : marketingTeamHeaders;
   const tasksAssignedAvailData = tasksAssignedTeam === 'web' ? webAvailData : marketingAvailData;
-  const tasksAssignedAvailHeaders = tasksAssignedTeam === 'web' ? availHeaders : [];
+  const tasksAssignedAvailHeaders = availHeaders;
   const tasksAssignedSorted = isNewestFirst
     ? [...tasksAssignedTeamData].sort((a, b) => {
         const diff = parseRowTimestamp(b, tasksAssignedHeadersForSort) - parseRowTimestamp(a, tasksAssignedHeadersForSort);
@@ -1164,6 +1167,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     sheet1Data={marketingTeamData}
                     sheet1Headers={marketingTeamHeaders}
                     availData={marketingAvailData}
+                    availHeaders={availHeaders}
                     onStatusChange={handleMarketingTeamChange}
                     pmStatusColName={marketingTeamHeaders.find(h => h.toLowerCase().includes('pm status'))}
                     canEditPmStatus={isAdmin || isPmTier || isTeamAdmin}
@@ -1234,6 +1238,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     data={marketingTeamData}
                     headers={marketingTeamHeaders}
                     availData={marketingAvailData}
+                    availHeaders={availHeaders}
                     onStatusChange={handleMarketingTeamChange}
                     pmStatusColName={marketingTeamHeaders.find(h => h.toLowerCase().includes('pm status'))}
                     currentUserName={user.displayName}
