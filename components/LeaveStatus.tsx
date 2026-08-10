@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Pencil } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
+import { memberPhoto } from '@/lib/memberColors';
 
 interface Props {
   data: SheetData[];
@@ -21,11 +22,14 @@ function findCol(headers: string[], ...terms: string[]): string | undefined {
 }
 
 const NO_ACTION = 'No Action Taken';
-// A starting set of common values — any value an admin has already typed
-// into the sheet (e.g. "Two Days Leave") is unioned in below, so nothing
-// already in use ever falls out of the dropdown.
+// Matches the sheet's own data-validation dropdown exactly (including its
+// "More then" typo) — any value already typed into the sheet is still
+// unioned in below, so nothing already in use ever falls out of the list.
 const CANONICAL_LEAVE_OPTIONS = [
-  NO_ACTION, 'Half Day Leave', 'Full Day Leave', 'Two Days Leave', 'Sick Leave', 'Work From Home',
+  NO_ACTION,
+  'Short Leave ( Q1 )', 'Short Leave ( Q2 )', 'Short Leave ( Q3 )', 'Short Leave ( Q4 )',
+  'First Half Day Leave', 'Second Half Day Leave', 'Full Day Leave',
+  'Two Days Leave', 'Three Days Leave', 'More then Three Days Leave',
 ];
 
 // Anything other than blank/"No Action Taken" counts as on leave — this
@@ -54,8 +58,8 @@ function LeaveBadge({ value }: { value: string }) {
 
 export default function LeaveStatus({ data, headers, onUpdate, loading }: Props) {
   const [editMode, setEditMode] = useState(false);
-  const nameCol  = findCol(headers, 'team', 'name');
-  const emailCol = findCol(headers, 'email');
+  const nameCol = findCol(headers, 'team', 'name');
+  const deptCol = findCol(headers, 'department');
   const leaveCol = findCol(headers, 'leave');
 
   const options = useMemo(() => {
@@ -105,9 +109,10 @@ export default function LeaveStatus({ data, headers, onUpdate, loading }: Props)
         <table className="w-full text-sm text-left">
           <thead>
             <tr className="border-b" style={{ background: 'var(--cn-bg-row-even)', borderColor: 'var(--cn-border)' }}>
+              <th className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: 'var(--cn-text-secondary)' }}></th>
               <th className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: 'var(--cn-text-secondary)' }}>Name</th>
-              {emailCol && (
-                <th className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: 'var(--cn-text-secondary)' }}>Email</th>
+              {deptCol && (
+                <th className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: 'var(--cn-text-secondary)' }}>Department</th>
               )}
               <th className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: 'var(--cn-text-secondary)' }}>Leave Status</th>
             </tr>
@@ -115,14 +120,27 @@ export default function LeaveStatus({ data, headers, onUpdate, loading }: Props)
           <tbody>
             {rows.map((row, i) => {
               const value = String(row[leaveCol] ?? '');
+              const name = String(row[nameCol] ?? '');
+              const photo = memberPhoto(name);
               return (
                 <tr key={i} className="border-b hover:bg-[var(--cn-bg-hover)] transition-colors" style={{ borderColor: 'var(--cn-border-light, var(--cn-border))' }}>
-                  <td className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: 'var(--cn-text-primary)' }}>
-                    {String(row[nameCol] ?? '') || '—'}
+                  <td className="px-4 py-3">
+                    {photo ? (
+                      <img src={photo} alt={name} className="w-8 h-8 rounded-full object-cover shrink-0"
+                        onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                        style={{ background: 'var(--cn-accent)' }}>
+                        {name.charAt(0).toUpperCase() || '?'}
+                      </div>
+                    )}
                   </td>
-                  {emailCol && (
+                  <td className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: 'var(--cn-text-primary)' }}>
+                    {name || '—'}
+                  </td>
+                  {deptCol && (
                     <td className="px-4 py-3 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
-                      {String(row[emailCol] ?? '') || '—'}
+                      {String(row[deptCol] ?? '') || '—'}
                     </td>
                   )}
                   <td className="px-4 py-3">
