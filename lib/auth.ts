@@ -84,37 +84,42 @@ export function getTasksAssignedLockedTeam(role: Role): Team | undefined {
 
 // Individual Analysis ('10') removed from every role's nav — component code
 // is left in place (unreachable) rather than deleted, to keep this change low-risk.
-const FULL_ACCESS: SheetId[]     = ['3', '6', '1', '9', '11', '12', '7', '14'];
-const NO_PM_BANDWIDTH: SheetId[] = ['3', '6', '1', '9', '12', '7', '14'];
-const TEAM_MEMBER: SheetId[]     = ['3', '9', '7', '14'];
-// Marketing has no leaderboard/scoring system yet — MarketingAdmin/MarketingTeam
-// don't get the Leaderboard nav item until a real Marketing leaderboard exists.
-const NO_PM_BANDWIDTH_NO_LB: SheetId[] = ['3', '6', '1', '9', '12', '14'];
-const TEAM_MEMBER_NO_LB: SheetId[]     = ['3', '9', '14'];
+// Nav order below is deliberate per-role (not alphabetical/id order) — the
+// array order IS the sidebar order (see Sidebar.tsx, which just maps over
+// getAllowedSheets(user)).
 
-// Leave Status ('2') — admin/PM/team-admin tiers only, not individual
-// contributors (WebTeam/MarketingTeam) or the legacy unmigrated role slugs.
-const FULL_ACCESS_WITH_LEAVE: SheetId[]        = ['3', '6', '1', '9', '11', '12', '2', '7', '14'];
-const NO_PM_BANDWIDTH_WITH_LEAVE: SheetId[]    = ['3', '6', '1', '9', '12', '2', '7', '14'];
-const NO_PM_BANDWIDTH_NO_LB_WITH_LEAVE: SheetId[] = ['3', '6', '1', '9', '12', '2', '14'];
+// HM / Admin / Mod / PMWebAdmin / PMMarketingAdmin — full access, same order
+const ADMIN_ORDER: SheetId[] = ['3', '6', '2', '11', '12', '1', '9', '7', '14'];
+// legacy "pm" — like ADMIN_ORDER but no Tasks Assigned
+const PM_ORDER: SheetId[] = ['3', '6', '2', '11', '12', '9', '7', '14'];
+// WebAdmin — no Leave Status, no PM Projects
+const WEB_ADMIN_ORDER: SheetId[] = ['3', '6', '12', '1', '9', '7', '14'];
+// WebTeam / legacy "resource" — individual contributor, own team
+const WEB_TEAM_ORDER: SheetId[] = ['3', '9', '7', '14'];
+// MarketingAdmin — no Leave Status, no PM Projects, no Leaderboard (no
+// Marketing scoring system yet)
+const MARKETING_ADMIN_ORDER: SheetId[] = ['3', '6', '12', '1', '9', '14'];
+// MarketingTeam — individual contributor, own team, no Leaderboard
+const MARKETING_TEAM_ORDER: SheetId[] = ['3', '9', '14'];
 
 export const ROLE_SHEETS: Record<Role, SheetId[]> = {
-  HM:    FULL_ACCESS_WITH_LEAVE,
-  Admin: FULL_ACCESS_WITH_LEAVE,
-  Mod:   FULL_ACCESS_WITH_LEAVE,
-  PMWebAdmin:       FULL_ACCESS_WITH_LEAVE,
-  PMMarketingAdmin: FULL_ACCESS_WITH_LEAVE,
-  WebAdmin:       NO_PM_BANDWIDTH_WITH_LEAVE,
-  MarketingAdmin: NO_PM_BANDWIDTH_NO_LB_WITH_LEAVE,
-  WebTeam:       TEAM_MEMBER,
-  MarketingTeam: TEAM_MEMBER_NO_LB,
-  // legacy
-  pm:       ['3', '6', '9', '11', '12', '7', '14'],
-  resource: TEAM_MEMBER,
-  akash:    FULL_ACCESS,
-  admin:    FULL_ACCESS,
-  high:     FULL_ACCESS,
-  mod:      FULL_ACCESS,
+  HM:    ADMIN_ORDER,
+  Admin: ADMIN_ORDER,
+  Mod:   ADMIN_ORDER,
+  PMWebAdmin:       ADMIN_ORDER,
+  PMMarketingAdmin: ADMIN_ORDER,
+  WebAdmin:       WEB_ADMIN_ORDER,
+  MarketingAdmin: MARKETING_ADMIN_ORDER,
+  WebTeam:       WEB_TEAM_ORDER,
+  MarketingTeam: MARKETING_TEAM_ORDER,
+  // legacy — unmigrated accounts behave exactly like their new-taxonomy
+  // equivalent (akash/admin/high/mod ≈ HM/Admin/Mod, resource ≈ WebTeam)
+  pm:       PM_ORDER,
+  resource: WEB_TEAM_ORDER,
+  akash:    ADMIN_ORDER,
+  admin:    ADMIN_ORDER,
+  high:     ADMIN_ORDER,
+  mod:      ADMIN_ORDER,
 };
 
 export const SHEET_LABELS: Record<SheetId, string> = {
