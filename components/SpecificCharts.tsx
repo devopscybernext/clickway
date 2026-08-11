@@ -677,7 +677,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
   // Fixed per-column pixel widths so the table never squishes/overlaps —
   // once the sum exceeds the container, overflow-x-auto scrolls instead.
   const cardTableMinWidth =
-    (canCopy ? 40 : 0) + (showMarketingCols ? 160 : 220) + 70 + 70 +
+    (canCopy ? 40 : 0) + 140 + (showMarketingCols ? 160 : 220) + 70 + 70 +
     (showTotalHours ? 90 : 0) + 120 + 110 +
     (showMarketingCols ? 140 + 160 + 110 + 110 : 0) +
     (showTimeLogged ? 110 : 0) + 140 + 160;
@@ -987,6 +987,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
           <table className="text-xs table-fixed" style={{ width: '100%', minWidth: cardTableMinWidth }}>
             <colgroup>
               {canCopy && <col style={{ width: '40px' }} />}  {/* Copy */}
+              <col style={{ width: '140px' }} />  {/* Project */}
               <col style={{ width: showMarketingCols ? '160px' : '220px' }} />  {/* Task */}
               <col style={{ width: '70px' }} />   {/* Link */}
               <col style={{ width: '70px' }} />   {/* Est. */}
@@ -1004,6 +1005,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
             <thead>
               <tr style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}>
                 {canCopy && <th className="px-2 py-2 w-10" />}
+                <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Project</th>
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task</th>
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Link</th>
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Est.</th>
@@ -1060,6 +1062,10 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                         </button>
                       </td>
                     )}
+                    {/* Project */}
+                    <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
+                      <span className="truncate block">{t.project || '—'}</span>
+                    </td>
                     {/* Task */}
                     <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-primary)' }}>
                       <span className="truncate block">{t.task || '—'}</span>
