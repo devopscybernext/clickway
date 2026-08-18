@@ -558,6 +558,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const isResourceOverview = selectedSheet === '9';
   const isIndividualAnalysis = selectedSheet === '10';
   const isPmBandwidth       = selectedSheet === '11';
+  // Admin/HM/Mod have no projects of their own — always show them "All
+  // Projects" regardless of whatever pmBandwidthSubTab happens to hold.
+  const effectivePmBandwidthSubTab = isAdmin ? 'all' : pmBandwidthSubTab;
   const isTeamBandwidth     = selectedSheet === '12';
   const isLeaveStatus       = selectedSheet === '2';
   const isTools             = selectedSheet === '14';
@@ -1037,15 +1040,16 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 <div className="flex items-center gap-3 flex-wrap">
                   {([
                     { key: 'all', label: 'All Projects' },
-                    { key: 'mine', label: 'My Projects' },
+                    // Admin/HM/Mod don't have their own projects — no "My Projects" view for them
+                    ...(isAdmin ? [] : [{ key: 'mine', label: 'My Projects' } as const]),
                   ] as const).map(tab => (
                     <button
                       key={tab.key}
                       onClick={() => setPmBandwidthSubTab(tab.key)}
                       className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
                       style={{
-                        borderColor: pmBandwidthSubTab === tab.key ? 'var(--cn-accent)' : 'transparent',
-                        color: pmBandwidthSubTab === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
+                        borderColor: effectivePmBandwidthSubTab === tab.key ? 'var(--cn-accent)' : 'transparent',
+                        color: effectivePmBandwidthSubTab === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
                         background: 'transparent',
                       }}
                     >
@@ -1067,13 +1071,13 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               <div className="p-3 sm:p-6">
                 <PMProjectBandwidth
                   data={
-                    pmBandwidthSubTab === 'mine'
+                    effectivePmBandwidthSubTab === 'mine'
                       ? pmBandwidthData.filter(r => String(r['__pm'] ?? '').trim().toLowerCase() === user.displayName.trim().toLowerCase())
                       : pmBandwidthData
                   }
                   headers={pmBandwidthHeaders}
-                  canEdit={pmBandwidthSubTab === 'mine'}
-                  onCellChange={pmBandwidthSubTab === 'mine' ? handlePmBandwidthChange : undefined}
+                  canEdit={effectivePmBandwidthSubTab === 'mine'}
+                  onCellChange={effectivePmBandwidthSubTab === 'mine' ? handlePmBandwidthChange : undefined}
                   allData={pmBandwidthData}
                 />
               </div>
