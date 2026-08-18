@@ -268,7 +268,7 @@ const PM_CARD_METRIC_DEFS: { key: PmStatKey; label: string; color: string; isHou
   { key: 'yetToStart', label: 'Project Yet To Start', color: '#dc2626', isHours: false },
   { key: 'ongoing', label: 'Project Ongoing', color: '#16a34a', isHours: false },
 ];
-const DEFAULT_PM_CARD_FIELDS = ['Total Hours', 'Current Month Hours', 'Risk Month Hours', 'Pending Hours', 'Follow-up Due', 'Project Yet To Start'];
+const DEFAULT_PM_CARD_FIELDS = ['Total Hours', 'Current Month Hours'];
 
 // Same idea, but for populating the H/M dropdowns when opening a cell to edit.
 function toHMLiteral(val: string): { h: number; m: number } {
@@ -796,7 +796,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>PM Summary</p>
             <MultiSelect
-              label="Card Fields"
+              label="Show More Data"
               options={PM_CARD_METRIC_DEFS.map(d => d.label)}
               selected={pmCardFields}
               onChange={setPmCardFields}
