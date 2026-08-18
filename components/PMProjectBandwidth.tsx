@@ -216,8 +216,12 @@ function computeStatsFor(
 ) {
   const { totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol } = cols;
   const totalHours = totalHoursCol ? rowsFiltered.reduce((s, r) => s + parseDurationDecimal(r[totalHoursCol]), 0) : 0;
-  const currentMonthHours = currentMonthHoursCol ? rowsFiltered.reduce((s, r) => s + parseDurationDecimal(r[currentMonthHoursCol]), 0) : 0;
+  const currentMonthHoursRaw = currentMonthHoursCol ? rowsFiltered.reduce((s, r) => s + parseDurationDecimal(r[currentMonthHoursCol]), 0) : 0;
   const riskMonthHours = riskMonthHoursCol ? rowsFiltered.reduce((s, r) => s + parseDurationDecimal(r[riskMonthHoursCol]), 0) : 0;
+  // Current Month Hours nets out the at-risk portion of the month — it's
+  // the sum actually secured, not the raw logged total. Pending Hours then
+  // cascades off this adjusted figure, not the raw one.
+  const currentMonthHours = currentMonthHoursRaw - riskMonthHours;
   const pendingHours = totalHours - currentMonthHours;
   const paymentPendingHours = (paymentStatusCol && currentMonthHoursCol)
     ? rowsFiltered.reduce((s, r) => {
@@ -618,13 +622,38 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     return rows;
   }, [data, filters, filterCols, searchTerm]);
 
-  // Top KPI cards — scoped to the currently filtered/searched rows, same as
-  // the "N of M records" count below.
+  // Top KPI cards are pinned to the real current month/year regardless of
+  // whichever Month/Year the table filter happens to have selected —
+  // they're an always-current snapshot, not a filtered-table summary.
+  // Every other active filter (PM/Project/Client/Status/...) still narrows
+  // them, same as the table below.
+  const topCardRows = useMemo(() => {
+    let rows = data;
+    filterCols.forEach(({ col }) => {
+      if (col === monthCol || col === yearCol) return;
+      const selected = filters[col] ?? [];
+      if (selected.length > 0) rows = rows.filter(r => selected.includes(String(r[col] ?? '').trim()));
+    });
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      rows = rows.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(term)));
+    }
+    const now = new Date();
+    const curMonthName = now.toLocaleString('en-US', { month: 'long' }).toLowerCase();
+    const curYear = String(now.getFullYear());
+    if (monthCol) rows = rows.filter(r => String(r[monthCol] ?? '').trim().toLowerCase() === curMonthName);
+    if (yearCol) rows = rows.filter(r => String(r[yearCol] ?? '').trim() === curYear);
+    return rows;
+  }, [data, filters, filterCols, searchTerm, monthCol, yearCol]);
+
+  // Top KPI cards — scoped to topCardRows (current month/year, other
+  // filters still applied); Yet To Start ignores even that (see
+  // computeStatsFor).
   const statsCols = { totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol };
   const stats = useMemo(
-    () => computeStatsFor(filtered, data, statsCols),
+    () => computeStatsFor(topCardRows, data, statsCols),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data, filtered, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol]
+    [data, topCardRows, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol]
   );
 
   // Per-PM summary cards — only meaningful when this view spans more than
@@ -702,27 +731,27 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   }
 
   const statCards = [
-    { label: 'Total Hours', value: fmtHours(stats.totalHours), color: '#2563eb', icon: <Clock className="w-4 h-4" /> },
-    { label: 'Current Month Hours', value: fmtHours(stats.currentMonthHours), color: '#0891b2', icon: <CalendarClock className="w-4 h-4" /> },
-    { label: 'Risk Month Hours', value: fmtHours(stats.riskMonthHours), color: '#dc2626', icon: <AlertTriangle className="w-4 h-4" /> },
-    { label: 'Pending Hours', value: fmtHours(stats.pendingHours), color: '#d97706', icon: <Hourglass className="w-4 h-4" /> },
-    { label: 'Payment Pending', value: fmtHours(stats.paymentPendingHours), color: '#dc2626', icon: <Wallet className="w-4 h-4" /> },
-    { label: 'Follow-up Due', value: stats.followupDue, color: '#7c3aed', icon: <PhoneCall className="w-4 h-4" /> },
-    { label: 'Project Yet To Start', value: stats.yetToStart, color: '#dc2626', icon: <Rocket className="w-4 h-4" /> },
-    { label: 'Project Ongoing', value: stats.ongoing, color: '#16a34a', icon: <Activity className="w-4 h-4" /> },
+    { label: 'Total Hours', value: fmtHours(stats.totalHours), color: '#2563eb', icon: <Clock className="w-3.5 h-3.5" /> },
+    { label: 'Current Month Hours', value: fmtHours(stats.currentMonthHours), color: '#0891b2', icon: <CalendarClock className="w-3.5 h-3.5" /> },
+    { label: 'Risk Month Hours', value: fmtHours(stats.riskMonthHours), color: '#dc2626', icon: <AlertTriangle className="w-3.5 h-3.5" /> },
+    { label: 'Pending Hours', value: fmtHours(stats.pendingHours), color: '#d97706', icon: <Hourglass className="w-3.5 h-3.5" /> },
+    { label: 'Payment Pending', value: fmtHours(stats.paymentPendingHours), color: '#dc2626', icon: <Wallet className="w-3.5 h-3.5" /> },
+    { label: 'Follow-up Due', value: stats.followupDue, color: '#7c3aed', icon: <PhoneCall className="w-3.5 h-3.5" /> },
+    { label: 'Project Yet To Start', value: stats.yetToStart, color: '#dc2626', icon: <Rocket className="w-3.5 h-3.5" /> },
+    { label: 'Project Ongoing', value: stats.ongoing, color: '#16a34a', icon: <Activity className="w-3.5 h-3.5" /> },
   ];
 
   return (
     <div className="space-y-4">
       <div className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-px" style={{ background: 'var(--cn-border)' }}>
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-px" style={{ background: 'var(--cn-border)' }}>
           {statCards.map(({ label, value, color, icon }) => (
-            <div key={label} className="flex flex-col gap-1.5 p-4" style={{ background: 'var(--cn-bg-card)' }}>
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] font-semibold uppercase tracking-wide leading-tight" style={{ color: 'var(--cn-text-muted)' }}>{label}</p>
-                <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: color + '18', color }}>{icon}</div>
+            <div key={label} className="flex flex-col gap-1.5 p-3" style={{ background: 'var(--cn-bg-card)' }}>
+              <div className="flex items-center justify-between gap-1">
+                <p className="text-[9px] font-semibold uppercase tracking-wide leading-tight" style={{ color: 'var(--cn-text-muted)' }}>{label}</p>
+                <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0" style={{ background: color + '18', color }}>{icon}</div>
               </div>
-              <p className="text-2xl font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{value}</p>
+              <p className="text-xl font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{value}</p>
             </div>
           ))}
         </div>
