@@ -216,7 +216,16 @@ function computeStatsFor(
 ) {
   const { totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol } = cols;
   const totalHours = totalHoursCol ? rowsFiltered.reduce((s, r) => s + parseDurationDecimal(r[totalHoursCol]), 0) : 0;
-  const currentMonthHoursRaw = currentMonthHoursCol ? rowsFiltered.reduce((s, r) => s + parseDurationDecimal(r[currentMonthHoursCol]), 0) : 0;
+  // Only rows whose Payment Status is exactly "Done" count toward Current
+  // Month Hours — QA_Done/On Hold/Automated Payment/etc don't count, even
+  // though they're distinct real statuses (falls back to summing every row
+  // if there's no Payment Status column to check against).
+  const currentMonthHoursRaw = currentMonthHoursCol
+    ? rowsFiltered.reduce((s, r) => {
+        if (paymentStatusCol && String(r[paymentStatusCol] ?? '').trim().toLowerCase() !== 'done') return s;
+        return s + parseDurationDecimal(r[currentMonthHoursCol]);
+      }, 0)
+    : 0;
   const riskMonthHours = riskMonthHoursCol ? rowsFiltered.reduce((s, r) => s + parseDurationDecimal(r[riskMonthHoursCol]), 0) : 0;
   // Current Month Hours nets out the at-risk portion of the month — it's
   // the sum actually secured, not the raw logged total. Pending Hours then
