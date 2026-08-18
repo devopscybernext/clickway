@@ -308,21 +308,32 @@ function parseDeadlineDate(val: string): Date | null {
   return isNaN(date.getTime()) ? null : date;
 }
 
+// Workload status bands — shared by every "who's Available/Occupied" badge
+// in the app (Tasks Overview resource cards, Team Bandwidth, Dashboard's
+// Team Workload cards, and the bandwidth chips above Tasks Assigned).
+// Web & SMM band on today's daily task hours; PPC & SEO log "Everyday"
+// tasks as a monthly retainer block instead of a daily one, so they band
+// on a much larger monthly-hours scale.
+function workloadStatus(hours: number, isMonthlyBlock: boolean): { label: string; bg: string } {
+  if (isMonthlyBlock) {
+    if (hours <= 40)  return { label: 'Available',           bg: '#22c55e' };
+    if (hours <= 70)  return { label: 'Partially Available', bg: '#16a34a' };
+    if (hours <= 100) return { label: 'Partially Occupied',  bg: '#f59e0b' };
+    if (hours <= 125) return { label: 'Occupied',            bg: '#ea580c' };
+    return                     { label: 'Overload',            bg: '#dc2626' };
+  }
+  if (hours === 0)  return { label: 'Available',           bg: '#22c55e' };
+  if (hours <= 3.5) return { label: 'Partially Available', bg: '#16a34a' };
+  if (hours <= 6.5) return { label: 'Partially Occupied',  bg: '#f59e0b' };
+  if (hours <= 7.3) return { label: 'Occupied',            bg: '#ea580c' };
+  return                     { label: 'Overload',            bg: '#dc2626' };
+}
+
 // Status based on todayHours (today+everyday) — matches the badge shown on the card.
-// PPC and SEO (Marketing) log "Everyday" tasks as a monthly retainer hour
-// block rather than a daily one, so they get their own thresholds.
 function resourceStatus(row: ResourceRow, onLeave = false): { label: string; bg: string; text: string } {
   if (onLeave) return { label: 'On Leave', bg: '#ef4444', text: '#fff' };
-  if (MONTHLY_BLOCK_MARKETING_NAMES.has(row.name.trim().toLowerCase())) {
-    if (row.todayHours > 130)  return { label: 'Overload',           bg: '#dc2626', text: '#fff' };
-    if (row.todayHours >= 120) return { label: 'Occupied',           bg: '#f97316', text: '#fff' };
-    if (row.todayHours >= 60)  return { label: 'Partially Available', bg: '#f59e0b', text: '#fff' };
-    return                            { label: 'Available',          bg: '#22c55e', text: '#fff' };
-  }
-  if (row.todayHours === 0)   return { label: 'Available',          bg: '#22c55e', text: '#fff' };
-  if (row.todayHours <= 6.5)  return { label: 'Partially Available', bg: '#f59e0b', text: '#fff' };
-  if (row.todayHours <= 7.3)  return { label: 'Occupied',           bg: '#f97316', text: '#fff' };
-  return                             { label: 'Occupied',           bg: '#ef4444', text: '#fff' };
+  const s = workloadStatus(row.todayHours, MONTHLY_BLOCK_MARKETING_NAMES.has(row.name.trim().toLowerCase()));
+  return { ...s, text: '#fff' };
 }
 
 
@@ -2636,26 +2647,9 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
       if (av) { const v = String(av[availStatusCol] ?? '').trim().toLowerCase(); onLeave = isOnLeaveText(v); }
     }
 
-    // PPC and SEO's "Everyday" tasks carry a full monthly hour block rather
-    // than a daily one, so they get their own thresholds instead of the
-    // daily-hours bands.
     const status = onLeave
       ? { label: 'On Leave', bg: '#ef4444' }
-      : isMonthlyBlock
-        ? (displayHours > 130
-            ? { label: 'Overload',            bg: '#dc2626' }
-            : displayHours >= 120
-              ? { label: 'Occupied',          bg: '#f97316' }
-              : displayHours >= 60
-                ? { label: 'Partially Available', bg: '#f59e0b' }
-                : { label: 'Available',        bg: '#22c55e' })
-        : displayHours === 0
-          ? { label: 'Available',          bg: '#22c55e' }
-          : displayHours <= 6.5
-            ? { label: 'Partially Occupied', bg: '#f59e0b' }
-            : displayHours <= 7.3
-              ? { label: 'Occupied',         bg: '#f97316' }
-              : { label: 'Occupied',         bg: '#ef4444' };
+      : workloadStatus(displayHours, isMonthlyBlock);
 
     // Build grouped tasks for dropdown (tab-relevant tasks only, exclude task closed)
     const grouped: Record<string, { task: string; project: string; status: string; hours: number; taskUrl: string; bucketSet: string; pmStatus: string; totalHoursVal: string; realBucket: string; _raw: SheetData }[]> = {};
@@ -2688,10 +2682,10 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
   const stateSummary = [
     { label: 'Available',          color: '#22c55e' },
     { label: 'Partially Occupied', color: '#f59e0b' },
-    { label: 'Occupied',           color: '#ef4444' },
+    { label: 'Occupied',           color: '#ea580c' },
     { label: 'On Leave',           color: '#8b5cf6' },
-    // PPC-only labels — only shown when at least one PPC row uses them
-    ...(rows.some(r => r.status.label === 'Partially Available') ? [{ label: 'Partially Available', color: '#f59e0b' }] : []),
+    // Only shown when at least one row actually lands in that band
+    ...(rows.some(r => r.status.label === 'Partially Available') ? [{ label: 'Partially Available', color: '#16a34a' }] : []),
     ...(rows.some(r => r.status.label === 'Overload') ? [{ label: 'Overload', color: '#dc2626' }] : []),
   ];
 
@@ -3011,21 +3005,7 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
 
     const status = onLeave
       ? { label: 'On Leave', bg: '#ef4444' }
-      : isMonthlyBlock
-        ? (displayHours > 130
-            ? { label: 'Overload',            bg: '#dc2626' }
-            : displayHours >= 120
-              ? { label: 'Occupied',          bg: '#f97316' }
-              : displayHours >= 60
-                ? { label: 'Partially Available', bg: '#f59e0b' }
-                : { label: 'Available',        bg: '#22c55e' })
-        : displayHours === 0
-          ? { label: 'Available',          bg: '#22c55e' }
-          : displayHours <= 6.5
-            ? { label: 'Partially Occupied', bg: '#f59e0b' }
-            : displayHours <= 7.3
-              ? { label: 'Occupied',         bg: '#f97316' }
-              : { label: 'Occupied',         bg: '#ef4444' };
+      : workloadStatus(displayHours, isMonthlyBlock);
 
     const inProgressTask = todayTasks.find(r => getStatus(r) === 'in progress');
     const onHoldCount = todayTasks.filter(r => getStatus(r) === 'on hold').length;
@@ -3176,19 +3156,7 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
     const isMonthlyBlock = MONTHLY_BLOCK_MARKETING_NAMES.has(name.trim().toLowerCase());
     const status = onLeave
       ? { label: 'On Leave', bg: '#8b5cf6' }
-      : isMonthlyBlock
-        ? (displayHours > 130
-            ? { label: 'Overload',            bg: '#dc2626' }
-            : displayHours >= 120
-              ? { label: 'Occupied',          bg: '#f97316' }
-              : displayHours >= 60
-                ? { label: 'Partially Available', bg: '#f59e0b' }
-                : { label: 'Available',        bg: '#22c55e' })
-        : displayHours === 0
-          ? { label: 'Available',          bg: '#22c55e' }
-          : displayHours <= 6.5
-            ? { label: 'Partially Occupied', bg: '#f59e0b' }
-            : { label: 'Occupied',           bg: displayHours <= 7.3 ? '#f97316' : '#ef4444' };
+      : workloadStatus(displayHours, isMonthlyBlock);
 
     return { name, displayHours, status };
   }).sort((a, b) => a.displayHours - b.displayHours);
@@ -3197,8 +3165,8 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
   // "who's Available" instead of hunting through one long wrapped row.
   const GROUP_ORDER = ['Available', 'Partially Available', 'Partially Occupied', 'Occupied', 'Overload', 'On Leave'];
   const GROUP_COLORS: Record<string, string> = {
-    'Available': '#22c55e', 'Partially Available': '#f59e0b', 'Partially Occupied': '#f59e0b',
-    'Occupied': '#f97316', 'Overload': '#dc2626', 'On Leave': '#8b5cf6',
+    'Available': '#22c55e', 'Partially Available': '#16a34a', 'Partially Occupied': '#f59e0b',
+    'Occupied': '#ea580c', 'Overload': '#dc2626', 'On Leave': '#8b5cf6',
   };
   const groups = GROUP_ORDER
     .map(label => ({ label, color: GROUP_COLORS[label], members: rows.filter(r => r.status.label === label) }))
