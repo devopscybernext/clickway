@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronLeft, ChevronRight, Clock, CalendarClock, Hourglass, Rocket, Activity, AlertTriangle, Wallet, PhoneCall, Pencil } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronLeft, ChevronRight, Clock, CalendarClock, Hourglass, Rocket, Activity, AlertTriangle, Wallet, PhoneCall, Pencil, SlidersHorizontal } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { MultiSelect } from './FilteredDataTable';
 import SearchFilter from './SearchFilter';
@@ -240,6 +240,23 @@ function computeStatsFor(
   const ongoing = statusCol ? rowsFiltered.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'on going').length : 0;
   return { totalHours, currentMonthHours, riskMonthHours, pendingHours, paymentPendingHours, followupDue, yetToStart, ongoing };
 }
+type PmStatKey = keyof ReturnType<typeof computeStatsFor>;
+
+// Every metric higher management wants available on a PM card — shown via
+// an explicit picker (see pmCardFields) rather than all at once, since 8
+// tiles per card got cluttered fast with several PMs on screen at once.
+const PM_CARD_METRIC_DEFS: { key: PmStatKey; label: string; color: string; isHours: boolean }[] = [
+  { key: 'totalHours', label: 'Total Hours', color: '#2563eb', isHours: true },
+  { key: 'currentMonthHours', label: 'Current Month Hours', color: '#0891b2', isHours: true },
+  { key: 'riskMonthHours', label: 'Risk Month Hours', color: '#dc2626', isHours: true },
+  { key: 'pendingHours', label: 'Pending Hours', color: '#d97706', isHours: true },
+  { key: 'paymentPendingHours', label: 'Payment Pending', color: '#dc2626', isHours: true },
+  { key: 'followupDue', label: 'Follow-up Due', color: '#7c3aed', isHours: false },
+  { key: 'yetToStart', label: 'Project Yet To Start', color: '#dc2626', isHours: false },
+  { key: 'ongoing', label: 'Project Ongoing', color: '#16a34a', isHours: false },
+];
+const DEFAULT_PM_CARD_FIELDS = ['Total Hours', 'Current Month Hours', 'Pending Hours', 'Follow-up Due'];
+
 // Same idea, but for populating the H/M dropdowns when opening a cell to edit.
 function toHMLiteral(val: string): { h: number; m: number } {
   const trimmed = val.trim();
@@ -477,6 +494,9 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   // Which table columns are shown — empty means "all" (same convention as
   // MultiSelect's own empty-selection = no filter applied)
   const [visibleCols, setVisibleCols] = useState<string[]>([]);
+  // Which stats show on each PM summary card
+  const [pmCardFields, setPmCardFields] = useState<string[]>(DEFAULT_PM_CARD_FIELDS);
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
 
   const projectCol = headers.find(h => h.toLowerCase().includes('project name'));
   const clientCol = headers.find(h => h.toLowerCase().includes('client'));
@@ -542,6 +562,11 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     ].filter((c): c is { col: string; label: string } => c !== null)),
     [showPmCol, projectCol, clientCol, yearCol, monthCol, statusCol, phaseCol, upsellCol, paymentStatusCol]
   );
+  // PM/Project/Client/Year/Month stay always visible; the rest collapse
+  // behind "More Filters" so the primary bar doesn't grow unbounded.
+  const secondaryFilterCols = filterCols.filter(({ col }) => col === statusCol || col === phaseCol || col === upsellCol || col === paymentStatusCol);
+  const primaryFilterCols = filterCols.filter(fc => !secondaryFilterCols.includes(fc));
+  const secondaryActiveCount = secondaryFilterCols.filter(({ col }) => (filters[col] ?? []).length > 0).length + (visibleCols.length > 0 ? 1 : 0);
 
   // Faceted: each dropdown's options reflect rows matching every OTHER active
   // filter, so e.g. picking Year 2026 narrows Month/Project/Client to values
@@ -704,24 +729,24 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
       </div>
 
       {pmSummaries.length > 0 && (
-        <div className="overflow-x-auto">
-          <div className="flex gap-3 pb-1" style={{ minWidth: 'min-content' }}>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>PM Summary</p>
+            <MultiSelect
+              label="Card Fields"
+              options={PM_CARD_METRIC_DEFS.map(d => d.label)}
+              selected={pmCardFields}
+              onChange={setPmCardFields}
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {pmSummaries.map(pm => {
               const photo = memberPhoto(pm.name);
               const bg = memberColor(pm.name);
               const initials = pm.name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
-              const pmStatCards = [
-                { label: 'Total Hours', value: fmtHours(pm.totalHours), color: '#2563eb', icon: <Clock className="w-3.5 h-3.5" /> },
-                { label: 'Current Month', value: fmtHours(pm.currentMonthHours), color: '#0891b2', icon: <CalendarClock className="w-3.5 h-3.5" /> },
-                { label: 'Risk Month', value: fmtHours(pm.riskMonthHours), color: '#dc2626', icon: <AlertTriangle className="w-3.5 h-3.5" /> },
-                { label: 'Pending', value: fmtHours(pm.pendingHours), color: '#d97706', icon: <Hourglass className="w-3.5 h-3.5" /> },
-                { label: 'Payment Pending', value: fmtHours(pm.paymentPendingHours), color: '#dc2626', icon: <Wallet className="w-3.5 h-3.5" /> },
-                { label: 'Follow-up Due', value: pm.followupDue, color: '#7c3aed', icon: <PhoneCall className="w-3.5 h-3.5" /> },
-                { label: 'Yet To Start', value: pm.yetToStart, color: '#dc2626', icon: <Rocket className="w-3.5 h-3.5" /> },
-                { label: 'Ongoing', value: pm.ongoing, color: '#16a34a', icon: <Activity className="w-3.5 h-3.5" /> },
-              ];
+              const activeMetrics = PM_CARD_METRIC_DEFS.filter(d => pmCardFields.includes(d.label));
               return (
-                <div key={pm.name} className="rounded-xl border shrink-0" style={{ width: 300, background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+                <div key={pm.name} className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
                   <div className="flex items-center gap-2.5 px-3.5 pt-3.5 pb-3">
                     {photo ? (
                       <img src={photo} alt={pm.name} className="w-9 h-9 rounded-full object-cover shrink-0"
@@ -735,17 +760,21 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                       <p className="text-[11px] truncate" style={{ color: 'var(--cn-text-muted)' }}>Project Management</p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-px" style={{ background: 'var(--cn-border)', borderTop: '1px solid var(--cn-border)' }}>
-                    {pmStatCards.map(({ label, value, color, icon }) => (
-                      <div key={label} className="flex items-center gap-2 px-3 py-2" style={{ background: 'var(--cn-bg-card)' }}>
-                        <div className="w-6 h-6 rounded-md flex items-center justify-center shrink-0" style={{ background: color + '18', color }}>{icon}</div>
-                        <div className="min-w-0">
-                          <p className="text-[9px] font-semibold uppercase tracking-wide truncate" style={{ color: 'var(--cn-text-muted)' }}>{label}</p>
-                          <p className="text-xs font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{value}</p>
+                  {activeMetrics.length > 0 && (
+                    <div className="grid grid-cols-2 gap-px" style={{ background: 'var(--cn-border)', borderTop: '1px solid var(--cn-border)' }}>
+                      {activeMetrics.map(({ key, label, color, isHours }) => (
+                        <div key={key} className="flex flex-col gap-1 px-3.5 py-2.5" style={{ background: 'var(--cn-bg-card)' }}>
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
+                            <span className="text-[9px] font-semibold uppercase tracking-wide leading-tight" style={{ color: 'var(--cn-text-muted)' }}>{label}</span>
+                          </div>
+                          <span className="text-sm font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>
+                            {isHours ? fmtHours(pm[key]) : pm[key]}
+                          </span>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -760,42 +789,73 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
         onChange={val => { setSearchTerm(val); setPage(1); }}
       />
 
-      <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-2 sm:gap-3">
-        {filterCols.map(({ col, label }) =>
-          col === monthCol ? (
-            <MonthMultiSelect
-              key={col}
-              options={filterOptions[col] ?? []}
-              selected={filters[col] ?? []}
-              onChange={vals => handleFilter(col, vals)}
-            />
-          ) : (
-            <MultiSelect
-              key={col}
-              label={label}
-              options={filterOptions[col] ?? []}
-              selected={filters[col] ?? []}
-              onChange={vals => handleFilter(col, vals)}
-            />
-          )
-        )}
-        <MultiSelect
-          label="Columns"
-          options={tableCols}
-          selected={visibleCols}
-          onChange={vals => { setVisibleCols(vals); setPage(1); }}
-        />
-        {activeFilterCount > 0 && (
-          <div className="flex items-end col-span-2 sm:col-span-1">
+      <div className="space-y-2">
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-2 sm:gap-3">
+          {primaryFilterCols.map(({ col, label }) =>
+            col === monthCol ? (
+              <MonthMultiSelect
+                key={col}
+                options={filterOptions[col] ?? []}
+                selected={filters[col] ?? []}
+                onChange={vals => handleFilter(col, vals)}
+              />
+            ) : (
+              <MultiSelect
+                key={col}
+                label={label}
+                options={filterOptions[col] ?? []}
+                selected={filters[col] ?? []}
+                onChange={vals => handleFilter(col, vals)}
+              />
+            )
+          )}
+          <div className="flex items-end">
             <button
-              onClick={clearAll}
-              title={`Clear all ${activeFilterCount} filter(s)`}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg cursor-pointer transition-all text-xs font-medium"
-              style={{ background: 'var(--cn-bg-input)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }}
+              onClick={() => setShowMoreFilters(o => !o)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg cursor-pointer transition-all text-sm border"
+              style={showMoreFilters || secondaryActiveCount > 0
+                ? { background: 'rgba(254,74,35,0.12)', borderColor: '#FE4A23', color: '#FE4A23' }
+                : { background: 'var(--cn-bg-input)', borderColor: 'var(--cn-border)', color: 'var(--cn-text-primary)' }}
             >
-              <X className="w-3.5 h-3.5" />
-              Clear all ({activeFilterCount})
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              More Filters
+              {secondaryActiveCount > 0 && (
+                <span className="text-[10px] font-bold px-1.5 rounded-full" style={{ background: '#FE4A23', color: '#fff' }}>{secondaryActiveCount}</span>
+              )}
             </button>
+          </div>
+          {activeFilterCount > 0 && (
+            <div className="flex items-end col-span-2 sm:col-span-1">
+              <button
+                onClick={clearAll}
+                title={`Clear all ${activeFilterCount} filter(s)`}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg cursor-pointer transition-all text-xs font-medium"
+                style={{ background: 'var(--cn-bg-input)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }}
+              >
+                <X className="w-3.5 h-3.5" />
+                Clear all ({activeFilterCount})
+              </button>
+            </div>
+          )}
+        </div>
+
+        {showMoreFilters && (
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-2 sm:gap-3 p-3 rounded-lg" style={{ background: 'var(--cn-bg-input)', border: '1px solid var(--cn-border)' }}>
+            {secondaryFilterCols.map(({ col, label }) => (
+              <MultiSelect
+                key={col}
+                label={label}
+                options={filterOptions[col] ?? []}
+                selected={filters[col] ?? []}
+                onChange={vals => handleFilter(col, vals)}
+              />
+            ))}
+            <MultiSelect
+              label="Columns"
+              options={tableCols}
+              selected={visibleCols}
+              onChange={vals => { setVisibleCols(vals); setPage(1); }}
+            />
           </div>
         )}
       </div>
