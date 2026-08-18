@@ -235,6 +235,18 @@ function teamPhoto(name: string): string {
   return key ? TEAM_PHOTOS[key] : '';
 }
 
+// Marketing sub-department rosters — used only for Team Workload's SEO/PPC/
+// SMM filter. Akshay is deliberately in both SEO and PPC (does work for
+// both), unlike teamDesignation() above which only ever shows one label.
+const SEO_NAMES = ['bhavya', 'kshitij', 'akshay'];
+const PPC_NAMES = ['atul', 'shiwangi', 'anjali', 'dheeraj', 'anurag', 'vansh', 'akshay'];
+const SMM_NAMES = ['payal', 'akanksha'];
+function inMarketingSubDept(name: string, dept: 'seo' | 'ppc' | 'smm'): boolean {
+  const lower = name.trim().toLowerCase();
+  const list = dept === 'seo' ? SEO_NAMES : dept === 'ppc' ? PPC_NAMES : SMM_NAMES;
+  return list.some(n => lower.includes(n));
+}
+
 // Parse time strings like "3 Hours", "0.5 Hour", "1.5 Hours", "90 min", "3",
 // or the new "HH.MM Hours" literal-minutes notation ("01.30 Hours" = 1h30m =
 // 1.5 decimal hours here, not 1.3) → number of decimal hours. Every "Time
@@ -2925,6 +2937,7 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
   sheet1Data: SheetData[]; sheet1Headers: string[];
   availData?: SheetData[]; availHeaders?: string[];
 }) {
+  const [subDept, setSubDept] = useState<'all' | 'seo' | 'ppc' | 'smm'>('all');
   const resourceCol = findCol(sheet1Headers, 'assigned person', 'assigned to', 'resource');
   const statusCol   = findCol(sheet1Headers, 'task status', 'status');
   const bucketCol   = findCol(sheet1Headers, 'task daily bucket', 'bucket');
@@ -3007,9 +3020,33 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
     </div>
   );
 
+  // Only Marketing rosters have SEO/PPC/SMM sub-departments — Web's names
+  // never match, so the tab row simply doesn't render there.
+  const isMarketingRoster = names.some(n => inMarketingSubDept(n, 'seo') || inMarketingSubDept(n, 'ppc') || inMarketingSubDept(n, 'smm'));
+  const visibleCards = subDept === 'all' ? cards : cards.filter(c => inMarketingSubDept(c.name, subDept));
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-      {cards.map(c => {
+    <div className="space-y-3">
+      {isMarketingRoster && (
+        <div className="flex items-center gap-1.5">
+          {([['all', 'All'], ['seo', 'SEO'], ['ppc', 'PPC'], ['smm', 'SMM']] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setSubDept(key)}
+              className="px-3 py-1.5 text-xs font-semibold rounded-full transition-all cursor-pointer"
+              style={{
+                background: subDept === key ? 'var(--cn-accent)' : 'var(--cn-bg-input)',
+                color: subDept === key ? '#fff' : 'var(--cn-text-muted)',
+                border: `1px solid ${subDept === key ? 'var(--cn-accent)' : 'var(--cn-border)'}`,
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {visibleCards.map(c => {
         const photo = teamPhoto(c.name);
         const bg = memberColor(c.name);
         const initials = c.name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
@@ -3041,7 +3078,8 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
             </div>
           </div>
         );
-      })}
+        })}
+      </div>
     </div>
   );
 }

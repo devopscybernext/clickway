@@ -548,14 +548,16 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   // Timestamp/Email stay usable for sorting & filtering but aren't shown as table columns
   const tableCols = headers.filter(h => h !== timestampCol && h !== emailCol);
 
-  // Column visibility defaults, applied once: All Projects (read-only, !canEdit)
-  // starts on a curated subset so the table isn't overwhelming with every PM
-  // sharing the view; My Projects (canEdit) starts showing every column since
-  // it's a PM's own, much smaller, editable list.
-  const colDefaultsApplied = useRef(false);
+  // Column visibility defaults, applied once per tab: All Projects (read-only,
+  // !canEdit) starts on a curated subset so the table isn't overwhelming with
+  // every PM sharing the view; My Projects (canEdit) starts showing every
+  // column since it's a PM's own, much smaller, editable list. Keyed by
+  // canEdit (not a plain once-ever flag) since both tabs share this same
+  // component instance — switching tabs must re-apply the right default set.
+  const colDefaultsApplied = useRef<boolean | null>(null);
   useEffect(() => {
-    if (colDefaultsApplied.current || !headers.length) return;
-    colDefaultsApplied.current = true;
+    if (colDefaultsApplied.current === canEdit || !headers.length) return;
+    colDefaultsApplied.current = canEdit;
     if (canEdit) {
       setVisibleCols(tableCols);
     } else {
