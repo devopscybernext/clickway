@@ -7,7 +7,7 @@ import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, PM_PROJECT_FORM_URLS,
 import { AuthUser, SheetId, Team, getAllowedSheets, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, getTasksAssignedLockedTeam } from '@/lib/auth';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
-import SpecificCharts, { ResourceOverview, PmStatusOverview, KpiCards, ResourceStatusGrid, InsightCards, PmStatusChart, ResourceBandwidthChips } from './SpecificCharts';
+import SpecificCharts, { ResourceOverview, PmStatusOverview, KpiCards, ResourceStatusGrid, TeamWorkloadCards, InsightCards, PmStatusChart, ResourceBandwidthChips } from './SpecificCharts';
 import FilteredDataTable from './FilteredDataTable';
 import SearchFilter from './SearchFilter';
 import EmployeeGallery from './EmployeeGallery';
@@ -773,21 +773,22 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 />
               )}
 
-              {/* ── Today's Team Workload grid — admin + PM + Team Admin ── */}
+              {/* ── Today's Team Workload cards — admin + PM + Team Admin ── */}
               {(isAdmin || isPmTier || isTeamAdmin) && (
-                <ResourceStatusGrid
-                  key={`team-workload-${analyticsTeam}`}
-                  sheet1Data={analyticsData}
-                  sheet1Headers={analyticsHeaders}
-                  availData={analyticsAvailData}
-                  availHeaders={analyticsAvailHeaders}
-                  onStatusChange={analyticsOnStatusChange}
-                  pmStatusColName={analyticsHeaders.find(h => h.toLowerCase().includes('pm status'))}
-                  canEditPmStatus={isAdmin || isPmTier || isTeamAdmin}
-                  isAdmin={isAdmin}
-                  currentUserEmail={user.email}
-                  autoOpenFirst
-                />
+                <div className="cn-card rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+                  <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--cn-border)', background: 'var(--cn-bg-input)' }}>
+                    <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>Team Workload</p>
+                  </div>
+                  <div className="p-4">
+                    <TeamWorkloadCards
+                      key={`team-workload-${analyticsTeam}`}
+                      sheet1Data={analyticsData}
+                      sheet1Headers={analyticsHeaders}
+                      availData={analyticsAvailData}
+                      availHeaders={analyticsAvailHeaders}
+                    />
+                  </div>
+                </div>
               )}
 
               {/* ── Charts ── */}
