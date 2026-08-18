@@ -631,32 +631,22 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     return rows;
   }, [data, filters, filterCols, searchTerm]);
 
-  // Top KPI cards are pinned to the real current month/year regardless of
-  // whichever Month/Year the table filter happens to have selected —
-  // they're an always-current snapshot, not a filtered-table summary.
-  // Every other active filter (PM/Project/Client/Status/...) still narrows
-  // them, same as the table below.
+  // Top KPI cards and PM summary cards are pinned to the real current
+  // month/year and are otherwise completely untouched by the bottom filter
+  // bar (PM/Project/Client/Status/.../search) — that row only narrows the
+  // table below. They're an always-current, always-company-wide snapshot.
   const topCardRows = useMemo(() => {
     let rows = data;
-    filterCols.forEach(({ col }) => {
-      if (col === monthCol || col === yearCol) return;
-      const selected = filters[col] ?? [];
-      if (selected.length > 0) rows = rows.filter(r => selected.includes(String(r[col] ?? '').trim()));
-    });
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
-      rows = rows.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(term)));
-    }
     const now = new Date();
     const curMonthName = now.toLocaleString('en-US', { month: 'long' }).toLowerCase();
     const curYear = String(now.getFullYear());
     if (monthCol) rows = rows.filter(r => String(r[monthCol] ?? '').trim().toLowerCase() === curMonthName);
     if (yearCol) rows = rows.filter(r => String(r[yearCol] ?? '').trim() === curYear);
     return rows;
-  }, [data, filters, filterCols, searchTerm, monthCol, yearCol]);
+  }, [data, monthCol, yearCol]);
 
-  // Top KPI cards — scoped to topCardRows (current month/year, other
-  // filters still applied); Yet To Start ignores even that (see
+  // Top KPI cards — scoped to topCardRows (current month/year only, bottom
+  // filter bar has no effect); Yet To Start ignores even that (see
   // computeStatsFor).
   const statsCols = { totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol };
   const stats = useMemo(
