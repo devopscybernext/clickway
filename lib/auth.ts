@@ -82,23 +82,24 @@ export function getTasksAssignedLockedTeam(role: Role): Team | undefined {
   return TASKS_ASSIGNED_TEAM_LOCK[role];
 }
 
-// Individual Analysis ('10') removed from every role's nav — component code
-// is left in place (unreachable) rather than deleted, to keep this change low-risk.
+// Individual Analysis ('10') and Team Bandwidth ('12') removed from every
+// role's nav — component code is left in place (unreachable) rather than
+// deleted, to keep this change low-risk.
 // Nav order below is deliberate per-role (not alphabetical/id order) — the
 // array order IS the sidebar order (see Sidebar.tsx, which just maps over
 // getAllowedSheets(user)).
 
 // HM / Admin / Mod / PMWebAdmin / PMMarketingAdmin — full access, same order
-const ADMIN_ORDER: SheetId[] = ['3', '6', '2', '11', '12', '1', '9', '7', '14'];
+const ADMIN_ORDER: SheetId[] = ['3', '6', '2', '11', '1', '9', '7', '14'];
 // legacy "pm" — like ADMIN_ORDER but no Tasks Assigned
-const PM_ORDER: SheetId[] = ['3', '6', '2', '11', '12', '9', '7', '14'];
+const PM_ORDER: SheetId[] = ['3', '6', '2', '11', '9', '7', '14'];
 // WebAdmin — no Leave Status, no PM Projects
-const WEB_ADMIN_ORDER: SheetId[] = ['3', '6', '12', '1', '9', '7', '14'];
+const WEB_ADMIN_ORDER: SheetId[] = ['3', '6', '1', '9', '7', '14'];
 // WebTeam / legacy "resource" — individual contributor, own team
 const WEB_TEAM_ORDER: SheetId[] = ['3', '9', '7', '14'];
 // MarketingAdmin — no Leave Status, no PM Projects, no Leaderboard (no
 // Marketing scoring system yet)
-const MARKETING_ADMIN_ORDER: SheetId[] = ['3', '6', '12', '1', '9', '14'];
+const MARKETING_ADMIN_ORDER: SheetId[] = ['3', '6', '1', '9', '14'];
 // MarketingTeam — individual contributor, own team, no Leaderboard
 const MARKETING_TEAM_ORDER: SheetId[] = ['3', '9', '14'];
 
