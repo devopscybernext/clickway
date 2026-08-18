@@ -6,6 +6,7 @@ import { SheetData } from '@/lib/googleSheets';
 import { MultiSelect } from './FilteredDataTable';
 import SearchFilter from './SearchFilter';
 import { parseHHMM, formatHHMM, hhmmToDecimalHours, DURATION_MINUTE_OPTIONS } from './SpecificCharts';
+import { memberPhoto, memberColor } from '@/lib/memberColors';
 
 const PAGE_SIZE = 30;
 const FOLLOWUP_DUE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days since last follow-up counts as due
@@ -201,6 +202,44 @@ function parseDurationDecimal(val: unknown): number {
   const n = Number(trimmed);
   return isNaN(n) ? 0 : n;
 }
+
+// Shared by the overall KPI cards and each per-PM summary card — same
+// formulas, just scoped to a different row set. `rowsAll` (unfiltered) is
+// used only for Yet To Start, which is deliberately filter-independent.
+function computeStatsFor(
+  rowsFiltered: SheetData[],
+  rowsAll: SheetData[],
+  cols: {
+    totalHoursCol?: string; currentMonthHoursCol?: string; riskMonthHoursCol?: string;
+    paymentStatusCol?: string; followupDateCol?: string; statusCol?: string;
+  }
+) {
+  const { totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol } = cols;
+  const totalHours = totalHoursCol ? rowsFiltered.reduce((s, r) => s + parseDurationDecimal(r[totalHoursCol]), 0) : 0;
+  const currentMonthHours = currentMonthHoursCol ? rowsFiltered.reduce((s, r) => s + parseDurationDecimal(r[currentMonthHoursCol]), 0) : 0;
+  const riskMonthHours = riskMonthHoursCol ? rowsFiltered.reduce((s, r) => s + parseDurationDecimal(r[riskMonthHoursCol]), 0) : 0;
+  const pendingHours = totalHours - currentMonthHours;
+  const paymentPendingHours = (paymentStatusCol && currentMonthHoursCol)
+    ? rowsFiltered.reduce((s, r) => {
+        const isPending = String(r[paymentStatusCol] ?? '').trim().toLowerCase() === 'pending';
+        return isPending ? s + parseDurationDecimal(r[currentMonthHoursCol]) : s;
+      }, 0)
+    : 0;
+  const followupDue = followupDateCol
+    ? rowsFiltered.filter(r => {
+        const raw = String(r[followupDateCol] ?? '').trim();
+        if (!raw) return true; // never followed up — counts as due
+        const t = parseTimestamp(raw);
+        return t === 0 || (Date.now() - t) > FOLLOWUP_DUE_MS;
+      }).length
+    : 0;
+  // Yet To Start is intentionally sourced from the full unfiltered rows, not
+  // the filtered set — it's a right-now flag ("has a PM started this yet?"),
+  // not scoped to whichever Month/Year/etc filters happen to be active.
+  const yetToStart = statusCol ? rowsAll.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'yet to start').length : 0;
+  const ongoing = statusCol ? rowsFiltered.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'on going').length : 0;
+  return { totalHours, currentMonthHours, riskMonthHours, pendingHours, paymentPendingHours, followupDue, yetToStart, ongoing };
+}
 // Same idea, but for populating the H/M dropdowns when opening a cell to edit.
 function toHMLiteral(val: string): { h: number; m: number } {
   const trimmed = val.trim();
@@ -330,6 +369,91 @@ function SelectCell({ value, colored, editable, options, onSave }: {
   );
 }
 
+// Month filter — same look/behavior as the shared MultiSelect, but the
+// option list is visually split into Upcoming/Current/Previous relative to
+// today's real calendar month (kept local to this file rather than
+// extending the shared MultiSelect, so Tasks Assigned's use of it is
+// untouched).
+function MonthMultiSelect({ options, selected, onChange }: {
+  options: string[]; selected: string[]; onChange: (vals: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const currentIdx = MONTH_ORDER[new Date().toLocaleString('en-US', { month: 'long' }).toLowerCase()] ?? 0;
+  const groups = [
+    { label: 'Upcoming Months', opts: options.filter(o => (MONTH_ORDER[o.toLowerCase()] ?? 0) > currentIdx) },
+    { label: 'Current Month', opts: options.filter(o => (MONTH_ORDER[o.toLowerCase()] ?? 0) === currentIdx) },
+    { label: 'Previous Months', opts: options.filter(o => (MONTH_ORDER[o.toLowerCase()] ?? 0) < currentIdx && (MONTH_ORDER[o.toLowerCase()] ?? 0) > 0) },
+  ].filter(g => g.opts.length > 0);
+
+  const isActive = selected.length > 0 && selected.length < options.length;
+  const btnLabel = selected.length === 0
+    ? 'All'
+    : selected.length === options.length
+    ? 'All'
+    : selected.length === 1
+    ? selected[0]
+    : `${selected.length} selected`;
+
+  const toggle = (val: string) =>
+    onChange(selected.includes(val) ? selected.filter(v => v !== val) : [...selected, val]);
+
+  return (
+    <div ref={ref} className="relative flex flex-col gap-1 w-full sm:w-auto sm:min-w-[150px]">
+      <label style={{ color: 'var(--cn-text-muted)' }} className="text-xs font-medium">Month</label>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={!isActive ? { background: 'var(--cn-bg-input)', borderColor: 'var(--cn-border)', color: 'var(--cn-text-primary)' } : undefined}
+        className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-sm border transition-colors w-full ${
+          isActive ? 'bg-[#FE4A23]/20 border-[#FE4A23] text-[#FE4A23]' : 'hover:border-[#FE4A23]'
+        }`}
+      >
+        <span className="truncate">{btnLabel}</span>
+        <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div style={{ background: 'var(--cn-bg-dropdown)', borderColor: 'var(--cn-border)', boxShadow: '0 4px 16px rgba(0,0,0,0.30)' }}
+          className="absolute top-full left-0 mt-1 w-[min(16rem,90vw)] border rounded-md z-50 flex flex-col max-h-80">
+          <div style={{ borderColor: 'var(--cn-border)' }} className="flex gap-3 px-3 py-1.5 border-b shrink-0">
+            <button onClick={() => onChange(options)} className="text-xs text-[#FE4A23] hover:opacity-80 transition-opacity">Select all</button>
+            <span style={{ color: 'var(--cn-border)' }}>·</span>
+            <button onClick={() => onChange([])} style={{ color: 'var(--cn-text-muted)' }} className="text-xs hover:text-white transition-colors">Clear</button>
+          </div>
+          <div className="overflow-y-auto flex-1">
+            {groups.length === 0 ? (
+              <p style={{ color: 'var(--cn-text-faint)' }} className="text-xs text-center py-3">No options</p>
+            ) : (
+              groups.map(({ label, opts }) => (
+                <div key={label}>
+                  <p className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-widest sticky top-0" style={{ color: 'var(--cn-text-faint)', background: 'var(--cn-bg-dropdown)' }}>{label}</p>
+                  {opts.map(opt => (
+                    <label key={opt} className="flex items-center gap-2.5 px-3 py-2 cursor-pointer"
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--cn-bg-input)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = '')}>
+                      <input type="checkbox" checked={selected.includes(opt)} onChange={() => toggle(opt)} className="rounded accent-[#FE4A23] cursor-pointer" />
+                      <span style={{ color: 'var(--cn-text-primary)' }} className="text-sm truncate">{opt}</span>
+                    </label>
+                  ))}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface Props {
   data: SheetData[];
   headers: string[];
@@ -350,6 +474,9 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const [sortCol, setSortCol] = useState('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [filters, setFilters] = useState<Record<string, string[]>>({});
+  // Which table columns are shown — empty means "all" (same convention as
+  // MultiSelect's own empty-selection = no filter applied)
+  const [visibleCols, setVisibleCols] = useState<string[]>([]);
 
   const projectCol = headers.find(h => h.toLowerCase().includes('project name'));
   const clientCol = headers.find(h => h.toLowerCase().includes('client'));
@@ -408,8 +535,12 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
       clientCol ? { col: clientCol, label: 'Client' } : null,
       yearCol ? { col: yearCol, label: 'Year' } : null,
       monthCol ? { col: monthCol, label: 'Month' } : null,
+      statusCol ? { col: statusCol, label: 'Status' } : null,
+      phaseCol ? { col: phaseCol, label: 'Phase' } : null,
+      upsellCol ? { col: upsellCol, label: 'Upsell/Cross-Sell' } : null,
+      paymentStatusCol ? { col: paymentStatusCol, label: 'Payment Status' } : null,
     ].filter((c): c is { col: string; label: string } => c !== null)),
-    [showPmCol, projectCol, clientCol, yearCol, monthCol]
+    [showPmCol, projectCol, clientCol, yearCol, monthCol, statusCol, phaseCol, upsellCol, paymentStatusCol]
   );
 
   // Faceted: each dropdown's options reflect rows matching every OTHER active
@@ -464,29 +595,29 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
 
   // Top KPI cards — scoped to the currently filtered/searched rows, same as
   // the "N of M records" count below.
-  const stats = useMemo(() => {
-    const totalHours = totalHoursCol ? filtered.reduce((s, r) => s + parseDurationDecimal(r[totalHoursCol]), 0) : 0;
-    const currentMonthHours = currentMonthHoursCol ? filtered.reduce((s, r) => s + parseDurationDecimal(r[currentMonthHoursCol]), 0) : 0;
-    const riskMonthHours = riskMonthHoursCol ? filtered.reduce((s, r) => s + parseDurationDecimal(r[riskMonthHoursCol]), 0) : 0;
-    const pendingHours = totalHours - currentMonthHours;
-    const paymentPendingHours = (paymentStatusCol && currentMonthHoursCol)
-      ? filtered.reduce((s, r) => {
-          const isPending = String(r[paymentStatusCol] ?? '').trim().toLowerCase() === 'pending';
-          return isPending ? s + parseDurationDecimal(r[currentMonthHoursCol]) : s;
-        }, 0)
-      : 0;
-    const followupDue = followupDateCol
-      ? filtered.filter(r => {
-          const raw = String(r[followupDateCol] ?? '').trim();
-          if (!raw) return true; // never followed up — counts as due
-          const t = parseTimestamp(raw);
-          return t === 0 || (Date.now() - t) > FOLLOWUP_DUE_MS;
-        }).length
-      : 0;
-    const yetToStart = statusCol ? filtered.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'yet to start').length : 0;
-    const ongoing = statusCol ? filtered.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'on going').length : 0;
-    return { totalHours, currentMonthHours, riskMonthHours, pendingHours, paymentPendingHours, followupDue, yetToStart, ongoing };
-  }, [filtered, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol]);
+  const statsCols = { totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol };
+  const stats = useMemo(
+    () => computeStatsFor(filtered, data, statsCols),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [data, filtered, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol]
+  );
+
+  // Per-PM summary cards — only meaningful when this view spans more than
+  // one PM (the All Projects tab; My Projects is always a single PM already).
+  const pmSummaries = useMemo(() => {
+    if (!showPmCol) return [];
+    const names = [...new Set(data.map(r => String(r['__pm'] ?? '').trim()).filter(Boolean))].sort();
+    if (names.length <= 1) return [];
+    return names.map(name => ({
+      name,
+      ...computeStatsFor(
+        filtered.filter(r => String(r['__pm'] ?? '').trim() === name),
+        data.filter(r => String(r['__pm'] ?? '').trim() === name),
+        statsCols
+      ),
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, filtered, showPmCol, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol]);
 
   const fmtHours = (n: number) => `${Math.round(n * 10) / 10}h`;
 
@@ -538,7 +669,8 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const clearAll = () => { setFilters({}); setPage(1); };
 
   // Timestamp/Email stay usable for sorting & filtering but aren't shown as table columns
-  const visibleHeaders = headers.filter(h => h !== timestampCol && h !== emailCol);
+  const tableCols = headers.filter(h => h !== timestampCol && h !== emailCol);
+  const visibleHeaders = visibleCols.length === 0 ? tableCols : tableCols.filter(h => visibleCols.includes(h));
 
   if (!headers.length) {
     return <div className="text-center py-12 text-sm" style={{ color: 'var(--cn-text-muted)' }}>No data available</div>;
@@ -571,6 +703,56 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
         </div>
       </div>
 
+      {pmSummaries.length > 0 && (
+        <div className="overflow-x-auto">
+          <div className="flex gap-3 pb-1" style={{ minWidth: 'min-content' }}>
+            {pmSummaries.map(pm => {
+              const photo = memberPhoto(pm.name);
+              const bg = memberColor(pm.name);
+              const initials = pm.name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
+              const pmStatCards = [
+                { label: 'Total Hours', value: fmtHours(pm.totalHours), color: '#2563eb', icon: <Clock className="w-3.5 h-3.5" /> },
+                { label: 'Current Month', value: fmtHours(pm.currentMonthHours), color: '#0891b2', icon: <CalendarClock className="w-3.5 h-3.5" /> },
+                { label: 'Risk Month', value: fmtHours(pm.riskMonthHours), color: '#dc2626', icon: <AlertTriangle className="w-3.5 h-3.5" /> },
+                { label: 'Pending', value: fmtHours(pm.pendingHours), color: '#d97706', icon: <Hourglass className="w-3.5 h-3.5" /> },
+                { label: 'Payment Pending', value: fmtHours(pm.paymentPendingHours), color: '#dc2626', icon: <Wallet className="w-3.5 h-3.5" /> },
+                { label: 'Follow-up Due', value: pm.followupDue, color: '#7c3aed', icon: <PhoneCall className="w-3.5 h-3.5" /> },
+                { label: 'Yet To Start', value: pm.yetToStart, color: '#dc2626', icon: <Rocket className="w-3.5 h-3.5" /> },
+                { label: 'Ongoing', value: pm.ongoing, color: '#16a34a', icon: <Activity className="w-3.5 h-3.5" /> },
+              ];
+              return (
+                <div key={pm.name} className="rounded-xl border shrink-0" style={{ width: 300, background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+                  <div className="flex items-center gap-2.5 px-3.5 pt-3.5 pb-3">
+                    {photo ? (
+                      <img src={photo} alt={pm.name} className="w-9 h-9 rounded-full object-cover shrink-0"
+                        onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                    ) : (
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                        style={{ background: `linear-gradient(135deg, ${bg}cc, ${bg}66)` }}>{initials}</div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold truncate" style={{ color: 'var(--cn-text-primary)' }}>{pm.name}</p>
+                      <p className="text-[11px] truncate" style={{ color: 'var(--cn-text-muted)' }}>Project Management</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-px" style={{ background: 'var(--cn-border)', borderTop: '1px solid var(--cn-border)' }}>
+                    {pmStatCards.map(({ label, value, color, icon }) => (
+                      <div key={label} className="flex items-center gap-2 px-3 py-2" style={{ background: 'var(--cn-bg-card)' }}>
+                        <div className="w-6 h-6 rounded-md flex items-center justify-center shrink-0" style={{ background: color + '18', color }}>{icon}</div>
+                        <div className="min-w-0">
+                          <p className="text-[9px] font-semibold uppercase tracking-wide truncate" style={{ color: 'var(--cn-text-muted)' }}>{label}</p>
+                          <p className="text-xs font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{value}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <SearchFilter
         searchTerm={searchTerm}
         totalCount={data.length}
@@ -579,15 +761,30 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
       />
 
       <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-2 sm:gap-3">
-        {filterCols.map(({ col, label }) => (
-          <MultiSelect
-            key={col}
-            label={label}
-            options={filterOptions[col] ?? []}
-            selected={filters[col] ?? []}
-            onChange={vals => handleFilter(col, vals)}
-          />
-        ))}
+        {filterCols.map(({ col, label }) =>
+          col === monthCol ? (
+            <MonthMultiSelect
+              key={col}
+              options={filterOptions[col] ?? []}
+              selected={filters[col] ?? []}
+              onChange={vals => handleFilter(col, vals)}
+            />
+          ) : (
+            <MultiSelect
+              key={col}
+              label={label}
+              options={filterOptions[col] ?? []}
+              selected={filters[col] ?? []}
+              onChange={vals => handleFilter(col, vals)}
+            />
+          )
+        )}
+        <MultiSelect
+          label="Columns"
+          options={tableCols}
+          selected={visibleCols}
+          onChange={vals => { setVisibleCols(vals); setPage(1); }}
+        />
         {activeFilterCount > 0 && (
           <div className="flex items-end col-span-2 sm:col-span-1">
             <button
