@@ -270,6 +270,16 @@ const PM_CARD_METRIC_DEFS: { key: PmStatKey; label: string; color: string; isHou
 ];
 const DEFAULT_PM_CARD_FIELDS = ['Total Hours', 'Current Month Hours'];
 
+// PM workload badge — bands on raw Total Hours (not a rate, not net of
+// current-month progress; deliberately simple per explicit request).
+function pmWorkloadStatus(totalHours: number): { label: string; bg: string } {
+  if (totalHours < 100) return { label: 'Available', bg: '#22c55e' };
+  if (totalHours < 250) return { label: 'Partially Available', bg: '#f59e0b' };
+  if (totalHours < 350) return { label: 'Partially Occupied', bg: '#f59e0b' };
+  if (totalHours < 450) return { label: 'Occupied', bg: '#f97316' };
+  return { label: 'Overload', bg: '#dc2626' };
+}
+
 // Same idea, but for populating the H/M dropdowns when opening a cell to edit.
 function toHMLiteral(val: string): { h: number; m: number } {
   const trimmed = val.trim();
@@ -808,6 +818,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
               const bg = memberColor(pm.name);
               const initials = pm.name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
               const activeMetrics = PM_CARD_METRIC_DEFS.filter(d => pmCardFields.includes(d.label));
+              const workload = pmWorkloadStatus(pm.totalHours);
               return (
                 <div key={pm.name} className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
                   <div className="flex items-center gap-2.5 px-3.5 pt-3.5 pb-3">
@@ -818,10 +829,13 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                       <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
                         style={{ background: `linear-gradient(135deg, ${bg}cc, ${bg}66)` }}>{initials}</div>
                     )}
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold truncate" style={{ color: 'var(--cn-text-primary)' }}>{pm.name}</p>
                       <p className="text-[11px] truncate" style={{ color: 'var(--cn-text-muted)' }}>Project Management</p>
                     </div>
+                    <span className="text-[10px] font-bold px-2 py-1 rounded-full shrink-0" style={{ background: workload.bg + '22', color: workload.bg }}>
+                      {workload.label}
+                    </span>
                   </div>
                   {activeMetrics.length > 0 && (
                     <div className="grid grid-cols-2 gap-px" style={{ background: 'var(--cn-border)', borderTop: '1px solid var(--cn-border)' }}>
