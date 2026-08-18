@@ -2945,15 +2945,20 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
   const cards = names.map(name => {
     const myTasks = sheet1Data.filter(r => String(r[resourceCol] ?? '').trim() === name);
     const isMonthlyBlock = MONTHLY_BLOCK_MARKETING_NAMES.has(name.trim().toLowerCase());
-    // Same "Today" scope as ResourceStatusGrid's Today tab: today/everyday
-    // (plus anything not explicitly Tomorrow/Day After), excluding closed/n-a.
+    // Strictly Today/Everyday bucketed tasks, excluding closed/n-a. This is
+    // the base set the On Hold/Submitted/In Progress counts are drawn from.
     const todayTasks = myTasks.filter(r => {
       const st = getStatus(r);
       if (SKIP_STATUSES.includes(st)) return false;
       const b = getBucket(r);
-      return !(b === 'tomorrow' || b === 'tommorow' || b === 'day after tomorrow' || b === 'dayafter' || b === 'day after');
+      return b === 'today' || b === 'everyday';
     });
-    const displayHours = todayTasks.reduce((s, r) => s + getTime(r), 0);
+    // Tasks/Hours/Status reflect only what's still actively pending — a task
+    // already handed off (Submitted To PM/Admin/Akash/Client) shouldn't keep
+    // counting toward someone's workload.
+    const SUBMITTED_STATUSES = ['submitted to client', 'submitted to pm', 'submitted to akash', 'submitted to admin'];
+    const activeTasks = todayTasks.filter(r => !SUBMITTED_STATUSES.includes(getStatus(r)));
+    const displayHours = activeTasks.reduce((s, r) => s + getTime(r), 0);
 
     let onLeave = false;
     if (availData && availNameCol && availStatusCol) {
@@ -2988,7 +2993,7 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
     const submittedPmCount = todayTasks.filter(r => getStatus(r) === 'submitted to pm').length;
 
     return {
-      name, status, tabCount: todayTasks.length, displayHours,
+      name, status, tabCount: activeTasks.length, displayHours,
       department: teamDesignation(name),
       inProgressProject: inProgressTask ? getProj(inProgressTask) : '',
       onHoldCount, submittedAdminCount, submittedPmCount,
