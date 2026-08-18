@@ -259,7 +259,7 @@ const PM_CARD_METRIC_DEFS: { key: PmStatKey; label: string; color: string; isHou
   { key: 'yetToStart', label: 'Project Yet To Start', color: '#dc2626', isHours: false },
   { key: 'ongoing', label: 'Project Ongoing', color: '#16a34a', isHours: false },
 ];
-const DEFAULT_PM_CARD_FIELDS = ['Total Hours', 'Current Month Hours', 'Pending Hours', 'Follow-up Due'];
+const DEFAULT_PM_CARD_FIELDS = ['Total Hours', 'Current Month Hours', 'Pending Hours', 'Follow-up Due', 'Project Yet To Start'];
 
 // Same idea, but for populating the H/M dropdowns when opening a cell to edit.
 function toHMLiteral(val: string): { h: number; m: number } {
