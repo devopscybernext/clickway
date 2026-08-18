@@ -658,6 +658,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
 
   // Per-PM summary cards — only meaningful when this view spans more than
   // one PM (the All Projects tab; My Projects is always a single PM already).
+  // Scoped to topCardRows (current month/year), same as the top KPI cards.
   const pmSummaries = useMemo(() => {
     if (!showPmCol) return [];
     const names = [...new Set(data.map(r => String(r['__pm'] ?? '').trim()).filter(Boolean))].sort();
@@ -665,13 +666,13 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     return names.map(name => ({
       name,
       ...computeStatsFor(
-        filtered.filter(r => String(r['__pm'] ?? '').trim() === name),
+        topCardRows.filter(r => String(r['__pm'] ?? '').trim() === name),
         data.filter(r => String(r['__pm'] ?? '').trim() === name),
         statsCols
       ),
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, filtered, showPmCol, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol]);
+  }, [data, topCardRows, showPmCol, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol]);
 
   const fmtHours = (n: number) => `${Math.round(n * 10) / 10}h`;
 
