@@ -504,9 +504,13 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const [sortCol, setSortCol] = useState('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [filters, setFilters] = useState<Record<string, string[]>>({});
-  // Which table columns are shown — empty means "all" (same convention as
-  // MultiSelect's own empty-selection = no filter applied)
+  // Which table columns are shown — starts empty, then gets a real default
+  // list applied once headers are known (see colDefaultsApplied below);
+  // empty still means "all" as a manual-reset fallback (e.g. after Clear).
   const [visibleCols, setVisibleCols] = useState<string[]>([]);
+  // Tracks whether the user has actually touched the Columns picker, so the
+  // "More Filters" badge doesn't count the auto-applied default as active.
+  const [colsTouched, setColsTouched] = useState(false);
   // Which stats show on each PM summary card
   const [pmCardFields, setPmCardFields] = useState<string[]>(DEFAULT_PM_CARD_FIELDS);
   const [showMoreFilters, setShowMoreFilters] = useState(false);
@@ -528,8 +532,31 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const currentMonthHoursCol = headers.find(h => h.toLowerCase() === 'current month hours');
   const riskMonthHoursCol = headers.find(h => h.toLowerCase() === 'risk month hours');
   const followupDateCol = headers.find(h => h.toLowerCase().includes('follow-up date') || h.toLowerCase().includes('followup date'));
+  const commentsCol = headers.find(h => h.toLowerCase().includes('comment'));
   const showPmCol = data.some(r => r['__pm']);
   const isDurationCol = (h: string) => h === totalHoursCol || h === currentMonthHoursCol || h === riskMonthHoursCol;
+  // Timestamp/Email stay usable for sorting & filtering but aren't shown as table columns
+  const tableCols = headers.filter(h => h !== timestampCol && h !== emailCol);
+
+  // Column visibility defaults, applied once: All Projects (read-only, !canEdit)
+  // starts on a curated subset so the table isn't overwhelming with every PM
+  // sharing the view; My Projects (canEdit) starts showing every column since
+  // it's a PM's own, much smaller, editable list.
+  const colDefaultsApplied = useRef(false);
+  useEffect(() => {
+    if (colDefaultsApplied.current || !headers.length) return;
+    colDefaultsApplied.current = true;
+    if (canEdit) {
+      setVisibleCols(tableCols);
+    } else {
+      const defaults = [
+        departmentCol, projectCol, clientCol, totalHoursCol, assignedCol,
+        statusCol, phaseCol, currentMonthHoursCol, paymentStatusCol, followupDateCol, commentsCol,
+      ].filter((c): c is string => !!c);
+      setVisibleCols(defaults);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [headers.length, canEdit]);
 
   // Dropdown columns — canonical lists (matching the sheet's actual data
   // validation) unioned with anything already in the data, so a value that
@@ -570,16 +597,17 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
       monthCol ? { col: monthCol, label: 'Month' } : null,
       statusCol ? { col: statusCol, label: 'Status' } : null,
       phaseCol ? { col: phaseCol, label: 'Phase' } : null,
+      milestonesCol ? { col: milestonesCol, label: 'Upcoming Milestones' } : null,
       upsellCol ? { col: upsellCol, label: 'Upsell/Cross-Sell' } : null,
       paymentStatusCol ? { col: paymentStatusCol, label: 'Payment Status' } : null,
     ].filter((c): c is { col: string; label: string } => c !== null)),
-    [showPmCol, projectCol, clientCol, yearCol, monthCol, statusCol, phaseCol, upsellCol, paymentStatusCol]
+    [showPmCol, projectCol, clientCol, yearCol, monthCol, statusCol, phaseCol, milestonesCol, upsellCol, paymentStatusCol]
   );
   // PM/Project/Client/Year/Month stay always visible; the rest collapse
   // behind "More Filters" so the primary bar doesn't grow unbounded.
-  const secondaryFilterCols = filterCols.filter(({ col }) => col === statusCol || col === phaseCol || col === upsellCol || col === paymentStatusCol);
+  const secondaryFilterCols = filterCols.filter(({ col }) => col === statusCol || col === phaseCol || col === milestonesCol || col === upsellCol || col === paymentStatusCol);
   const primaryFilterCols = filterCols.filter(fc => !secondaryFilterCols.includes(fc));
-  const secondaryActiveCount = secondaryFilterCols.filter(({ col }) => (filters[col] ?? []).length > 0).length + (visibleCols.length > 0 ? 1 : 0);
+  const secondaryActiveCount = secondaryFilterCols.filter(({ col }) => (filters[col] ?? []).length > 0).length + (colsTouched ? 1 : 0);
 
   // Faceted: each dropdown's options reflect rows matching every OTHER active
   // filter, so e.g. picking Year 2026 narrows Month/Project/Client to values
@@ -587,6 +615,14 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const filterOptions = useMemo(() => {
     const opts: Record<string, string[]> = {};
     filterCols.forEach(({ col }) => {
+      // Status/Phase/Upcoming Milestones/Upsell/Payment Status are fixed
+      // dropdown fields — always offer the full canonical list (same one
+      // the edit cells use), not just whatever values happen to occur in
+      // the currently-faceted rows, so an unused status is still pickable.
+      if (col === statusCol || col === phaseCol || col === milestonesCol || col === upsellCol || col === paymentStatusCol) {
+        opts[col] = dropdownOptions[col] ?? [];
+        return;
+      }
       const rows = data.filter(r =>
         filterCols.every(({ col: otherCol }) => {
           if (otherCol === col) return true;
@@ -603,7 +639,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
         : vals.sort();
     });
     return opts;
-  }, [data, filterCols, filters, yearCol, monthCol]);
+  }, [data, filterCols, filters, yearCol, monthCol, statusCol, phaseCol, milestonesCol, upsellCol, paymentStatusCol, dropdownOptions]);
 
   // Default to the current Year/Month once, when they're available as filter columns
   const defaultsApplied = useRef(false);
@@ -722,8 +758,6 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const activeFilterCount = Object.values(filters).filter(v => v.length > 0).length;
   const clearAll = () => { setFilters({}); setPage(1); };
 
-  // Timestamp/Email stay usable for sorting & filtering but aren't shown as table columns
-  const tableCols = headers.filter(h => h !== timestampCol && h !== emailCol);
   const visibleHeaders = visibleCols.length === 0 ? tableCols : tableCols.filter(h => visibleCols.includes(h));
 
   if (!headers.length) {
@@ -883,7 +917,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
               label="Columns"
               options={tableCols}
               selected={visibleCols}
-              onChange={vals => { setVisibleCols(vals); setPage(1); }}
+              onChange={vals => { setVisibleCols(vals); setColsTouched(true); setPage(1); }}
             />
           </div>
         )}
