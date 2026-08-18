@@ -9,6 +9,7 @@ import { CheckCircle2, PauseCircle, LayoutGrid, Send, CalendarCheck, CalendarClo
 import { SheetData } from '@/lib/googleSheets';
 import { memberColor, MONTHLY_BLOCK_MARKETING_NAMES } from '@/lib/memberColors';
 import { MARKETING_STATUS_OPTIONS } from '@/lib/config';
+import { MultiSelect } from './FilteredDataTable';
 
 // "Task Closed" is a Tasks Assigned-only action — Tasks Overview (team's own
 // view of their work) doesn't offer it.
@@ -245,6 +246,24 @@ function inMarketingSubDept(name: string, dept: 'seo' | 'ppc' | 'smm'): boolean 
   const lower = name.trim().toLowerCase();
   const list = dept === 'seo' ? SEO_NAMES : dept === 'ppc' ? PPC_NAMES : SMM_NAMES;
   return list.some(n => lower.includes(n));
+}
+
+// Web sub-department rosters — same purpose as the Marketing split above,
+// for Team Workload's UIUX/Front End/Back End filter. Shubham deliberately
+// in both Front End and Back End (does work for both).
+const UIUX_NAMES = ['akash', 'robin'];
+const FRONTEND_NAMES = ['lovepreet', 'shubham'];
+const BACKEND_NAMES = ['pawan', 'dhruv', 'shubham'];
+function inWebSubDept(name: string, dept: 'uiux' | 'frontend' | 'backend'): boolean {
+  const lower = name.trim().toLowerCase();
+  const list = dept === 'uiux' ? UIUX_NAMES : dept === 'frontend' ? FRONTEND_NAMES : BACKEND_NAMES;
+  return list.some(n => lower.includes(n));
+}
+type SubDept = 'all' | 'seo' | 'ppc' | 'smm' | 'uiux' | 'frontend' | 'backend';
+function matchesSubDept(name: string, dept: SubDept): boolean {
+  if (dept === 'all') return true;
+  if (dept === 'seo' || dept === 'ppc' || dept === 'smm') return inMarketingSubDept(name, dept);
+  return inWebSubDept(name, dept);
 }
 
 // Parse time strings like "3 Hours", "0.5 Hour", "1.5 Hours", "90 min", "3",
@@ -2933,11 +2952,22 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
 // thresholds as ResourceStatusGrid, just a flat glance instead of a
 // list+detail layout (that's what the standalone Team Bandwidth tab was for,
 // and it's been retired).
+const TEAM_CARD_STAT_DEFS: { key: string; label: string; full?: boolean }[] = [
+  { key: 'tasks', label: 'Tasks' },
+  { key: 'hours', label: 'Hours' },
+  { key: 'inProgress', label: 'In Progress', full: true },
+  { key: 'onHold', label: 'On Hold' },
+  { key: 'submittedPm', label: 'Submitted To PM' },
+  { key: 'submittedAdmin', label: 'Submitted To Admin', full: true },
+];
+const DEFAULT_TEAM_CARD_FIELDS = ['Tasks', 'Hours', 'In Progress'];
+
 export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availHeaders }: {
   sheet1Data: SheetData[]; sheet1Headers: string[];
   availData?: SheetData[]; availHeaders?: string[];
 }) {
-  const [subDept, setSubDept] = useState<'all' | 'seo' | 'ppc' | 'smm'>('all');
+  const [subDept, setSubDept] = useState<SubDept>('all');
+  const [cardFields, setCardFields] = useState<string[]>(DEFAULT_TEAM_CARD_FIELDS);
   const resourceCol = findCol(sheet1Headers, 'assigned person', 'assigned to', 'resource');
   const statusCol   = findCol(sheet1Headers, 'task status', 'status');
   const bucketCol   = findCol(sheet1Headers, 'task daily bucket', 'bucket');
@@ -3019,17 +3049,36 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
       <p className="text-sm font-bold tabular-nums truncate mt-0.5" style={{ color: 'var(--cn-text-primary)' }}>{value}</p>
     </div>
   );
+  const statValue = (c: (typeof cards)[number], key: string): React.ReactNode => {
+    switch (key) {
+      case 'tasks': return c.tabCount;
+      case 'hours': return `${Math.round(c.displayHours * 10) / 10}h`;
+      case 'inProgress': return c.inProgressProject || '—';
+      case 'onHold': return c.onHoldCount;
+      case 'submittedPm': return c.submittedPmCount;
+      case 'submittedAdmin': return c.submittedAdminCount;
+      default: return '';
+    }
+  };
 
-  // Only Marketing rosters have SEO/PPC/SMM sub-departments — Web's names
-  // never match, so the tab row simply doesn't render there.
+  // Marketing rosters get SEO/PPC/SMM tabs, Web rosters get UIUX/Front End/
+  // Back End — auto-detected from the names present, so this same component
+  // renders the right tab set (or none) for whichever team it's fed.
   const isMarketingRoster = names.some(n => inMarketingSubDept(n, 'seo') || inMarketingSubDept(n, 'ppc') || inMarketingSubDept(n, 'smm'));
-  const visibleCards = subDept === 'all' ? cards : cards.filter(c => inMarketingSubDept(c.name, subDept));
+  const isWebRoster = names.some(n => inWebSubDept(n, 'uiux') || inWebSubDept(n, 'frontend') || inWebSubDept(n, 'backend'));
+  const subDeptTabs: { key: SubDept; label: string }[] = isMarketingRoster
+    ? [{ key: 'all', label: 'All' }, { key: 'seo', label: 'SEO' }, { key: 'ppc', label: 'PPC' }, { key: 'smm', label: 'SMM' }]
+    : isWebRoster
+      ? [{ key: 'all', label: 'All' }, { key: 'uiux', label: 'UIUX' }, { key: 'frontend', label: 'Front End' }, { key: 'backend', label: 'Back End' }]
+      : [];
+  const visibleCards = cards.filter(c => matchesSubDept(c.name, subDept));
+  const activeStats = TEAM_CARD_STAT_DEFS.filter(d => cardFields.includes(d.label));
 
   return (
     <div className="space-y-3">
-      {isMarketingRoster && (
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-1.5">
-          {([['all', 'All'], ['seo', 'SEO'], ['ppc', 'PPC'], ['smm', 'SMM']] as const).map(([key, label]) => (
+          {subDeptTabs.map(({ key, label }) => (
             <button
               key={key}
               onClick={() => setSubDept(key)}
@@ -3044,7 +3093,13 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
             </button>
           ))}
         </div>
-      )}
+        <MultiSelect
+          label="Show More Data"
+          options={TEAM_CARD_STAT_DEFS.map(d => d.label)}
+          selected={cardFields}
+          onChange={setCardFields}
+        />
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {visibleCards.map(c => {
         const photo = teamPhoto(c.name);
@@ -3068,14 +3123,13 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
                 {c.status.label}
               </span>
             </div>
-            <div className="grid grid-cols-2 gap-px" style={{ background: 'var(--cn-border)', borderTop: '1px solid var(--cn-border)' }}>
-              <Stat label="Tasks" value={c.tabCount} />
-              <Stat label="Hours" value={`${Math.round(c.displayHours * 10) / 10}h`} />
-              <Stat label="In Progress" value={c.inProgressProject || '—'} full />
-              <Stat label="On Hold" value={c.onHoldCount} />
-              <Stat label="Submitted To PM" value={c.submittedPmCount} />
-              <Stat label="Submitted To Admin" value={c.submittedAdminCount} full />
-            </div>
+            {activeStats.length > 0 && (
+              <div className="grid grid-cols-2 gap-px" style={{ background: 'var(--cn-border)', borderTop: '1px solid var(--cn-border)' }}>
+                {activeStats.map(({ key, label, full }) => (
+                  <Stat key={key} label={label} value={statValue(c, key)} full={full} />
+                ))}
+              </div>
+            )}
           </div>
         );
         })}
