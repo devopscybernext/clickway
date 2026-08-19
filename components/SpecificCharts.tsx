@@ -3582,6 +3582,9 @@ export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = fal
   const timeEstCol   = findCol(sheet1Headers, 'time estimation', 'time estimate', 'estimation');
   const taskCol      = findCol(sheet1Headers, 'task name', 'task title', 'task');
   const taskUrlCol   = findCol(sheet1Headers, 'task url', 'task link', 'link', 'url');
+  // "Total Hours" on the Marketing Tasks sheet, "Total Time" on Bandwidth
+  // Allocation — same HH.MM-notation column ResourceStatusGrid reads.
+  const totalHoursCol = sheet1Headers.find(h => h.toLowerCase().includes('total hours') || h.toLowerCase().includes('total time'));
 
   if (!sheet1Data.length) return null;
 
@@ -3612,6 +3615,49 @@ export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = fal
       const rank = (r: SheetData) => (String(bucketCol ? r[bucketCol] ?? '' : '').trim().toLowerCase().startsWith('tomorrow') || String(bucketCol ? r[bucketCol] ?? '' : '').trim().toLowerCase() === 'tommorow') ? 0 : 1;
       return rank(a) - rank(b);
     });
+
+    // Top Projects by Hours — grouped by Project, summed off the Total
+    // Hours/Total Time column (not Time Estimation) per the user's spec.
+    const projectHoursMap = new Map<string, number>();
+    if (totalHoursCol && projectCol) {
+      myData.forEach(r => {
+        const proj = String(r[projectCol] ?? '').trim();
+        if (!proj) return;
+        const { h, m } = toHM(String(r[totalHoursCol] ?? '').trim());
+        const dec = h + m / 60;
+        if (dec <= 0) return;
+        projectHoursMap.set(proj, (projectHoursMap.get(proj) ?? 0) + dec);
+      });
+    }
+    const topProjects = [...projectHoursMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const topProjectMax = topProjects.length ? topProjects[0][1] : 0;
+
+    // PM Status breakdown — the four states that actually show up on this
+    // sheet's PM Status column (lowercased literals: 'changes', 'approved',
+    // 'submitted to client', 'ticketclosed').
+    const PM_STATUS_CARD_DEFS = [
+      { label: 'Changes',              match: 'changes',              color: '#dc2626' },
+      { label: 'Approved',             match: 'approved',             color: '#16a34a' },
+      { label: 'Submitted To Client',  match: 'submitted to client',  color: '#6d28d9' },
+      { label: 'TicketClosed',         match: 'ticketclosed',         color: '#7c3aed' },
+    ];
+    const pmStatusCounts = PM_STATUS_CARD_DEFS.map(d => ({
+      ...d,
+      count: pmStatusCol ? myData.filter(r => String(r[pmStatusCol] ?? '').trim().toLowerCase() === d.match).length : 0,
+    }));
+
+    // Task Pipeline — every bucket + Submitted, split out individually
+    // instead of Project State's combined Today/Everyday tile.
+    const bucketOf = (r: SheetData) => bucketCol ? String(r[bucketCol] ?? '').trim().toLowerCase() : '';
+    const pipelineToday        = myData.filter(r => bucketOf(r) === 'today').length;
+    const pipelineEveryday     = myData.filter(r => bucketOf(r) === 'everyday').length;
+    const pipelineTomorrow     = myData.filter(r => { const b = bucketOf(r); return b === 'tomorrow' || b === 'tommorow'; }).length;
+    const pipelineDayAfter     = myData.filter(r => { const b = bucketOf(r); return b === 'day after tomorrow' || b === 'dayafter' || b === 'day after'; }).length;
+    const pipelineToBeExpected = myData.filter(r => bucketOf(r) === 'to be expected').length;
+    const pipelineSubmitted    = statusCol ? myData.filter(r => {
+      const s = String(r[statusCol] ?? '').trim().toLowerCase();
+      return s === 'submitted to pm' || s === 'submitted to akash' || s === 'submitted to admin' || s === 'submitted to client';
+    }).length : 0;
 
     return (
       <section className="space-y-4">
@@ -3668,6 +3714,61 @@ export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = fal
               })}
             </div>
           )}
+        </div>
+
+        {/* ── Task Pipeline — every bucket + Submitted, split out individually ── */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
+          <StatCard label="Today"          value={pipelineToday}        total={myTotal} color="#FE4A23" icon={<CalendarCheck className="w-4 h-4" />} adminStyle={true} />
+          <StatCard label="Everyday"       value={pipelineEveryday}     total={myTotal} color="#06b6d4" icon={<RefreshCw     className="w-4 h-4" />} adminStyle={true} />
+          <StatCard label="Tomorrow"       value={pipelineTomorrow}     total={myTotal} color="#3b82f6" icon={<CalendarClock className="w-4 h-4" />} adminStyle={true} />
+          <StatCard label="Day After"      value={pipelineDayAfter}     total={myTotal} color="#7c3aed" icon={<CalendarClock className="w-4 h-4" />} adminStyle={true} />
+          <StatCard label="Submitted"      value={pipelineSubmitted}    total={myTotal} color="#10b981" icon={<Send          className="w-4 h-4" />} adminStyle={true} />
+          <StatCard label="To Be Expected" value={pipelineToBeExpected} total={myTotal} color="#d97706" icon={<AlertTriangle className="w-4 h-4" />} adminStyle={true} />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* ── Top Projects by Hours (Total Hours column) ── */}
+          <div className="cn-card rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+            <div className="px-4 py-2.5 border-b" style={{ borderColor: 'var(--cn-border)', background: 'var(--cn-bg-input)' }}>
+              <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>Top Projects by Hours</p>
+            </div>
+            {topProjects.length === 0 ? (
+              <p className="text-sm text-center py-8" style={{ color: 'var(--cn-text-faint)' }}>No Total Hours logged yet</p>
+            ) : (
+              <div className="divide-y" style={{ borderColor: 'var(--cn-border)' }}>
+                {topProjects.map(([proj, hrs], i) => (
+                  <div key={proj} className="flex items-center gap-3 px-4 py-2.5" style={{ background: i % 2 === 1 ? 'var(--cn-bg-input)' : 'transparent' }}>
+                    <span className="text-xs font-bold w-5 shrink-0" style={{ color: 'var(--cn-text-muted)' }}>#{i + 1}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold truncate" style={{ color: 'var(--cn-text-primary)' }}>{proj}</p>
+                      <div className="h-1 rounded-full overflow-hidden mt-1" style={{ background: 'var(--cn-bg-input)' }}>
+                        <div className="h-full rounded-full" style={{ width: `${topProjectMax > 0 ? (hrs / topProjectMax) * 100 : 0}%`, background: '#10b981' }} />
+                      </div>
+                    </div>
+                    <span className="text-xs font-bold tabular-nums shrink-0" style={{ color: 'var(--cn-text-primary)' }}>{Math.round(hrs * 10) / 10}h</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ── PM Status breakdown ── */}
+          <div className="cn-card rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+            <div className="px-4 py-2.5 border-b" style={{ borderColor: 'var(--cn-border)', background: 'var(--cn-bg-input)' }}>
+              <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>PM Status</p>
+            </div>
+            <div className="grid grid-cols-2 gap-px" style={{ background: 'var(--cn-border)' }}>
+              {pmStatusCounts.map(d => (
+                <div key={d.label} className="flex flex-col gap-1 px-4 py-3" style={{ background: 'var(--cn-bg-card)' }}>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: d.color }} />
+                    <span className="text-[10px] font-semibold uppercase tracking-wide truncate" style={{ color: 'var(--cn-text-muted)' }}>{d.label}</span>
+                  </div>
+                  <span className="text-xl font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{d.count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
     );
