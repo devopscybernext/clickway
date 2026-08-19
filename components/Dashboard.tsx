@@ -7,7 +7,7 @@ import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, PM_PROJECT_FORM_URLS,
 import { AuthUser, SheetId, Team, getAllowedSheets, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, getTasksAssignedLockedTeam } from '@/lib/auth';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
-import SpecificCharts, { ResourceOverview, PmStatusOverview, KpiCards, ResourceStatusGrid, TeamWorkloadCards, InsightCards, PmStatusChart, ResourceBandwidthChips } from './SpecificCharts';
+import SpecificCharts, { ResourceOverview, PmStatusOverview, KpiCards, ResourceStatusGrid, TeamWorkloadCards, MyWorkloadSummary, InsightCards, PmStatusChart, ResourceBandwidthChips } from './SpecificCharts';
 import FilteredDataTable from './FilteredDataTable';
 import SearchFilter from './SearchFilter';
 import EmployeeGallery from './EmployeeGallery';
@@ -770,6 +770,19 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   sheet1Data={analyticsData}
                   sheet1Headers={analyticsHeaders}
                   personFilter={user.displayName}
+                />
+              )}
+
+              {/* ── My Workload — individual contributor's own badge/gauge/leave
+                   flag + today's task list (Web & MarketingTeam only) ── */}
+              {isIndividual && (
+                <MyWorkloadSummary
+                  key={`my-workload-${analyticsTeam}`}
+                  sheet1Data={analyticsData}
+                  sheet1Headers={analyticsHeaders}
+                  availData={analyticsAvailData}
+                  availHeaders={analyticsAvailHeaders}
+                  personName={user.displayName}
                 />
               )}
 

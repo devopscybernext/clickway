@@ -3118,6 +3118,128 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
   );
 }
 
+// ─── My Workload — individual-contributor Dashboard widget: their own
+// workload badge + hours-vs-band gauge + leave flag, plus today's actual
+// task list (Web/Marketing individual viewers only; admin/PM/team-admin
+// never see this, they get TeamWorkloadCards instead).
+export function MyWorkloadSummary({ sheet1Data, sheet1Headers, availData, availHeaders, personName }: {
+  sheet1Data: SheetData[]; sheet1Headers: string[];
+  availData?: SheetData[]; availHeaders?: string[];
+  personName: string;
+}) {
+  const resourceCol = findCol(sheet1Headers, 'assigned person', 'assigned to', 'resource');
+  const statusCol   = findCol(sheet1Headers, 'task status', 'status');
+  const bucketCol   = findCol(sheet1Headers, 'task daily bucket', 'bucket');
+  const timeEstCol  = findCol(sheet1Headers, 'time estimation', 'time estimate', 'estimation');
+  const projectCol  = findCol(sheet1Headers, 'project name', 'project');
+  const taskCol     = findCol(sheet1Headers, 'task name', 'task title', 'task');
+  const taskUrlCol  = findCol(sheet1Headers, 'task url', 'task link', 'link', 'url');
+  const availNameCol   = availHeaders ? findCol(availHeaders, 'name', 'resource', 'person', 'team') : undefined;
+  const availStatusCol = availHeaders ? findCol(availHeaders, 'availability', 'status', 'leave') : undefined;
+
+  if (!sheet1Data.length || !resourceCol || !personName) return null;
+
+  const getStatus  = (r: SheetData) => statusCol  ? String(r[statusCol]  ?? '').trim() : '';
+  const getBucket  = (r: SheetData) => bucketCol  ? String(r[bucketCol]  ?? '').trim().toLowerCase() : '';
+  const getTime    = (r: SheetData) => timeEstCol ? parseHours(String(r[timeEstCol] ?? '').trim()) : 0;
+  const getProj    = (r: SheetData) => projectCol ? String(r[projectCol] ?? '').trim() : '';
+  const getTask    = (r: SheetData) => taskCol    ? String(r[taskCol] ?? '').trim() : '';
+  const getTaskUrl = (r: SheetData) => taskUrlCol ? String(r[taskUrlCol] ?? '').trim() : '';
+
+  const myTasks = sheet1Data.filter(r => String(r[resourceCol] ?? '').trim().toLowerCase() === personName.trim().toLowerCase());
+  const isMonthlyBlock = MONTHLY_BLOCK_MARKETING_NAMES.has(personName.trim().toLowerCase());
+
+  // Same today/everyday scope as TeamWorkloadCards, so this badge always
+  // matches what the admin sees on the team-wide cards.
+  const todayTasks = myTasks.filter(r => {
+    const st = getStatus(r).toLowerCase();
+    if (SKIP_STATUSES.includes(st)) return false;
+    const b = getBucket(r);
+    return b === 'today' || b === 'everyday';
+  });
+  const SUBMITTED_STATUSES = ['submitted to client', 'submitted to pm', 'submitted to akash', 'submitted to admin'];
+  const activeTasks = todayTasks.filter(r => !SUBMITTED_STATUSES.includes(getStatus(r).toLowerCase()));
+  const displayHours = activeTasks.reduce((s, r) => s + getTime(r), 0);
+
+  let onLeave = false;
+  if (availData && availNameCol && availStatusCol) {
+    const av = availData.find(r => String(r[availNameCol] ?? '').trim().toLowerCase() === personName.trim().toLowerCase());
+    if (av) { const v = String(av[availStatusCol] ?? '').trim().toLowerCase(); onLeave = isOnLeaveText(v); }
+  }
+
+  const status = onLeave ? { label: 'On Leave', bg: '#ef4444' } : workloadStatus(displayHours, isMonthlyBlock);
+  // Gauge reads against the Overload threshold — 125h/month for PPC & SEO,
+  // 7.3h/day for everyone else.
+  const cap = isMonthlyBlock ? 125 : 7.3;
+  const pct = Math.min((displayHours / cap) * 100, 100);
+  const hoursLabel = isMonthlyBlock
+    ? `${Math.round(displayHours * 10) / 10}h of ${cap}h this month`
+    : `${Math.round(displayHours * 10) / 10}h of ${cap}h today`;
+
+  return (
+    <div className="flex flex-col lg:flex-row gap-4">
+      <div className="cn-card rounded-xl border p-5 flex flex-col gap-4 lg:w-[320px] shrink-0" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>My Workload</p>
+          <span className="text-[10px] font-bold px-2 py-1 rounded-full shrink-0" style={{ background: status.bg + '22', color: status.bg }}>
+            {status.label}
+          </span>
+        </div>
+        <div className="space-y-1.5">
+          <p className="text-xs" style={{ color: 'var(--cn-text-muted)' }}>{hoursLabel}</p>
+          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--cn-bg-input)' }}>
+            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: status.bg, transition: 'width 0.8s ease' }} />
+          </div>
+        </div>
+        {onLeave && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold" style={{ background: '#ef444418', color: '#ef4444' }}>
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            You&apos;re marked on leave today
+          </div>
+        )}
+      </div>
+
+      <div className="cn-card rounded-xl border overflow-hidden flex-1" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+        <div className="px-4 py-2.5 border-b flex items-center justify-between" style={{ borderColor: 'var(--cn-border)', background: 'var(--cn-bg-input)' }}>
+          <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>Today&apos;s Tasks</p>
+          <span className="text-[11px] font-medium" style={{ color: 'var(--cn-text-muted)' }}>{todayTasks.length} task{todayTasks.length === 1 ? '' : 's'}</span>
+        </div>
+        {todayTasks.length === 0 ? (
+          <p className="text-sm text-center py-8" style={{ color: 'var(--cn-text-faint)' }}>No tasks for today</p>
+        ) : (
+          <div className="divide-y max-h-80 overflow-y-auto" style={{ borderColor: 'var(--cn-border)' }}>
+            {todayTasks.map((r, i) => {
+              const task = getTask(r) || 'Untitled task';
+              const proj = getProj(r);
+              const hrs = getTime(r);
+              const st = getStatus(r);
+              const url = getTaskUrl(r);
+              return (
+                <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    {url ? (
+                      <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold truncate hover:underline block" style={{ color: 'var(--cn-text-primary)' }}>{task}</a>
+                    ) : (
+                      <p className="text-sm font-semibold truncate" style={{ color: 'var(--cn-text-primary)' }}>{task}</p>
+                    )}
+                    {proj && <p className="text-[11px] truncate" style={{ color: 'var(--cn-text-muted)' }}>{proj}</p>}
+                  </div>
+                  {hrs > 0 && (
+                    <span className="text-xs font-bold tabular-nums shrink-0" style={{ color: 'var(--cn-text-muted)' }}>{Math.round(hrs * 10) / 10}h</span>
+                  )}
+                  <span className="text-[10px] font-semibold px-2 py-1 rounded-full shrink-0 truncate max-w-[140px]" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>
+                    {st || '—'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Resource Bandwidth chips — compact "who has room for a new task" strip,
 // used above Tasks Assigned. Same status thresholds as ResourceStatusGrid
 // (Team Bandwidth), sorted most-available first.
