@@ -3396,7 +3396,11 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
   const submittedPMCount     = statusCol ? data.filter(r => getStatus(r) === 'submitted to pm').length : 0;
   const onHoldCount          = statusCol ? data.filter(r => getStatus(r) === 'on hold').length : 0;
   const toBeExpectedCount    = bucketCol ? data.filter(r => String(r[bucketCol] ?? '').trim().toLowerCase() === 'to be expected').length : 0;
-  const rosterNames = resourceCol ? [...new Set(data.map(r => String(r[resourceCol] ?? '').trim()).filter(Boolean))] : [];
+  // Unfiltered roster (scopedData, not the date-filtered `data`) — otherwise
+  // anyone with zero today/everyday tasks (e.g. someone on leave with
+  // nothing assigned) would silently drop out of the roster and never get
+  // counted here, even though Team Workload still shows their card.
+  const rosterNames = resourceCol ? [...new Set(scopedData.map(r => String(r[resourceCol] ?? '').trim()).filter(Boolean))] : [];
   const onLeaveCount = (availData && availNameCol && availStatusCol)
     ? rosterNames.filter(name => {
         const av = availData.find(r => String(r[availNameCol] ?? '').trim().toLowerCase() === name.toLowerCase());
