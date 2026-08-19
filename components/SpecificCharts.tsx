@@ -3585,6 +3585,7 @@ export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = fal
   // "Total Hours" on the Marketing Tasks sheet, "Total Time" on Bandwidth
   // Allocation — same HH.MM-notation column ResourceStatusGrid reads.
   const totalHoursCol = sheet1Headers.find(h => h.toLowerCase().includes('total hours') || h.toLowerCase().includes('total time'));
+  const timestampCol  = sheet1Headers.find(h => h.toLowerCase().includes('timestamp'));
 
   if (!sheet1Data.length) return null;
 
@@ -3631,6 +3632,48 @@ export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = fal
     }
     const topProjects = [...projectHoursMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
     const topProjectMax = topProjects.length ? topProjects[0][1] : 0;
+
+    // Longest-Running Task — single task with the highest Total Hours logged.
+    let longestTask: SheetData | null = null;
+    let longestHours = 0;
+    if (totalHoursCol) {
+      myData.forEach(r => {
+        const { h, m } = toHM(String(r[totalHoursCol] ?? '').trim());
+        const dec = h + m / 60;
+        if (dec > longestHours) { longestHours = dec; longestTask = r; }
+      });
+    }
+
+    // This Month vs Last Month — same "DD/MM/YYYY[ HH:MM:SS]"-tolerant parse
+    // filterByDate() already relies on elsewhere in this file, bucketed off
+    // the Timestamp column and summed off Total Hours (same source as Top
+    // Projects, for consistency).
+    const parseRowDate = (raw: string): Date | null => {
+      if (!raw) return null;
+      let d = new Date(raw);
+      if (!isNaN(d.getTime())) return d;
+      const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if (m) { d = new Date(+m[3], +m[2] - 1, +m[1]); if (!isNaN(d.getTime())) return d; }
+      return null;
+    };
+    const monthNow = new Date();
+    const thisMonthStart = new Date(monthNow.getFullYear(), monthNow.getMonth(), 1);
+    const lastMonthStart = new Date(monthNow.getFullYear(), monthNow.getMonth() - 1, 1);
+    let thisMonthHours = 0;
+    let lastMonthHours = 0;
+    if (totalHoursCol && timestampCol) {
+      myData.forEach(r => {
+        const d = parseRowDate(String(r[timestampCol] ?? '').trim());
+        if (!d) return;
+        const { h, m } = toHM(String(r[totalHoursCol] ?? '').trim());
+        const dec = h + m / 60;
+        if (dec <= 0) return;
+        if (d >= thisMonthStart) thisMonthHours += dec;
+        else if (d >= lastMonthStart && d < thisMonthStart) lastMonthHours += dec;
+      });
+    }
+    const monthDelta = thisMonthHours - lastMonthHours;
+    const monthDeltaPct = lastMonthHours > 0 ? Math.round((monthDelta / lastMonthHours) * 100) : (thisMonthHours > 0 ? 100 : 0);
 
     // PM Status breakdown — the four states that actually show up on this
     // sheet's PM Status column (lowercased literals: 'changes', 'approved',
@@ -3767,6 +3810,54 @@ export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = fal
                   <span className="text-xl font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{d.count}</span>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* ── Longest-Running Task (highest Total Hours logged) ── */}
+          <div className="cn-card rounded-xl border p-5 flex items-center gap-4" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#10b98118', color: '#10b981' }}>
+              <BadgeCheck className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--cn-text-muted)' }}>Longest-Running Task</p>
+              {longestTask ? (
+                <>
+                  <p className="text-sm font-semibold truncate" style={{ color: 'var(--cn-text-primary)' }}>
+                    {taskCol ? String(longestTask[taskCol] ?? '').trim() || 'Untitled task' : 'Untitled task'}
+                  </p>
+                  {projectCol && (
+                    <p className="text-[11px] truncate" style={{ color: 'var(--cn-text-muted)' }}>{String(longestTask[projectCol] ?? '').trim()}</p>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm" style={{ color: 'var(--cn-text-faint)' }}>No Total Hours logged yet</p>
+              )}
+            </div>
+            {longestTask && (
+              <span className="text-2xl font-bold tabular-nums shrink-0" style={{ color: '#10b981' }}>{Math.round(longestHours * 10) / 10}h</span>
+            )}
+          </div>
+
+          {/* ── This Month vs Last Month (Total Hours, bucketed off Timestamp) ── */}
+          <div className="cn-card rounded-xl border p-5" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+            <p className="text-[10px] font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--cn-text-muted)' }}>This Month vs Last Month</p>
+            <div className="flex items-center gap-6">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>This Month</p>
+                <p className="text-2xl font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{Math.round(thisMonthHours * 10) / 10}h</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>Last Month</p>
+                <p className="text-2xl font-bold tabular-nums" style={{ color: 'var(--cn-text-muted)' }}>{Math.round(lastMonthHours * 10) / 10}h</p>
+              </div>
+              {(thisMonthHours > 0 || lastMonthHours > 0) && (
+                <div className="flex items-center gap-1 ml-auto shrink-0" style={{ color: monthDelta >= 0 ? '#16a34a' : '#dc2626' }}>
+                  {monthDelta >= 0 ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  <span className="text-sm font-bold tabular-nums">{Math.abs(monthDeltaPct)}%</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
