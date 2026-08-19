@@ -3396,6 +3396,13 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
   const submittedPMCount     = statusCol ? data.filter(r => getStatus(r) === 'submitted to pm').length : 0;
   const onHoldCount          = statusCol ? data.filter(r => getStatus(r) === 'on hold').length : 0;
   const toBeExpectedCount    = bucketCol ? data.filter(r => String(r[bucketCol] ?? '').trim().toLowerCase() === 'to be expected').length : 0;
+  const rosterNames = resourceCol ? [...new Set(data.map(r => String(r[resourceCol] ?? '').trim()).filter(Boolean))] : [];
+  const onLeaveCount = (availData && availNameCol && availStatusCol)
+    ? rosterNames.filter(name => {
+        const av = availData.find(r => String(r[availNameCol] ?? '').trim().toLowerCase() === name.toLowerCase());
+        return av ? isOnLeaveText(String(av[availStatusCol] ?? '').trim()) : false;
+      }).length
+    : 0;
 
   const IC = ({ label, value, sub, color, icon, badge }: { label: string; value: string | number; sub?: string; color: string; icon: React.ReactNode; badge?: React.ReactNode }) => (
     <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl border" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
@@ -3441,13 +3448,14 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
       { label: 'Submitted To Admin',   value: submittedAkashCount,              color: '#d97706', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.84 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.77 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8 8.09a16 16 0 0 0 6 6l1.06-1.06a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg> },
       { label: 'Submitted to PM',      value: submittedPMCount,                 color: '#10b981', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
       { label: 'To Be Expected',       value: toBeExpectedCount,                color: '#d97706', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> },
+      { label: 'Leave',                value: onLeaveCount,                     color: '#8b5cf6', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M9 16l2 2 4-4"/></svg> },
     ];
     return (
       <div className="cn-card rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
         <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--cn-border)', background: 'var(--cn-bg-input)' }}>
           <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>Project State</p>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-px" style={{ background: 'var(--cn-border)' }}>
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-7 gap-px" style={{ background: 'var(--cn-border)' }}>
           {cards.map(({ label, value, color, icon }) => (
             <div key={label} className="flex flex-col gap-1.5 p-4" style={{ background: 'var(--cn-bg-card)' }}>
               <div className="flex items-center justify-between">
