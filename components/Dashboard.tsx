@@ -539,14 +539,19 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
   const handleMarketingTeamChange = async (row: SheetData, colName: string, newValue: string) => {
     const rowNum = Number(row['__row']);
+    // Current Month Tasks + All Marketing Tasks share __row numbering
+    // per-tab (like Bandwidth Allocation's archive tabs), so both the write
+    // target and the local-state match must go through the row's own tab
+    // (__sheet/__id), not just __row.
+    const sheetName = String(row['__sheet'] ?? TAB_MARKETING_TASKS);
     const colIndex = marketingTeamHeaders.indexOf(colName);
     if (!rowNum || colIndex === -1) return;
     await fetch('/api/update-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ spreadsheetId: MARKETING_TEAM_SHEET_ID, sheetName: TAB_MARKETING_TASKS, row: rowNum, colIndex, value: newValue }),
+      body: JSON.stringify({ spreadsheetId: MARKETING_TEAM_SHEET_ID, sheetName, row: rowNum, colIndex, value: newValue }),
     });
-    setMarketingTeamData(prev => prev.map(r => r['__row'] === rowNum ? { ...r, [colName]: newValue } : r));
+    setMarketingTeamData(prev => prev.map(r => r['__id'] === row['__id'] ? { ...r, [colName]: newValue } : r));
   };
 
   const handleSheetChange = (sheet: SheetId) => {
@@ -588,9 +593,10 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const webAvailData     = filterByRoster(availData, availHeaders, WEB_TEAM);
 
   // Marketing — tasks come from the separate Marketing Team spreadsheet's
-  // single "Marketing Tasks" tab (Department column distinguishes SEO/PPC/
-  // SMM), but the Leave spreadsheet covers every resource in one table, so
-  // it's the same availData filtered to the Marketing roster.
+  // Current Month Tasks + All Marketing Tasks tabs, merged server-side like
+  // Bandwidth Allocation's archive tabs (Department column distinguishes
+  // SEO/PPC/SMM), but the Leave spreadsheet covers every resource in one
+  // table, so it's the same availData filtered to the Marketing roster.
   const marketingAvailData = filterByRoster(availData, availHeaders, MARKETING_ASSIGNED_PERSONS);
 
   // Dashboard analytics (sheet 3) — same Web/Marketing split as the other pages,

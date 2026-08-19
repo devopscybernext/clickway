@@ -37,8 +37,13 @@ export const PM_PROJECT_FORM_URLS: Record<string, string> = {
   Yash:   'https://forms.gle/mey4kAfqDwcDqRvb7',
 };
 
-// Tab names inside the Sheet 1 spreadsheet
-export const TAB_BANDWIDTH    = 'Bandwidth Allocation';
+// Tab names inside the Sheet 1 spreadsheet. The original "Bandwidth
+// Allocation" tab was renamed to "Current Month Tasks" and a new "All Web
+// Tasks Tab" was added alongside it for prior months' rows — /api/bandwidth-tasks
+// already auto-discovers every non-excluded tab (that's how the periodic
+// "Task - <range>" archive tabs have always been picked up), so this rename
+// needs no route changes, just this constant kept in sync.
+export const TAB_BANDWIDTH    = 'Current Month Tasks';
 // No longer fetched directly (see LEAVE_SHEET_ID below) — kept only so
 // /api/bandwidth-tasks' tab auto-discovery keeps excluding it by name for
 // as long as the tab still exists in the spreadsheet.
@@ -86,15 +91,19 @@ export const RANGE_QA_TESTING = `'${TAB_QA_TESTING}'!A1:Z10000`;
 // Allocation) / "Name" (Resource Availability) columns.
 export const WEB_TEAM = ['Akash', 'Dhruv', 'Shubham', 'Lovepreet', 'Pawan', 'Robin'];
 
-// Marketing Team spreadsheet — a single "Marketing Tasks" tab covering every
-// sub-team, distinguished by the Department column (SEO/PPC/SMM/...) rather
-// than separate tabs. Columns: Timestamp, Email Address, Project Name, Task
-// Name, Task URL, Department, Task Estimation, Deadline, Assigned Person,
-// Task Daily Bucket, Action Taken Today, Performance Signal/Insights,
+// Marketing Team spreadsheet — every sub-team lives in the same tab(s),
+// distinguished by the Department column (SEO/PPC/SMM/...) rather than
+// separate tabs. Originally a single "Marketing Tasks" tab; renamed to
+// "Current Month Tasks" with a new "All Marketing Tasks" tab added for prior
+// months' rows — /api/marketing-team auto-discovers every tab in this
+// spreadsheet (mirroring /api/bandwidth-tasks' approach) so a future archive
+// split needs no route change. Columns: Timestamp, Email Address, Project
+// Name, Task Name, Task URL, Department, Task Estimation, Deadline, Assigned
+// Person, Task Daily Bucket, Action Taken Today, Performance Signal/Insights,
 // Blocker, Next Steps, Time Logged On Ac, Task Status Updation, Today
 // Bucket Set, Total Hours, PM Status
 export const MARKETING_TEAM_SHEET_ID = '1TTfD6-EKMXucucAyI2iNJLd6-P6lbolgQe-QOC1GyXs';
-export const TAB_MARKETING_TASKS = 'Marketing Tasks';
+export const TAB_MARKETING_TASKS = 'Current Month Tasks';
 
 // Department options (matches the sheet's dropdown validation)
 export const MARKETING_DEPARTMENT_OPTIONS = ['SEO', 'PPC', 'SMM'];
