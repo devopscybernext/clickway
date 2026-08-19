@@ -1086,7 +1086,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                   String(t._raw[pmEmailCol] ?? '').trim().toLowerCase() === currentUserEmail.trim().toLowerCase()
                 );
                 return (
-                  <tr key={String(t._raw['__row'] ?? i)} style={{ borderTop: '1px solid var(--cn-border-light, var(--cn-border))' }}>
+                  <tr key={String(t._raw['__id'] ?? t._raw['__row'] ?? i)} style={{ borderTop: '1px solid var(--cn-border-light, var(--cn-border))' }}>
                     {/* Copy row */}
                     {canCopy && (
                       <td className="px-2 py-2 text-center">
@@ -1405,7 +1405,7 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
                 String(t._raw[pmEmailCol] ?? '').trim().toLowerCase() === currentUserEmail.trim().toLowerCase()
               );
               return (
-                <tr key={String(t._raw['__row'] ?? i)} style={{ borderTop: '1px solid var(--cn-border-light, var(--cn-border))' }}>
+                <tr key={String(t._raw['__id'] ?? t._raw['__row'] ?? i)} style={{ borderTop: '1px solid var(--cn-border-light, var(--cn-border))' }}>
                   {canCopy && (
                     <td className="px-2 py-2 text-center">
                       <button
@@ -2228,7 +2228,7 @@ function PmTasksTable({ data, personName, projectCol, taskCol, taskUrlCol, timeE
               const pmC     = pmColor[pmStatus.toLowerCase()] ?? '#6b7280';
               const bColor  = bucketColors[normBucket(bucket)] ?? '#6b7280';
               return (
-                <tr key={String(r['__row'] ?? i)} style={{ borderTop: '1px solid var(--cn-border-light, var(--cn-border))' }}>
+                <tr key={String(r['__id'] ?? r['__row'] ?? i)} style={{ borderTop: '1px solid var(--cn-border-light, var(--cn-border))' }}>
                   <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>
                     <span className="truncate block">{project || '—'}</span>
                   </td>

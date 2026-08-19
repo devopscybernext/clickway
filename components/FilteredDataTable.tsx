@@ -693,7 +693,7 @@ function parseTimestamp(v: string): number {
 }
 
 export default function FilteredDataTable({ data, headers, sheetNum, onStatusChange, readOnlyStatus, readOnlyPmStatus, showCopy, defaultPersonFilter, editPersonBucket, readOnlyBucket, readOnlyAssigned, rowCopy, restrictToBucketEdit, editStatusUpdation, editProjectTask, hiddenCols, onlyColTerms, hiddenFilterTerms, statusOptions, todayBucketSetOptions, assignedPersonOptions }: Props) {
-  const [copiedRow, setCopiedRow] = useState<number | null>(null);
+  const [copiedRow, setCopiedRow] = useState<string | null>(null);
   const effectiveStatusOptions = statusOptions ?? STATUS_OPTIONS;
   const effectiveStatusOptionsLower = effectiveStatusOptions.map(s => s.toLowerCase());
   const effectiveTodayBucketSetOptions = todayBucketSetOptions ?? TODAY_BUCKET_SET_OPTIONS;
@@ -715,7 +715,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
     const url        = urlCol     ? String(row[urlCol]     ?? '').trim() : '';
     const text       = `Project Name: ${project}\nTask URL: ${url}\nEst Time: `;
     navigator.clipboard.writeText(text).catch(() => {});
-    const idx = Number(row['__row']);
+    const idx = String(row['__id'] ?? row['__row'] ?? '');
     setCopiedRow(idx);
     setTimeout(() => setCopiedRow(null), 2000);
   };
@@ -1121,7 +1121,12 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                 const isToday = bucketCol && bucketVal === 'today';
                 return (
                   <tr
-                    key={String(row['__row'] ?? i)}
+                    // __id (tab-prefixed, e.g. "Current Month Tasks::5") is
+                    // unique across merged tabs; __row alone collides once a
+                    // dataset merges multiple tabs that each restart their
+                    // own row numbering at 2, which was rendering as blank/
+                    // duplicated rows via React key collisions.
+                    key={String(row['__id'] ?? row['__row'] ?? i)}
                     style={isToday
                       ? { backgroundColor: 'rgba(34,197,94,0.20)', borderColor: 'rgba(34,197,94,0.15)' }
                       : { backgroundColor: i % 2 === 0 ? 'var(--cn-bg-row-even)' : 'var(--cn-bg-row-odd)', borderColor: 'var(--cn-border-light)' }}
@@ -1137,12 +1142,12 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                           title="Copy task info"
                           className="w-8 h-8 rounded-lg inline-flex items-center justify-center cursor-pointer transition-all"
                           style={{
-                            background: copiedRow === Number(row['__row']) ? '#16a34a18' : 'var(--cn-bg-input)',
-                            color:      copiedRow === Number(row['__row']) ? '#16a34a'   : 'var(--cn-text-muted)',
-                            border:     `1px solid ${copiedRow === Number(row['__row']) ? '#16a34a40' : 'var(--cn-border)'}`,
+                            background: copiedRow === String(row['__id'] ?? row['__row'] ?? '') ? '#16a34a18' : 'var(--cn-bg-input)',
+                            color:      copiedRow === String(row['__id'] ?? row['__row'] ?? '') ? '#16a34a'   : 'var(--cn-text-muted)',
+                            border:     `1px solid ${copiedRow === String(row['__id'] ?? row['__row'] ?? '') ? '#16a34a40' : 'var(--cn-border)'}`,
                           }}
                         >
-                          {copiedRow === Number(row['__row'])
+                          {copiedRow === String(row['__id'] ?? row['__row'] ?? '')
                             ? <Check className="w-3.5 h-3.5" />
                             : <Copy  className="w-3.5 h-3.5" />}
                         </button>
