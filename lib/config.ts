@@ -18,6 +18,16 @@ export const USER_DETAILS_SHEET_ID = '1OFJyXJ89MTi7sFH4L0or-wGtrZi3a7zRFVtFMOCIt
 // End Date, Payment Status, Last (Project) Follow-up Date, Comments
 export const PM_BANDWIDTH_SHEET_ID = '1WBzXb7xfCtzlzeVzxYB6ZtkSCyN4FUzz1Eg9McgPbLM';
 
+// PM Sheet Bandwidth All Data — same one-tab-per-PM layout and columns as
+// PM_BANDWIDTH_SHEET_ID above, but holds prior months/years' rows instead of
+// the current month's. /api/pm-bandwidth merges both spreadsheets into one
+// dataset (tagging each row with __sheetId so edits route back to whichever
+// spreadsheet it actually came from) so PM Projects' Year/Month filters can
+// reach back into history while the current-month-pinned KPI/PM-summary
+// cards keep working unchanged (they already filter to the real current
+// month/year, which historical rows never match).
+export const PM_BANDWIDTH_ALL_DATA_SHEET_ID = '1QjLPmyVrzWpWIYoKKSsntwYAYFNGDRUyowvz9N8U25s';
+
 // "Add New Project" intake form — one Google Form per PM, matched against
 // the logged-in user's display name (same name used for the __pm tab tag).
 export const PM_PROJECT_FORM_URLS: Record<string, string> = {
