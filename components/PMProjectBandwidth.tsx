@@ -562,8 +562,8 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
       setVisibleCols(tableCols);
     } else {
       const defaults = [
-        departmentCol, projectCol, clientCol, totalHoursCol, assignedCol,
-        statusCol, phaseCol, currentMonthHoursCol, paymentStatusCol, followupDateCol, commentsCol,
+        departmentCol, projectCol, clientCol, totalHoursCol,
+        statusCol, currentMonthHoursCol, paymentStatusCol, followupDateCol,
       ].filter((c): c is string => !!c);
       setVisibleCols(defaults);
     }
