@@ -3131,9 +3131,6 @@ export function MyWorkloadSummary({ sheet1Data, sheet1Headers, availData, availH
   const statusCol   = findCol(sheet1Headers, 'task status', 'status');
   const bucketCol   = findCol(sheet1Headers, 'task daily bucket', 'bucket');
   const timeEstCol  = findCol(sheet1Headers, 'time estimation', 'time estimate', 'estimation');
-  const projectCol  = findCol(sheet1Headers, 'project name', 'project');
-  const taskCol     = findCol(sheet1Headers, 'task name', 'task title', 'task');
-  const taskUrlCol  = findCol(sheet1Headers, 'task url', 'task link', 'link', 'url');
   const availNameCol   = availHeaders ? findCol(availHeaders, 'name', 'resource', 'person', 'team') : undefined;
   const availStatusCol = availHeaders ? findCol(availHeaders, 'availability', 'status', 'leave') : undefined;
 
@@ -3142,9 +3139,6 @@ export function MyWorkloadSummary({ sheet1Data, sheet1Headers, availData, availH
   const getStatus  = (r: SheetData) => statusCol  ? String(r[statusCol]  ?? '').trim() : '';
   const getBucket  = (r: SheetData) => bucketCol  ? String(r[bucketCol]  ?? '').trim().toLowerCase() : '';
   const getTime    = (r: SheetData) => timeEstCol ? parseHours(String(r[timeEstCol] ?? '').trim()) : 0;
-  const getProj    = (r: SheetData) => projectCol ? String(r[projectCol] ?? '').trim() : '';
-  const getTask    = (r: SheetData) => taskCol    ? String(r[taskCol] ?? '').trim() : '';
-  const getTaskUrl = (r: SheetData) => taskUrlCol ? String(r[taskUrlCol] ?? '').trim() : '';
 
   const myTasks = sheet1Data.filter(r => String(r[resourceCol] ?? '').trim().toLowerCase() === personName.trim().toLowerCase());
   const isMonthlyBlock = MONTHLY_BLOCK_MARKETING_NAMES.has(personName.trim().toLowerCase());
@@ -3177,65 +3171,25 @@ export function MyWorkloadSummary({ sheet1Data, sheet1Headers, availData, availH
     : `${Math.round(displayHours * 10) / 10}h of ${cap}h today`;
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4">
-      <div className="cn-card rounded-xl border p-5 flex flex-col gap-4 lg:w-[320px] shrink-0" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>My Workload</p>
-          <span className="text-[10px] font-bold px-2 py-1 rounded-full shrink-0" style={{ background: status.bg + '22', color: status.bg }}>
-            {status.label}
-          </span>
-        </div>
-        <div className="space-y-1.5">
-          <p className="text-xs" style={{ color: 'var(--cn-text-muted)' }}>{hoursLabel}</p>
-          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--cn-bg-input)' }}>
-            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: status.bg, transition: 'width 0.8s ease' }} />
-          </div>
-        </div>
-        {onLeave && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold" style={{ background: '#ef444418', color: '#ef4444' }}>
-            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-            You&apos;re marked on leave today
-          </div>
-        )}
+    <div className="cn-card rounded-xl border p-5 flex flex-col gap-4" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>My Workload</p>
+        <span className="text-[10px] font-bold px-2 py-1 rounded-full shrink-0" style={{ background: status.bg + '22', color: status.bg }}>
+          {status.label}
+        </span>
       </div>
-
-      <div className="cn-card rounded-xl border overflow-hidden flex-1" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
-        <div className="px-4 py-2.5 border-b flex items-center justify-between" style={{ borderColor: 'var(--cn-border)', background: 'var(--cn-bg-input)' }}>
-          <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>Today&apos;s Tasks</p>
-          <span className="text-[11px] font-medium" style={{ color: 'var(--cn-text-muted)' }}>{todayTasks.length} task{todayTasks.length === 1 ? '' : 's'}</span>
+      <div className="space-y-1.5">
+        <p className="text-xs" style={{ color: 'var(--cn-text-muted)' }}>{hoursLabel}</p>
+        <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--cn-bg-input)' }}>
+          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: status.bg, transition: 'width 0.8s ease' }} />
         </div>
-        {todayTasks.length === 0 ? (
-          <p className="text-sm text-center py-8" style={{ color: 'var(--cn-text-faint)' }}>No tasks for today</p>
-        ) : (
-          <div className="divide-y max-h-80 overflow-y-auto" style={{ borderColor: 'var(--cn-border)' }}>
-            {todayTasks.map((r, i) => {
-              const task = getTask(r) || 'Untitled task';
-              const proj = getProj(r);
-              const hrs = getTime(r);
-              const st = getStatus(r);
-              const url = getTaskUrl(r);
-              return (
-                <div key={i} className="flex items-center gap-3 px-4 py-2.5" style={{ background: i % 2 === 1 ? 'var(--cn-bg-input)' : 'transparent' }}>
-                  <div className="min-w-0 flex-1">
-                    {url ? (
-                      <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold truncate hover:underline block" style={{ color: 'var(--cn-text-primary)' }}>{task}</a>
-                    ) : (
-                      <p className="text-sm font-semibold truncate" style={{ color: 'var(--cn-text-primary)' }}>{task}</p>
-                    )}
-                    {proj && <p className="text-[11px] truncate" style={{ color: 'var(--cn-text-muted)' }}>{proj}</p>}
-                  </div>
-                  {hrs > 0 && (
-                    <span className="text-xs font-bold tabular-nums shrink-0" style={{ color: 'var(--cn-text-muted)' }}>{Math.round(hrs * 10) / 10}h</span>
-                  )}
-                  <span className="text-[10px] font-semibold px-2 py-1 rounded-full shrink-0 truncate max-w-[140px]" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>
-                    {st || '—'}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
+      {onLeave && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold" style={{ background: '#ef444418', color: '#ef4444' }}>
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+          You&apos;re marked on leave today
+        </div>
+      )}
     </div>
   );
 }
@@ -3603,20 +3557,6 @@ export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = fal
     const myToday       = bucketCol ? myData.filter(r => String(r[bucketCol] ?? '').trim().toLowerCase() === 'today').length : 0;
     const mySubmittedPM = statusCol ? myData.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'submitted to pm').length : 0;
 
-    // Tomorrow / Day After Tomorrow — the one thing Project State and My
-    // Workload don't already surface (both are Today/Everyday-scoped), so
-    // this is what's left to show once the Status/Priority/Project charts
-    // are gone.
-    const notClosed = (r: SheetData) => !SKIP_STATUSES.includes(String(statusCol ? r[statusCol] ?? '' : '').trim().toLowerCase());
-    const upcomingTasks = myData.filter(r => {
-      if (!notClosed(r)) return false;
-      const b = bucketCol ? String(r[bucketCol] ?? '').trim().toLowerCase() : '';
-      return b === 'tomorrow' || b === 'tommorow' || b === 'day after tomorrow' || b === 'dayafter' || b === 'day after';
-    }).sort((a, b) => {
-      const rank = (r: SheetData) => (String(bucketCol ? r[bucketCol] ?? '' : '').trim().toLowerCase().startsWith('tomorrow') || String(bucketCol ? r[bucketCol] ?? '' : '').trim().toLowerCase() === 'tommorow') ? 0 : 1;
-      return rank(a) - rank(b);
-    });
-
     // Top Projects by Hours — grouped by Project, summed off the Total
     // Hours/Total Time column (not Time Estimation) per the user's spec.
     const projectHoursMap = new Map<string, number>();
@@ -3715,50 +3655,6 @@ export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = fal
         </div>
         )}
 
-        {/* ── Upcoming Tasks (Tomorrow / Day After Tomorrow) ── */}
-        <div className="cn-card rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
-          <div className="px-4 py-2.5 border-b flex items-center justify-between" style={{ borderColor: 'var(--cn-border)', background: 'var(--cn-bg-input)' }}>
-            <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>Upcoming Tasks</p>
-            <span className="text-[11px] font-medium" style={{ color: 'var(--cn-text-muted)' }}>{upcomingTasks.length} task{upcomingTasks.length === 1 ? '' : 's'}</span>
-          </div>
-          {upcomingTasks.length === 0 ? (
-            <p className="text-sm text-center py-8" style={{ color: 'var(--cn-text-faint)' }}>Nothing lined up for tomorrow or the day after</p>
-          ) : (
-            <div className="divide-y" style={{ borderColor: 'var(--cn-border)' }}>
-              {upcomingTasks.map((r, i) => {
-                const task = taskCol ? String(r[taskCol] ?? '').trim() || 'Untitled task' : 'Untitled task';
-                const proj = projectCol ? String(r[projectCol] ?? '').trim() : '';
-                const hrs = timeEstCol ? parseHours(String(r[timeEstCol] ?? '').trim()) : 0;
-                const st = statusCol ? String(r[statusCol] ?? '').trim() : '';
-                const url = taskUrlCol ? String(r[taskUrlCol] ?? '').trim() : '';
-                const b = bucketCol ? String(r[bucketCol] ?? '').trim().toLowerCase() : '';
-                const isTomorrow = b === 'tomorrow' || b === 'tommorow';
-                return (
-                  <div key={i} className="flex items-center gap-3 px-4 py-2.5" style={{ background: i % 2 === 1 ? 'var(--cn-bg-input)' : 'transparent' }}>
-                    <span className="text-[10px] font-semibold px-2 py-1 rounded-full shrink-0" style={{ background: isTomorrow ? '#3b82f622' : '#7c3aed22', color: isTomorrow ? '#3b82f6' : '#7c3aed' }}>
-                      {isTomorrow ? 'Tomorrow' : 'Day After'}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      {url ? (
-                        <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold truncate hover:underline block" style={{ color: 'var(--cn-text-primary)' }}>{task}</a>
-                      ) : (
-                        <p className="text-sm font-semibold truncate" style={{ color: 'var(--cn-text-primary)' }}>{task}</p>
-                      )}
-                      {proj && <p className="text-[11px] truncate" style={{ color: 'var(--cn-text-muted)' }}>{proj}</p>}
-                    </div>
-                    {hrs > 0 && (
-                      <span className="text-xs font-bold tabular-nums shrink-0" style={{ color: 'var(--cn-text-muted)' }}>{Math.round(hrs * 10) / 10}h</span>
-                    )}
-                    <span className="text-[10px] font-semibold px-2 py-1 rounded-full shrink-0 truncate max-w-[140px]" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>
-                      {st || '—'}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
         {/* ── Task Pipeline — every bucket + Submitted, split out individually ── */}
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
           <StatCard label="Today"          value={pipelineToday}        total={myTotal} color="#FE4A23" icon={<CalendarCheck className="w-4 h-4" />} adminStyle={true} />
@@ -3778,7 +3674,7 @@ export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = fal
             {topProjects.length === 0 ? (
               <p className="text-sm text-center py-8" style={{ color: 'var(--cn-text-faint)' }}>No Total Hours logged yet</p>
             ) : (
-              <div className="divide-y" style={{ borderColor: 'var(--cn-border)' }}>
+              <div className="divide-y" style={{ borderColor: 'var(--cn-border-light)' }}>
                 {topProjects.map(([proj, hrs], i) => (
                   <div key={proj} className="flex items-center gap-3 px-4 py-2.5" style={{ background: i % 2 === 1 ? 'var(--cn-bg-input)' : 'transparent' }}>
                     <span className="text-xs font-bold w-5 shrink-0" style={{ color: 'var(--cn-text-muted)' }}>#{i + 1}</span>
