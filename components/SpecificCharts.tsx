@@ -3580,6 +3580,8 @@ export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = fal
   const projectCol   = findCol(sheet1Headers, 'project name', 'project');
   const pmStatusCol  = findCol(sheet1Headers, 'pm status');
   const timeEstCol   = findCol(sheet1Headers, 'time estimation', 'time estimate', 'estimation');
+  const taskCol      = findCol(sheet1Headers, 'task name', 'task title', 'task');
+  const taskUrlCol   = findCol(sheet1Headers, 'task url', 'task link', 'link', 'url');
 
   if (!sheet1Data.length) return null;
 
@@ -3597,11 +3599,19 @@ export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = fal
     const myToday       = bucketCol ? myData.filter(r => String(r[bucketCol] ?? '').trim().toLowerCase() === 'today').length : 0;
     const mySubmittedPM = statusCol ? myData.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'submitted to pm').length : 0;
 
-    const myStatusData   = (statusCol && timeEstCol)   ? sumHoursByCol(myData, statusCol,   timeEstCol) : [];
-    const myPriorityData = (priorityCol && timeEstCol) ? sumHoursByCol(myData, priorityCol, timeEstCol) : [];
-    const myProjectData  = (projectCol && timeEstCol)
-      ? sumHoursByCol(myData, projectCol, timeEstCol).slice(0, 15).map(d => ({ name: d.name, Hours: d.value }))
-      : [];
+    // Tomorrow / Day After Tomorrow — the one thing Project State and My
+    // Workload don't already surface (both are Today/Everyday-scoped), so
+    // this is what's left to show once the Status/Priority/Project charts
+    // are gone.
+    const notClosed = (r: SheetData) => !SKIP_STATUSES.includes(String(statusCol ? r[statusCol] ?? '' : '').trim().toLowerCase());
+    const upcomingTasks = myData.filter(r => {
+      if (!notClosed(r)) return false;
+      const b = bucketCol ? String(r[bucketCol] ?? '').trim().toLowerCase() : '';
+      return b === 'tomorrow' || b === 'tommorow' || b === 'day after tomorrow' || b === 'dayafter' || b === 'day after';
+    }).sort((a, b) => {
+      const rank = (r: SheetData) => (String(bucketCol ? r[bucketCol] ?? '' : '').trim().toLowerCase().startsWith('tomorrow') || String(bucketCol ? r[bucketCol] ?? '' : '').trim().toLowerCase() === 'tommorow') ? 0 : 1;
+      return rank(a) - rank(b);
+    });
 
     return (
       <section className="space-y-4">
@@ -3616,20 +3626,49 @@ export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = fal
         </div>
         )}
 
-        {/* ── Hours by Status + Hours by Priority ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <DonutCard title="My Hours by Status"    sub="Estimated hours by task status"            data={myStatusData}   colorMap={STATUS_COLORS} adminStyle />
-          <DonutCard title="My Hours by Priority"  sub="Estimated hours by task priority"          data={myPriorityData} colorMap={PRIORITY_COLORS} adminStyle />
+        {/* ── Upcoming Tasks (Tomorrow / Day After Tomorrow) ── */}
+        <div className="cn-card rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+          <div className="px-4 py-2.5 border-b flex items-center justify-between" style={{ borderColor: 'var(--cn-border)', background: 'var(--cn-bg-input)' }}>
+            <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>Upcoming Tasks</p>
+            <span className="text-[11px] font-medium" style={{ color: 'var(--cn-text-muted)' }}>{upcomingTasks.length} task{upcomingTasks.length === 1 ? '' : 's'}</span>
+          </div>
+          {upcomingTasks.length === 0 ? (
+            <p className="text-sm text-center py-8" style={{ color: 'var(--cn-text-faint)' }}>Nothing lined up for tomorrow or the day after</p>
+          ) : (
+            <div className="divide-y" style={{ borderColor: 'var(--cn-border)' }}>
+              {upcomingTasks.map((r, i) => {
+                const task = taskCol ? String(r[taskCol] ?? '').trim() || 'Untitled task' : 'Untitled task';
+                const proj = projectCol ? String(r[projectCol] ?? '').trim() : '';
+                const hrs = timeEstCol ? parseHours(String(r[timeEstCol] ?? '').trim()) : 0;
+                const st = statusCol ? String(r[statusCol] ?? '').trim() : '';
+                const url = taskUrlCol ? String(r[taskUrlCol] ?? '').trim() : '';
+                const b = bucketCol ? String(r[bucketCol] ?? '').trim().toLowerCase() : '';
+                const isTomorrow = b === 'tomorrow' || b === 'tommorow';
+                return (
+                  <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+                    <span className="text-[10px] font-semibold px-2 py-1 rounded-full shrink-0" style={{ background: isTomorrow ? '#3b82f622' : '#7c3aed22', color: isTomorrow ? '#3b82f6' : '#7c3aed' }}>
+                      {isTomorrow ? 'Tomorrow' : 'Day After'}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      {url ? (
+                        <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold truncate hover:underline block" style={{ color: 'var(--cn-text-primary)' }}>{task}</a>
+                      ) : (
+                        <p className="text-sm font-semibold truncate" style={{ color: 'var(--cn-text-primary)' }}>{task}</p>
+                      )}
+                      {proj && <p className="text-[11px] truncate" style={{ color: 'var(--cn-text-muted)' }}>{proj}</p>}
+                    </div>
+                    {hrs > 0 && (
+                      <span className="text-xs font-bold tabular-nums shrink-0" style={{ color: 'var(--cn-text-muted)' }}>{Math.round(hrs * 10) / 10}h</span>
+                    )}
+                    <span className="text-[10px] font-semibold px-2 py-1 rounded-full shrink-0 truncate max-w-[140px]" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>
+                      {st || '—'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
-
-        {/* ── Hours per Project bar (full width) ── */}
-        <BarCard
-          title="My Hours per Project"
-          sub="Estimated hours per client / project"
-          data={myProjectData}
-          dataKey="Hours"
-          color="#10b981"
-        />
       </section>
     );
   }
