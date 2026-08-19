@@ -3629,19 +3629,6 @@ export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = fal
       count: pmStatusCol ? myData.filter(r => String(r[pmStatusCol] ?? '').trim().toLowerCase() === d.match).length : 0,
     }));
 
-    // Task Pipeline — every bucket + Submitted, split out individually
-    // instead of Project State's combined Today/Everyday tile.
-    const bucketOf = (r: SheetData) => bucketCol ? String(r[bucketCol] ?? '').trim().toLowerCase() : '';
-    const pipelineToday        = myData.filter(r => bucketOf(r) === 'today').length;
-    const pipelineEveryday     = myData.filter(r => bucketOf(r) === 'everyday').length;
-    const pipelineTomorrow     = myData.filter(r => { const b = bucketOf(r); return b === 'tomorrow' || b === 'tommorow'; }).length;
-    const pipelineDayAfter     = myData.filter(r => { const b = bucketOf(r); return b === 'day after tomorrow' || b === 'dayafter' || b === 'day after'; }).length;
-    const pipelineToBeExpected = myData.filter(r => bucketOf(r) === 'to be expected').length;
-    const pipelineSubmitted    = statusCol ? myData.filter(r => {
-      const s = String(r[statusCol] ?? '').trim().toLowerCase();
-      return s === 'submitted to pm' || s === 'submitted to akash' || s === 'submitted to admin' || s === 'submitted to client';
-    }).length : 0;
-
     return (
       <section className="space-y-4">
         {/* ── KPI Row ── */}
@@ -3655,16 +3642,6 @@ export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = fal
         </div>
         )}
 
-        {/* ── Task Pipeline — every bucket + Submitted, split out individually ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
-          <StatCard label="Today"          value={pipelineToday}        total={myTotal} color="#FE4A23" icon={<CalendarCheck className="w-4 h-4" />} adminStyle={true} />
-          <StatCard label="Everyday"       value={pipelineEveryday}     total={myTotal} color="#06b6d4" icon={<RefreshCw     className="w-4 h-4" />} adminStyle={true} />
-          <StatCard label="Tomorrow"       value={pipelineTomorrow}     total={myTotal} color="#3b82f6" icon={<CalendarClock className="w-4 h-4" />} adminStyle={true} />
-          <StatCard label="Day After"      value={pipelineDayAfter}     total={myTotal} color="#7c3aed" icon={<CalendarClock className="w-4 h-4" />} adminStyle={true} />
-          <StatCard label="Submitted"      value={pipelineSubmitted}    total={myTotal} color="#10b981" icon={<Send          className="w-4 h-4" />} adminStyle={true} />
-          <StatCard label="To Be Expected" value={pipelineToBeExpected} total={myTotal} color="#d97706" icon={<AlertTriangle className="w-4 h-4" />} adminStyle={true} />
-        </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* ── Top Projects by Hours (Total Hours column) ── */}
           <div className="cn-card rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
@@ -3674,9 +3651,9 @@ export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = fal
             {topProjects.length === 0 ? (
               <p className="text-sm text-center py-8" style={{ color: 'var(--cn-text-faint)' }}>No Total Hours logged yet</p>
             ) : (
-              <div className="divide-y" style={{ borderColor: 'var(--cn-border-light)' }}>
+              <div>
                 {topProjects.map(([proj, hrs], i) => (
-                  <div key={proj} className="flex items-center gap-3 px-4 py-2.5" style={{ background: i % 2 === 1 ? 'var(--cn-bg-input)' : 'transparent' }}>
+                  <div key={proj} className="flex items-center gap-3 px-4 py-2.5" style={{ background: i % 2 === 1 ? 'var(--cn-bg-input)' : 'transparent', borderTop: i > 0 ? '1px solid var(--cn-border-light)' : 'none' }}>
                     <span className="text-xs font-bold w-5 shrink-0" style={{ color: 'var(--cn-text-muted)' }}>#{i + 1}</span>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold truncate" style={{ color: 'var(--cn-text-primary)' }}>{proj}</p>
