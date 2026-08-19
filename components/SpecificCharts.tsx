@@ -3215,7 +3215,7 @@ export function MyWorkloadSummary({ sheet1Data, sheet1Headers, availData, availH
               const st = getStatus(r);
               const url = getTaskUrl(r);
               return (
-                <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+                <div key={i} className="flex items-center gap-3 px-4 py-2.5" style={{ background: i % 2 === 1 ? 'var(--cn-bg-input)' : 'transparent' }}>
                   <div className="min-w-0 flex-1">
                     {url ? (
                       <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold truncate hover:underline block" style={{ color: 'var(--cn-text-primary)' }}>{task}</a>
@@ -3645,7 +3645,7 @@ export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = fal
                 const b = bucketCol ? String(r[bucketCol] ?? '').trim().toLowerCase() : '';
                 const isTomorrow = b === 'tomorrow' || b === 'tommorow';
                 return (
-                  <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+                  <div key={i} className="flex items-center gap-3 px-4 py-2.5" style={{ background: i % 2 === 1 ? 'var(--cn-bg-input)' : 'transparent' }}>
                     <span className="text-[10px] font-semibold px-2 py-1 rounded-full shrink-0" style={{ background: isTomorrow ? '#3b82f622' : '#7c3aed22', color: isTomorrow ? '#3b82f6' : '#7c3aed' }}>
                       {isTomorrow ? 'Tomorrow' : 'Day After'}
                     </span>
