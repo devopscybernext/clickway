@@ -266,17 +266,26 @@ type PmStatKey = keyof ReturnType<typeof computeStatsFor>;
 // Every metric higher management wants available on a PM card — which ones
 // show is driven by the page's Low/Medium/Full Show Data level (see
 // pmCardFields in the component below) instead of an explicit picker.
+// Risk Month Hours is deliberately not shown here — it still feeds the
+// Current Month Hours net calculation above, just isn't surfaced as its own
+// card anywhere on Overview/PM Summary per request.
 const PM_CARD_METRIC_DEFS: { key: PmStatKey; label: string; color: string; isHours: boolean }[] = [
   { key: 'totalHours', label: 'Total', color: '#2563eb', isHours: true },
   { key: 'availableHours', label: 'Available', color: '#22c55e', isHours: true },
   { key: 'currentMonthHours', label: 'Current', color: '#0891b2', isHours: true },
-  { key: 'riskMonthHours', label: 'Risk', color: '#dc2626', isHours: true },
   { key: 'pendingHours', label: 'Pending', color: '#d97706', isHours: true },
   { key: 'paymentPendingHours', label: 'Pay Pending', color: '#dc2626', isHours: true },
   { key: 'followupDue', label: 'Follow-up Due', color: '#7c3aed', isHours: false },
   { key: 'yetToStart', label: 'Project Yet To Start', color: '#dc2626', isHours: false },
   { key: 'ongoing', label: 'Project Ongoing', color: '#16a34a', isHours: false },
 ];
+// Same order/field set drives both Overview and PM Summary at each level —
+// Low is a bare glance, Medium adds Pending/Pay Pending, Full is everything.
+const LEVEL_FIELDS: Record<'low' | 'medium' | 'full', string[]> = {
+  low: ['Total', 'Available', 'Current'],
+  medium: ['Total', 'Available', 'Current', 'Pending', 'Pay Pending'],
+  full: PM_CARD_METRIC_DEFS.map(d => d.label),
+};
 
 // Bandwidth-formula ceiling — same 450h threshold pmWorkloadStatus already
 // bands Overload at. Available Hours = how much headroom is left under it.
@@ -617,11 +626,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showDataLevel, headers.length]);
 
-  // PM Summary card fields per level — Low is Total/Available/Pending,
-  // Medium adds Current in between, Full is every metric.
-  const PM_FIELDS_LOW = ['Total', 'Available', 'Pending'];
-  const PM_FIELDS_MEDIUM = ['Total', 'Available', 'Current', 'Pending'];
-  const pmCardFields = showDataLevel === 'low' ? PM_FIELDS_LOW : showDataLevel === 'medium' ? PM_FIELDS_MEDIUM : PM_CARD_METRIC_DEFS.map(d => d.label);
+  const pmCardFields = LEVEL_FIELDS[showDataLevel];
 
   // Dropdown columns — canonical lists (matching the sheet's actual data
   // validation) unioned with anything already in the data, so a value that
@@ -835,27 +840,18 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     return <div className="text-center py-12 text-sm" style={{ color: 'var(--cn-text-muted)' }}>No data available</div>;
   }
 
-  const statCards = [
-    { label: 'Total', value: fmtHours(stats.totalHours) },
-    { label: 'Available', value: fmtHours(stats.availableHours) },
-    { label: 'Current', value: fmtHours(stats.currentMonthHours) },
-    { label: 'Risk', value: fmtHours(stats.riskMonthHours) },
-    { label: 'Pending', value: fmtHours(stats.pendingHours) },
-    { label: 'Pay Pending', value: fmtHours(stats.paymentPendingHours) },
-    { label: 'Follow-up Due', value: stats.followupDue },
-    { label: 'Project Yet To Start', value: stats.yetToStart },
-    { label: 'Project Ongoing', value: stats.ongoing },
-  ];
-  // Overview cards follow the same Low/Medium/Full ladder as everything
-  // else: Low = the first 5 (Total/Available/Current/Risk/Pending), Medium
-  // adds Pay Pending + Follow-up Due (7), Full shows all 9.
-  const statCardCounts: Record<ShowDataLevel, number> = { low: 5, medium: 7, full: 9 };
-  const visibleStatCards = statCards.slice(0, statCardCounts[showDataLevel]);
+  // Same metric list/order as PM Summary (PM_CARD_METRIC_DEFS) — Overview is
+  // just those metrics scoped to the whole filtered view instead of one PM.
+  const statCards = PM_CARD_METRIC_DEFS.map(({ key, label, isHours }) => ({
+    label,
+    value: isHours ? fmtHours(stats[key]) : stats[key],
+  }));
+  const visibleStatCards = statCards.filter(c => LEVEL_FIELDS[showDataLevel].includes(c.label));
   const statGridCols = showDataLevel === 'low'
-    ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'
+    ? 'grid-cols-2 sm:grid-cols-3'
     : showDataLevel === 'medium'
-      ? 'grid-cols-2 sm:grid-cols-4 lg:grid-cols-7'
-      : 'grid-cols-2 sm:grid-cols-4 lg:grid-cols-9';
+      ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'
+      : 'grid-cols-2 sm:grid-cols-4 lg:grid-cols-8';
 
   return (
     <div className="space-y-4">
@@ -909,7 +905,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
               </div>
             )}
             {!lockShowDataFull && (
-              <div className="flex flex-col gap-1 col-span-2 sm:col-span-1">
+              <div className="flex flex-col gap-1 col-span-2 sm:col-span-1 sm:ml-auto">
                 <span className="text-xs font-medium" style={{ color: 'var(--cn-text-muted)' }}>Show Data</span>
                 <div className="inline-flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--cn-border)' }}>
                   {(['low', 'medium', 'full'] as const).map(level => (
@@ -966,8 +962,8 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
               const bg = memberColor(pm.name);
               const initials = pm.name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
               const activeMetrics = PM_CARD_METRIC_DEFS.filter(d => pmCardFields.includes(d.label));
-              // Low (3 fields) and Medium (4 fields) fit one row; Full (9 fields) wraps two-per-row.
-              const metricsGridCols = showDataLevel === 'full' ? 'grid-cols-2' : showDataLevel === 'medium' ? 'grid-cols-4' : 'grid-cols-3';
+              // Low (3 fields) and Medium (5 fields) fit one row; Full (8 fields) wraps two-per-row.
+              const metricsGridCols = showDataLevel === 'full' ? 'grid-cols-2' : showDataLevel === 'medium' ? 'grid-cols-5' : 'grid-cols-3';
               const workload = pmWorkloadStatus(pm.totalHours);
               return (
                 <div key={pm.name} className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
