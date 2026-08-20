@@ -7,7 +7,7 @@ import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, PM_BANDWIDTH_ALL_DATA
 import { AuthUser, SheetId, Team, getAllowedSheets, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, getTasksAssignedLockedTeam } from '@/lib/auth';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
-import SpecificCharts, { ResourceOverview, PmStatusOverview, KpiCards, ResourceStatusGrid, TeamWorkloadCards, MyWorkloadSummary, InsightCards, PmStatusChart, ResourceBandwidthChips } from './SpecificCharts';
+import SpecificCharts, { ResourceOverview, PmStatusOverview, KpiCards, ResourceStatusGrid, TeamWorkloadCards, MyWorkloadSummary, InsightCards, PmStatusChart, ResourceBandwidthChips, SubDept } from './SpecificCharts';
 import FilteredDataTable from './FilteredDataTable';
 import SearchFilter from './SearchFilter';
 import EmployeeGallery from './EmployeeGallery';
@@ -302,6 +302,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [tasksAssignedTeam, setTasksAssignedTeam] = useState<Team>(lockedTasksAssignedTeam ?? 'web');
   const [addTaskTeam, setAddTaskTeam] = useState<Team>(lockedTeam ?? 'web');
   const [analyticsTeam, setAnalyticsTeam] = useState<Team>(lockedTeam ?? 'web');
+  const [analyticsSubDept, setAnalyticsSubDept] = useState<SubDept>('all');
   const [analysisDateFilter, setAnalysisDateFilter] = useState<'all' | 'daily' | 'weekly' | 'monthly'>('all');
   const iframeLoadCount = useRef(0);
 
@@ -751,7 +752,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     ] as const).map(tab => (
                       <button
                         key={tab.key}
-                        onClick={() => setAnalyticsTeam(tab.key)}
+                        onClick={() => { setAnalyticsTeam(tab.key); setAnalyticsSubDept('all'); }}
                         className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
                         style={{
                           borderColor: analyticsTeam === tab.key ? 'var(--cn-accent)' : 'transparent',
@@ -773,6 +774,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   sheet1Headers={analyticsHeaders}
                   availData={analyticsAvailData}
                   availHeaders={analyticsAvailHeaders}
+                  subDept={analyticsSubDept}
                 />
               )}
 
@@ -811,6 +813,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                       sheet1Headers={analyticsHeaders}
                       availData={analyticsAvailData}
                       availHeaders={analyticsAvailHeaders}
+                      subDept={analyticsSubDept}
+                      onSubDeptChange={setAnalyticsSubDept}
                     />
                   </div>
                 </div>

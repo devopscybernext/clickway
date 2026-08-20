@@ -258,7 +258,7 @@ function inWebSubDept(name: string, dept: 'uiux' | 'frontend' | 'backend'): bool
   const list = dept === 'uiux' ? UIUX_NAMES : dept === 'frontend' ? FRONTEND_NAMES : BACKEND_NAMES;
   return list.some(n => lower.includes(n));
 }
-type SubDept = 'all' | 'seo' | 'ppc' | 'smm' | 'uiux' | 'frontend' | 'backend';
+export type SubDept = 'all' | 'seo' | 'ppc' | 'smm' | 'uiux' | 'frontend' | 'backend';
 function matchesSubDept(name: string, dept: SubDept): boolean {
   if (dept === 'all') return true;
   if (dept === 'seo' || dept === 'ppc' || dept === 'smm') return inMarketingSubDept(name, dept);
@@ -2945,11 +2945,14 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
 // card style: avatar/name/status header, then Total + Bandwidth as a
 // two-column stat grid. No click-to-expand, no editing — that's what the
 // standalone Team Bandwidth tab was for, and it's been retired.
-export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availHeaders }: {
+export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availHeaders, subDept: subDeptProp, onSubDeptChange }: {
   sheet1Data: SheetData[]; sheet1Headers: string[];
   availData?: SheetData[]; availHeaders?: string[];
+  subDept?: SubDept; onSubDeptChange?: (d: SubDept) => void;
 }) {
-  const [subDept, setSubDept] = useState<SubDept>('all');
+  const [localSubDept, setLocalSubDept] = useState<SubDept>('all');
+  const subDept = subDeptProp ?? localSubDept;
+  const setSubDept = onSubDeptChange ?? setLocalSubDept;
   const resourceCol = findCol(sheet1Headers, 'assigned person', 'assigned to', 'resource');
   const statusCol   = findCol(sheet1Headers, 'task status', 'status');
   const bucketCol   = findCol(sheet1Headers, 'task daily bucket', 'bucket');
@@ -3300,11 +3303,12 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
 }
 
 // ─── Insight Cards (Resource Health / Project Health / Trends) ────────────────
-export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeaders, mode, personFilter }: {
+export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeaders, mode, personFilter, subDept }: {
   sheet1Data: SheetData[]; sheet1Headers: string[];
   availData?: SheetData[]; availHeaders?: string[];
   mode?: 'all' | 'team' | 'project' | 'project-cards';
   personFilter?: string;
+  subDept?: SubDept;
 }) {
   // Project State cards (project-cards mode) always show today's data only
   // — no All/Today/Week/Month toggle for that mode.
@@ -3312,9 +3316,11 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
   const statusCol   = findCol(sheet1Headers, 'task status', 'status');
   const bucketCol   = findCol(sheet1Headers, 'task daily bucket', 'bucket');
   const resourceCol = findCol(sheet1Headers, 'assigned person', 'assigned to', 'resource');
-  const scopedData  = personFilter && resourceCol
-    ? sheet1Data.filter(r => String(r[resourceCol] ?? '').trim().toLowerCase() === personFilter.trim().toLowerCase())
-    : sheet1Data;
+  const scopedData  = sheet1Data.filter(r => {
+    if (personFilter && resourceCol && String(r[resourceCol] ?? '').trim().toLowerCase() !== personFilter.trim().toLowerCase()) return false;
+    if (subDept && subDept !== 'all' && resourceCol && !matchesSubDept(String(r[resourceCol] ?? '').trim(), subDept)) return false;
+    return true;
+  });
   const data = filterByDate(scopedData, sheet1Headers, filter);
   if (!sheet1Data.length) return null;
   const timeEstCol  = findCol(sheet1Headers, 'time estimation', 'time estimate', 'estimation');
