@@ -679,47 +679,40 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     return rows;
   }, [data, filters, filterCols, searchTerm]);
 
-  // Top KPI cards and PM summary cards are pinned to the real current
-  // month/year and are otherwise completely untouched by the bottom filter
-  // bar (PM/Project/Client/Status/.../search) — that row only narrows the
-  // table below. They're an always-current, always-company-wide snapshot.
-  const topCardRows = useMemo(() => {
-    let rows = data;
-    const now = new Date();
-    const curMonthName = now.toLocaleString('en-US', { month: 'long' }).toLowerCase();
-    const curYear = String(now.getFullYear());
-    if (monthCol) rows = rows.filter(r => String(r[monthCol] ?? '').trim().toLowerCase() === curMonthName);
-    if (yearCol) rows = rows.filter(r => String(r[yearCol] ?? '').trim() === curYear);
-    return rows;
-  }, [data, monthCol, yearCol]);
-
-  // Top KPI cards — scoped to topCardRows (current month/year only, bottom
-  // filter bar has no effect); Yet To Start ignores even that (see
-  // computeStatsFor).
+  // Top KPI cards and PM summary cards now share the same filtered rows as
+  // the table below — every bottom-bar filter (PM/Project/Client/Year/
+  // Month/Status/.../search) affects them too. Year/Month default to the
+  // real current month/year on first load (see defaultsApplied above), so
+  // out of the box this still reads as a current-month snapshot; picking a
+  // different Year/Month/PM/etc. now updates these cards to match. Yet To
+  // Start is the one exception — it deliberately ignores every filter, see
+  // computeStatsFor.
   const statsCols = { totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol };
   const stats = useMemo(
-    () => computeStatsFor(topCardRows, data, statsCols),
+    () => computeStatsFor(filtered, data, statsCols),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data, topCardRows, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol]
+    [data, filtered, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol]
   );
 
   // Per-PM summary cards — only meaningful when this view spans more than
-  // one PM (the All Projects tab; My Projects is always a single PM already).
-  // Scoped to topCardRows (current month/year), same as the top KPI cards.
+  // one PM (the All Projects tab; My Projects is always a single PM
+  // already). Only PMs actually present in the filtered rows get a card, so
+  // e.g. filtering to one Project doesn't clutter the row with 0h cards for
+  // PMs who have nothing in it.
   const pmSummaries = useMemo(() => {
     if (!showPmCol) return [];
-    const names = [...new Set(data.map(r => String(r['__pm'] ?? '').trim()).filter(Boolean))].sort();
+    const names = [...new Set(filtered.map(r => String(r['__pm'] ?? '').trim()).filter(Boolean))].sort();
     if (names.length <= 1) return [];
     return names.map(name => ({
       name,
       ...computeStatsFor(
-        topCardRows.filter(r => String(r['__pm'] ?? '').trim() === name),
+        filtered.filter(r => String(r['__pm'] ?? '').trim() === name),
         data.filter(r => String(r['__pm'] ?? '').trim() === name),
         statsCols
       ),
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, topCardRows, showPmCol, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol]);
+  }, [data, filtered, showPmCol, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol]);
 
   const fmtHours = (n: number) => `${Math.round(n * 10) / 10}h`;
 
@@ -789,6 +782,14 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>Overview</p>
+        {activeFilterCount > 0 && (
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: 'rgba(254,74,35,0.12)', color: '#FE4A23' }}>
+            Reflecting {activeFilterCount} filter{activeFilterCount === 1 ? '' : 's'}
+          </span>
+        )}
+      </div>
       <div className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-px" style={{ background: 'var(--cn-border)' }}>
           {statCards.map(({ label, value, color, icon }) => (
