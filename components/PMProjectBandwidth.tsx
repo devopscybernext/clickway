@@ -255,9 +255,9 @@ function computeStatsFor(
 }
 type PmStatKey = keyof ReturnType<typeof computeStatsFor>;
 
-// Every metric higher management wants available on a PM card — shown via
-// an explicit picker (see pmCardFields) rather than all at once, since 8
-// tiles per card got cluttered fast with several PMs on screen at once.
+// Every metric higher management wants available on a PM card — which ones
+// show is driven by the page's Low/Medium/Full Show Data level (see
+// pmCardFields in the component below) instead of an explicit picker.
 const PM_CARD_METRIC_DEFS: { key: PmStatKey; label: string; color: string; isHours: boolean }[] = [
   { key: 'totalHours', label: 'Total Hours', color: '#2563eb', isHours: true },
   { key: 'currentMonthHours', label: 'Current Month Hours', color: '#0891b2', isHours: true },
@@ -268,7 +268,6 @@ const PM_CARD_METRIC_DEFS: { key: PmStatKey; label: string; color: string; isHou
   { key: 'yetToStart', label: 'Project Yet To Start', color: '#dc2626', isHours: false },
   { key: 'ongoing', label: 'Project Ongoing', color: '#16a34a', isHours: false },
 ];
-const DEFAULT_PM_CARD_FIELDS = ['Total Hours', 'Current Month Hours'];
 
 // PM workload badge — bands on raw Total Hours (not a rate, not net of
 // current-month progress; deliberately simple per explicit request).
@@ -515,15 +514,21 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [filters, setFilters] = useState<Record<string, string[]>>({});
   // Which table columns are shown — starts empty, then gets a real default
-  // list applied once headers are known (see colDefaultsApplied below);
-  // empty still means "all" as a manual-reset fallback (e.g. after Clear).
+  // list applied once headers are known (see the showDataLevel effects
+  // below); empty still means "all" as a manual-reset fallback (e.g. after
+  // Clear). The Columns picker can still fine-tune on top of whichever
+  // Low/Medium/Full preset is active.
   const [visibleCols, setVisibleCols] = useState<string[]>([]);
-  // Tracks whether the user has actually touched the Columns picker, so the
-  // "More Filters" badge doesn't count the auto-applied default as active.
+  // Tracks whether the user has actually touched the Columns picker —
+  // no longer feeds a "hidden filters" badge (Columns is always visible
+  // now), kept in case a future control needs to know.
   const [colsTouched, setColsTouched] = useState(false);
-  // Which stats show on each PM summary card
-  const [pmCardFields, setPmCardFields] = useState<string[]>(DEFAULT_PM_CARD_FIELDS);
   const [showMoreFilters, setShowMoreFilters] = useState(false);
+  // Single Low/Medium/Full control that governs both table column count and
+  // how many stats show on each PM Summary card, replacing the separate
+  // Columns-only default and the PM cards' own "Show More Data" picker.
+  type ShowDataLevel = 'low' | 'medium' | 'full';
+  const [showDataLevel, setShowDataLevel] = useState<ShowDataLevel>('medium');
 
   const projectCol = headers.find(h => h.toLowerCase().includes('project name'));
   const clientCol = headers.find(h => h.toLowerCase().includes('client'));
@@ -548,27 +553,48 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   // Timestamp/Email stay usable for sorting & filtering but aren't shown as table columns
   const tableCols = headers.filter(h => h !== timestampCol && h !== emailCol);
 
-  // Column visibility defaults, applied once per tab: All Projects (read-only,
-  // !canEdit) starts on a curated subset so the table isn't overwhelming with
-  // every PM sharing the view; My Projects (canEdit) starts showing every
-  // column since it's a PM's own, much smaller, editable list. Keyed by
-  // canEdit (not a plain once-ever flag) since both tabs share this same
-  // component instance — switching tabs must re-apply the right default set.
-  const colDefaultsApplied = useRef<boolean | null>(null);
+  // Show Data default, applied once per tab: All Projects (read-only,
+  // !canEdit) starts at Medium since the table is shared by every PM at
+  // once; My Projects (canEdit) starts at Full since it's a PM's own, much
+  // smaller, editable list. Keyed by canEdit (not a plain once-ever flag)
+  // since both tabs share this same component instance — switching tabs
+  // must re-apply the right default level. The user can still override
+  // with the Low/Medium/Full button within either tab.
+  const levelDefaultApplied = useRef<boolean | null>(null);
   useEffect(() => {
-    if (colDefaultsApplied.current === canEdit || !headers.length) return;
-    colDefaultsApplied.current = canEdit;
-    if (canEdit) {
-      setVisibleCols(tableCols);
-    } else {
-      const defaults = [
-        departmentCol, projectCol, clientCol, totalHoursCol,
-        statusCol, currentMonthHoursCol, paymentStatusCol, followupDateCol,
-      ].filter((c): c is string => !!c);
-      setVisibleCols(defaults);
-    }
+    if (levelDefaultApplied.current === canEdit || !headers.length) return;
+    levelDefaultApplied.current = canEdit;
+    setShowDataLevel(canEdit ? 'full' : 'medium');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [headers.length, canEdit]);
+
+  // Column presets per level — Low is a bare-minimum glance, Medium is the
+  // previous curated default, Full is every column.
+  const colLevelPresets = useMemo<Record<ShowDataLevel, string[]>>(() => ({
+    low: [projectCol, clientCol, totalHoursCol, statusCol].filter((c): c is string => !!c),
+    medium: [
+      departmentCol, projectCol, clientCol, totalHoursCol,
+      statusCol, currentMonthHoursCol, paymentStatusCol, followupDateCol,
+    ].filter((c): c is string => !!c),
+    full: tableCols,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [projectCol, clientCol, totalHoursCol, statusCol, departmentCol, currentMonthHoursCol, paymentStatusCol, followupDateCol, tableCols]);
+
+  // Re-applies whenever the level changes (button click or the per-tab
+  // default above) — manual Columns picker edits in between still work,
+  // they just get reset back to the preset on the next level change.
+  useEffect(() => {
+    if (!headers.length) return;
+    setVisibleCols(colLevelPresets[showDataLevel]);
+    setColsTouched(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showDataLevel, headers.length]);
+
+  // PM Summary card fields per level — Low is just the headline number,
+  // Medium is Total/Current Month/Pending in one row, Full is every metric.
+  const PM_FIELDS_LOW = ['Total Hours'];
+  const PM_FIELDS_MEDIUM = ['Total Hours', 'Current Month Hours', 'Pending Hours'];
+  const pmCardFields = showDataLevel === 'low' ? PM_FIELDS_LOW : showDataLevel === 'medium' ? PM_FIELDS_MEDIUM : PM_CARD_METRIC_DEFS.map(d => d.label);
 
   // Dropdown columns — canonical lists (matching the sheet's actual data
   // validation) unioned with anything already in the data, so a value that
@@ -619,7 +645,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   // behind "More Filters" so the primary bar doesn't grow unbounded.
   const secondaryFilterCols = filterCols.filter(({ col }) => col === statusCol || col === phaseCol || col === milestonesCol || col === upsellCol || col === paymentStatusCol);
   const primaryFilterCols = filterCols.filter(fc => !secondaryFilterCols.includes(fc));
-  const secondaryActiveCount = secondaryFilterCols.filter(({ col }) => (filters[col] ?? []).length > 0).length + (colsTouched ? 1 : 0);
+  const secondaryActiveCount = secondaryFilterCols.filter(({ col }) => (filters[col] ?? []).length > 0).length;
 
   // Faceted: each dropdown's options reflect rows matching every OTHER active
   // filter, so e.g. picking Year 2026 narrows Month/Project/Client to values
@@ -782,13 +808,32 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>Overview</p>
-        {activeFilterCount > 0 && (
-          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: 'rgba(254,74,35,0.12)', color: '#FE4A23' }}>
-            Reflecting {activeFilterCount} filter{activeFilterCount === 1 ? '' : 's'}
-          </span>
-        )}
+        <div className="flex items-center gap-3 flex-wrap">
+          {activeFilterCount > 0 && (
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: 'rgba(254,74,35,0.12)', color: '#FE4A23' }}>
+              Reflecting {activeFilterCount} filter{activeFilterCount === 1 ? '' : 's'}
+            </span>
+          )}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium" style={{ color: 'var(--cn-text-muted)' }}>Show Data</span>
+            <div className="inline-flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--cn-border)' }}>
+              {(['low', 'medium', 'full'] as const).map(level => (
+                <button
+                  key={level}
+                  onClick={() => setShowDataLevel(level)}
+                  className="px-3 py-1.5 text-xs font-semibold cursor-pointer transition-all capitalize"
+                  style={showDataLevel === level
+                    ? { background: 'var(--cn-accent)', color: '#fff' }
+                    : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)' }}
+                >
+                  {level}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
       <div className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-px" style={{ background: 'var(--cn-border)' }}>
@@ -806,21 +851,16 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
 
       {pmSummaries.length > 0 && (
         <div className="space-y-2">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>PM Summary</p>
-            <MultiSelect
-              label="Show More Data"
-              options={PM_CARD_METRIC_DEFS.map(d => d.label)}
-              selected={pmCardFields}
-              onChange={setPmCardFields}
-            />
-          </div>
+          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>PM Summary</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {pmSummaries.map(pm => {
               const photo = memberPhoto(pm.name);
               const bg = memberColor(pm.name);
               const initials = pm.name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
               const activeMetrics = PM_CARD_METRIC_DEFS.filter(d => pmCardFields.includes(d.label));
+              // Low = one field, full width; Medium = three fields in a
+              // single row; Full (8 fields) wraps two-per-row.
+              const metricsGridCols = showDataLevel === 'low' ? 'grid-cols-1' : showDataLevel === 'medium' ? 'grid-cols-3' : 'grid-cols-2';
               const workload = pmWorkloadStatus(pm.totalHours);
               return (
                 <div key={pm.name} className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
@@ -841,7 +881,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                     </span>
                   </div>
                   {activeMetrics.length > 0 && (
-                    <div className="grid grid-cols-2 gap-px" style={{ background: 'var(--cn-border)', borderTop: '1px solid var(--cn-border)' }}>
+                    <div className={`grid ${metricsGridCols} gap-px`} style={{ background: 'var(--cn-border)', borderTop: '1px solid var(--cn-border)' }}>
                       {activeMetrics.map(({ key, label, color, isHours }) => (
                         <div key={key} className="flex flex-col gap-1 px-3.5 py-2.5" style={{ background: 'var(--cn-bg-card)' }}>
                           <div className="flex items-center gap-1.5">
@@ -862,82 +902,84 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
         </div>
       )}
 
-      <SearchFilter
-        searchTerm={searchTerm}
-        totalCount={data.length}
-        filteredCount={filtered.length}
-        onChange={val => { setSearchTerm(val); setPage(1); }}
-      />
+      <div className="sticky top-16 z-10 space-y-2 py-2 -mx-3 sm:-mx-6 px-3 sm:px-6 border-b" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+        <SearchFilter
+          searchTerm={searchTerm}
+          totalCount={data.length}
+          filteredCount={filtered.length}
+          onChange={val => { setSearchTerm(val); setPage(1); }}
+        />
 
-      <div className="space-y-2">
-        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-2 sm:gap-3">
-          {primaryFilterCols.map(({ col, label }) =>
-            col === monthCol ? (
-              <MonthMultiSelect
-                key={col}
-                options={filterOptions[col] ?? []}
-                selected={filters[col] ?? []}
-                onChange={vals => handleFilter(col, vals)}
-              />
-            ) : (
-              <MultiSelect
-                key={col}
-                label={label}
-                options={filterOptions[col] ?? []}
-                selected={filters[col] ?? []}
-                onChange={vals => handleFilter(col, vals)}
-              />
-            )
-          )}
-          <div className="flex items-end">
-            <button
-              onClick={() => setShowMoreFilters(o => !o)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg cursor-pointer transition-all text-sm border"
-              style={showMoreFilters || secondaryActiveCount > 0
-                ? { background: 'rgba(254,74,35,0.12)', borderColor: '#FE4A23', color: '#FE4A23' }
-                : { background: 'var(--cn-bg-input)', borderColor: 'var(--cn-border)', color: 'var(--cn-text-primary)' }}
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5" />
-              More Filters
-              {secondaryActiveCount > 0 && (
-                <span className="text-[10px] font-bold px-1.5 rounded-full" style={{ background: '#FE4A23', color: '#fff' }}>{secondaryActiveCount}</span>
-              )}
-            </button>
-          </div>
-          {activeFilterCount > 0 && (
-            <div className="flex items-end col-span-2 sm:col-span-1">
-              <button
-                onClick={clearAll}
-                title={`Clear all ${activeFilterCount} filter(s)`}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg cursor-pointer transition-all text-xs font-medium"
-                style={{ background: 'var(--cn-bg-input)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }}
-              >
-                <X className="w-3.5 h-3.5" />
-                Clear all ({activeFilterCount})
-              </button>
-            </div>
-          )}
-        </div>
-
-        {showMoreFilters && (
-          <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-2 sm:gap-3 p-3 rounded-lg" style={{ background: 'var(--cn-bg-input)', border: '1px solid var(--cn-border)' }}>
-            {secondaryFilterCols.map(({ col, label }) => (
-              <MultiSelect
-                key={col}
-                label={label}
-                options={filterOptions[col] ?? []}
-                selected={filters[col] ?? []}
-                onChange={vals => handleFilter(col, vals)}
-              />
-            ))}
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-2 sm:gap-3">
+            {primaryFilterCols.map(({ col, label }) =>
+              col === monthCol ? (
+                <MonthMultiSelect
+                  key={col}
+                  options={filterOptions[col] ?? []}
+                  selected={filters[col] ?? []}
+                  onChange={vals => handleFilter(col, vals)}
+                />
+              ) : (
+                <MultiSelect
+                  key={col}
+                  label={label}
+                  options={filterOptions[col] ?? []}
+                  selected={filters[col] ?? []}
+                  onChange={vals => handleFilter(col, vals)}
+                />
+              )
+            )}
             <MultiSelect
               label="Columns"
               options={tableCols}
               selected={visibleCols}
               onChange={vals => { setVisibleCols(vals); setColsTouched(true); setPage(1); }}
             />
+            <div className="flex items-end">
+              <button
+                onClick={() => setShowMoreFilters(o => !o)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg cursor-pointer transition-all text-sm border"
+                style={showMoreFilters || secondaryActiveCount > 0
+                  ? { background: 'rgba(254,74,35,0.12)', borderColor: '#FE4A23', color: '#FE4A23' }
+                  : { background: 'var(--cn-bg-input)', borderColor: 'var(--cn-border)', color: 'var(--cn-text-primary)' }}
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                More Filters
+                {secondaryActiveCount > 0 && (
+                  <span className="text-[10px] font-bold px-1.5 rounded-full" style={{ background: '#FE4A23', color: '#fff' }}>{secondaryActiveCount}</span>
+                )}
+              </button>
+            </div>
+            {activeFilterCount > 0 && (
+              <div className="flex items-end col-span-2 sm:col-span-1">
+                <button
+                  onClick={clearAll}
+                  title={`Clear all ${activeFilterCount} filter(s)`}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg cursor-pointer transition-all text-xs font-medium"
+                  style={{ background: 'var(--cn-bg-input)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }}
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Clear all ({activeFilterCount})
+                </button>
+              </div>
+            )}
           </div>
-        )}
+
+          {showMoreFilters && (
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-2 sm:gap-3 p-3 rounded-lg" style={{ background: 'var(--cn-bg-input)', border: '1px solid var(--cn-border)' }}>
+              {secondaryFilterCols.map(({ col, label }) => (
+                <MultiSelect
+                  key={col}
+                  label={label}
+                  options={filterOptions[col] ?? []}
+                  selected={filters[col] ?? []}
+                  onChange={vals => handleFilter(col, vals)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center justify-between gap-3">
