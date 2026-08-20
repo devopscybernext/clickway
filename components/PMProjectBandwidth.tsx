@@ -953,9 +953,14 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                         style={{ background: `linear-gradient(135deg, ${bg}cc, ${bg}66)` }}>{initials}</div>
                     )}
                     <p className="text-sm font-semibold truncate min-w-0 flex-1" style={{ color: 'var(--cn-text-primary)' }}>{pm.name}</p>
-                    <span className="text-[10px] font-bold px-2 py-1 rounded-full shrink-0" style={{ background: workload.bg + '22', color: workload.bg }}>
-                      {workload.label}
-                    </span>
+                    {/* Workload status is a "right now" concept — doesn't
+                        make sense against a past month's totals, so it's
+                        hidden on the historical-only Previous Months tab. */}
+                    {defaultToCurrentMonth && (
+                      <span className="text-[10px] font-bold px-2 py-1 rounded-full shrink-0" style={{ background: workload.bg + '22', color: workload.bg }}>
+                        {workload.label}
+                      </span>
+                    )}
                   </div>
                   {activeMetrics.length > 0 && (
                     <div className={`grid ${metricsGridCols} gap-px`} style={{ background: 'var(--cn-border)', borderTop: '1px solid var(--cn-border)' }}>
