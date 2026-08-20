@@ -2993,7 +2993,13 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
       ? { label: 'On Leave', bg: '#8b5cf6' }
       : workloadStatus(displayHours, isMonthlyBlock);
 
-    return { name, status, tabCount: activeTasks.length, displayHours };
+    // Bandwidth (Availability) — same "headroom left before Overload"
+    // formula as PM Projects, just against this person's own daily (7.3h)
+    // or monthly-retainer (125h) ceiling instead of the PM 450h one.
+    const cap = isMonthlyBlock ? 125 : 7.3;
+    const availableHours = Math.max(0, cap - displayHours);
+
+    return { name, status, tabCount: activeTasks.length, displayHours, availableHours };
   });
 
   // Marketing rosters get SEO/PPC/SMM tabs, Web rosters get UIUX/Front End/
@@ -3055,6 +3061,7 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
                     <span className="flex items-center gap-2 shrink-0 tabular-nums">
                       <span style={{ color: 'var(--cn-text-muted)' }}>{m.tabCount} task{m.tabCount === 1 ? '' : 's'}</span>
                       <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{Math.round(m.displayHours * 10) / 10}h</span>
+                      <span style={{ color: '#22c55e' }}>{Math.round(m.availableHours * 10) / 10}h avail</span>
                     </span>
                   </div>
                 ))}
@@ -3236,7 +3243,13 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
       ? { label: 'On Leave', bg: '#8b5cf6' }
       : workloadStatus(displayHours, isMonthlyBlock);
 
-    return { name, displayHours, status };
+    // Bandwidth (Availability) — same "headroom left before Overload"
+    // formula as PM Projects, against this person's own daily (7.3h) or
+    // monthly-retainer (125h) ceiling instead of the PM 450h one.
+    const cap = isMonthlyBlock ? 125 : 7.3;
+    const availableHours = Math.max(0, cap - displayHours);
+
+    return { name, displayHours, availableHours, status };
   }).sort((a, b) => a.displayHours - b.displayHours);
 
   // Grouped into columns by status — lets an admin scan straight to
@@ -3269,7 +3282,10 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
                     <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: m.status.bg }} />
                     <span className="truncate" style={{ color: 'var(--cn-text-primary)' }}>{m.name}</span>
                   </span>
-                  <span className="tabular-nums font-semibold shrink-0" style={{ color: 'var(--cn-text-muted)' }}>{Math.round(m.displayHours * 10) / 10}h</span>
+                  <span className="flex items-center gap-2 shrink-0 tabular-nums">
+                    <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{Math.round(m.displayHours * 10) / 10}h</span>
+                    <span style={{ color: '#22c55e' }}>{Math.round(m.availableHours * 10) / 10}h avail</span>
+                  </span>
                 </div>
               ))}
             </div>
