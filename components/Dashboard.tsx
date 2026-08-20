@@ -1111,6 +1111,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   allData={pmBandwidthData}
                   defaultToCurrentMonth={effectivePmBandwidthSubTab !== 'archive'}
                   hideYearMonthFilter={effectivePmBandwidthSubTab === 'current'}
+                  lockShowDataFull={effectivePmBandwidthSubTab === 'mine'}
+                  hidePmFilter={effectivePmBandwidthSubTab === 'mine'}
                 />
               </div>
             </section>

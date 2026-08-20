@@ -514,9 +514,17 @@ interface Props {
   // a single month server-side, so Year/Month filters are redundant; Status
   // takes their place in the always-visible primary row instead.
   hideYearMonthFilter?: boolean;
+  // True for "My Projects" — a single PM's own, much smaller list, so it
+  // always shows every column/PM-card metric and skips the Low/Medium/Full
+  // control entirely instead of offering tiers that don't add much value
+  // at this scale.
+  lockShowDataFull?: boolean;
+  // True for "My Projects" — the PM filter is meaningless there since the
+  // whole tab is already scoped to one PM (the logged-in user).
+  hidePmFilter?: boolean;
 }
 
-export default function PMProjectBandwidth({ data, headers, canEdit = false, onCellChange, allData, defaultToCurrentMonth = true, hideYearMonthFilter = false }: Props) {
+export default function PMProjectBandwidth({ data, headers, canEdit = false, onCellChange, allData, defaultToCurrentMonth = true, hideYearMonthFilter = false, lockShowDataFull = false, hidePmFilter = false }: Props) {
   const optionSourceData = allData ?? data;
   // Cells only become editable after clicking "Edit", same pattern as Tasks Assigned
   const [editMode, setEditMode] = useState(false);
@@ -565,16 +573,17 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   // Timestamp/Email stay usable for sorting & filtering but aren't shown as table columns
   const tableCols = headers.filter(h => h !== timestampCol && h !== emailCol);
 
-  // Show Data always starts at Low — Dashboard.tsx remounts this component
-  // (key={effectivePmBandwidthSubTab}) on every tab switch, so a plain
-  // once-per-mount flag is enough; the user can still override with the
-  // Low/Medium/Full button within any tab.
+  // Show Data always starts at Low, except My Projects (lockShowDataFull)
+  // which always shows Full and has no toggle to change it. Dashboard.tsx
+  // remounts this component (key={effectivePmBandwidthSubTab}) on every tab
+  // switch, so a plain once-per-mount flag is enough; the user can still
+  // override with the Low/Medium/Full button on any other tab.
   const levelDefaultApplied = useRef(false);
   useEffect(() => {
     if (levelDefaultApplied.current || !headers.length) return;
     levelDefaultApplied.current = true;
-    setShowDataLevel('low');
-  }, [headers.length]);
+    setShowDataLevel(lockShowDataFull ? 'full' : 'low');
+  }, [headers.length, lockShowDataFull]);
 
   // Column presets per level — Low is a bare-minimum glance, Medium is the
   // previous curated default, Full is every column. PM itself isn't part of
@@ -641,7 +650,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   // always-visible row in their place.
   const filterCols = useMemo(
     () => ([
-      showPmCol ? { col: '__pm', label: 'PM' } : null,
+      (showPmCol && !hidePmFilter) ? { col: '__pm', label: 'PM' } : null,
       projectCol ? { col: projectCol, label: 'Project' } : null,
       clientCol ? { col: clientCol, label: 'Client' } : null,
       (yearCol && !hideYearMonthFilter) ? { col: yearCol, label: 'Year' } : null,
@@ -652,7 +661,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
       upsellCol ? { col: upsellCol, label: 'Upsell/Cross-Sell' } : null,
       paymentStatusCol ? { col: paymentStatusCol, label: 'Payment Status' } : null,
     ].filter((c): c is { col: string; label: string } => c !== null)),
-    [showPmCol, projectCol, clientCol, yearCol, monthCol, statusCol, phaseCol, milestonesCol, upsellCol, paymentStatusCol, hideYearMonthFilter]
+    [showPmCol, projectCol, clientCol, yearCol, monthCol, statusCol, phaseCol, milestonesCol, upsellCol, paymentStatusCol, hideYearMonthFilter, hidePmFilter]
   );
   // PM/Project/Client/Year/Month stay always visible; the rest collapse
   // behind "More Filters" so the primary bar doesn't grow unbounded. Status
@@ -890,23 +899,25 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                 </button>
               </div>
             )}
-            <div className="flex flex-col gap-1 col-span-2 sm:col-span-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--cn-text-muted)' }}>Show Data</span>
-              <div className="inline-flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--cn-border)' }}>
-                {(['low', 'medium', 'full'] as const).map(level => (
-                  <button
-                    key={level}
-                    onClick={() => setShowDataLevel(level)}
-                    className="px-3 py-2 text-xs font-semibold cursor-pointer transition-all capitalize"
-                    style={showDataLevel === level
-                      ? { background: 'var(--cn-accent)', color: '#fff' }
-                      : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)' }}
-                  >
-                    {level}
-                  </button>
-                ))}
+            {!lockShowDataFull && (
+              <div className="flex flex-col gap-1 col-span-2 sm:col-span-1">
+                <span className="text-xs font-medium" style={{ color: 'var(--cn-text-muted)' }}>Show Data</span>
+                <div className="inline-flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--cn-border)' }}>
+                  {(['low', 'medium', 'full'] as const).map(level => (
+                    <button
+                      key={level}
+                      onClick={() => setShowDataLevel(level)}
+                      className="px-3 py-2 text-xs font-semibold cursor-pointer transition-all capitalize"
+                      style={showDataLevel === level
+                        ? { background: 'var(--cn-accent)', color: '#fff' }
+                        : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)' }}
+                    >
+                      {level}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {showMoreFilters && (
