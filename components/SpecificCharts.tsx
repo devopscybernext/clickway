@@ -2941,11 +2941,10 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
 }
 
 // ─── Team Workload — Dashboard's simplified, read-only "today" snapshot of
-// the whole team. Grouped into columns by workload status (same layout as
-// ResourceBandwidthChips above Tasks Assigned) so an admin can scan straight
-// to "who's Available" instead of hunting through a grid of cards; each row
-// shows both Tasks and Hours. No click-to-expand, no editing — that's what
-// the standalone Team Bandwidth tab was for, and it's been retired.
+// the whole team. Card-per-person grid matching PM Projects' PM Summary
+// card style: avatar/name/status header, then Total + Bandwidth as a
+// two-column stat grid. No click-to-expand, no editing — that's what the
+// standalone Team Bandwidth tab was for, and it's been retired.
 export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availHeaders }: {
   sheet1Data: SheetData[]; sheet1Headers: string[];
   availData?: SheetData[]; availHeaders?: string[];
@@ -2999,7 +2998,7 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
     const cap = isMonthlyBlock ? 125 : 7.3;
     const availableHours = Math.max(0, cap - displayHours);
 
-    return { name, status, tabCount: activeTasks.length, displayHours, availableHours };
+    return { name, status, displayHours, availableHours };
   });
 
   // Marketing rosters get SEO/PPC/SMM tabs, Web rosters get UIUX/Front End/
@@ -3013,15 +3012,6 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
       ? [{ key: 'all', label: 'All' }, { key: 'uiux', label: 'UIUX' }, { key: 'frontend', label: 'Front End' }, { key: 'backend', label: 'Back End' }]
       : [];
   const visibleCards = cards.filter(c => matchesSubDept(c.name, subDept));
-
-  const GROUP_ORDER = ['Available', 'Partially Available', 'Partially Occupied', 'Occupied', 'Overload', 'On Leave'];
-  const GROUP_COLORS: Record<string, string> = {
-    'Available': '#22c55e', 'Partially Available': '#16a34a', 'Partially Occupied': '#f59e0b',
-    'Occupied': '#ea580c', 'Overload': '#dc2626', 'On Leave': '#8b5cf6',
-  };
-  const groups = GROUP_ORDER
-    .map(label => ({ label, color: GROUP_COLORS[label], members: visibleCards.filter(c => c.status.label === label) }))
-    .filter(g => g.members.length > 0);
 
   return (
     <div className="space-y-3">
@@ -3043,32 +3033,45 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
           ))}
         </div>
       )}
-      <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--cn-border)' }}>
-        <div className="flex flex-wrap gap-px" style={{ background: 'var(--cn-border)' }}>
-          {groups.map(g => (
-            <div key={g.label} className="flex-1 min-w-[220px] flex flex-col gap-2 p-3" style={{ background: 'var(--cn-bg-card)' }}>
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: g.color }}>{g.label}</span>
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full tabular-nums" style={{ background: g.color + '18', color: g.color }}>{g.members.length}</span>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+        {visibleCards.map(c => {
+          const photo = teamPhoto(c.name);
+          const bg = memberColor(c.name);
+          const initials = c.name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
+          return (
+            <div key={c.name} className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+              <div className="flex items-center gap-2.5 px-3.5 pt-3.5 pb-3">
+                {photo ? (
+                  <img src={photo} alt={c.name} className="w-9 h-9 rounded-full object-cover shrink-0"
+                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                ) : (
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                    style={{ background: `linear-gradient(135deg, ${bg}cc, ${bg}66)` }}>{initials}</div>
+                )}
+                <p className="text-sm font-semibold truncate min-w-0 flex-1" style={{ color: 'var(--cn-text-primary)' }}>{c.name}</p>
+                <span className="text-[10px] font-bold px-2 py-1 rounded-full shrink-0" style={{ background: c.status.bg + '22', color: c.status.bg }}>
+                  {c.status.label}
+                </span>
               </div>
-              <div className="flex flex-col gap-1">
-                {g.members.map(m => (
-                  <div key={m.name} className="flex items-center justify-between gap-2 text-[12px] px-2 py-1.5 rounded-lg border" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
-                    <span className="flex items-center gap-1.5 min-w-0">
-                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: m.status.bg }} />
-                      <span className="truncate" style={{ color: 'var(--cn-text-primary)' }}>{m.name}</span>
-                    </span>
-                    <span className="flex items-center gap-2 shrink-0 tabular-nums">
-                      <span style={{ color: 'var(--cn-text-muted)' }}>{m.tabCount} task{m.tabCount === 1 ? '' : 's'}</span>
-                      <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{Math.round(m.displayHours * 10) / 10}h</span>
-                      <span style={{ color: '#22c55e' }}>{Math.round(m.availableHours * 10) / 10}h avail</span>
-                    </span>
+              <div className="grid grid-cols-2 gap-px" style={{ background: 'var(--cn-border)', borderTop: '1px solid var(--cn-border)' }}>
+                <div className="flex flex-col gap-1 px-3.5 py-2.5" style={{ background: 'var(--cn-bg-card)' }}>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#2563eb' }} />
+                    <span className="text-[9px] font-semibold uppercase tracking-wide leading-tight" style={{ color: 'var(--cn-text-muted)' }}>Total</span>
                   </div>
-                ))}
+                  <span className="text-sm font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{Math.round(c.displayHours * 10) / 10}h</span>
+                </div>
+                <div className="flex flex-col gap-1 px-3.5 py-2.5" style={{ background: 'var(--cn-bg-card)' }}>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#22c55e' }} />
+                    <span className="text-[9px] font-semibold uppercase tracking-wide leading-tight" style={{ color: 'var(--cn-text-muted)' }}>Bandwidth</span>
+                  </div>
+                  <span className="text-sm font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{Math.round(c.availableHours * 10) / 10}h</span>
+                </div>
               </div>
             </div>
-          ))}
-        </div>
+          );
+        })}
       </div>
     </div>
   );
