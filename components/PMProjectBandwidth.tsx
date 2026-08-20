@@ -10,6 +10,12 @@ import { memberPhoto, memberColor } from '@/lib/memberColors';
 const PAGE_SIZE = 50;
 const FOLLOWUP_DUE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days since last follow-up counts as due
 
+// Synthetic table column — Pending Hours isn't a raw sheet column (it's
+// Total Hours minus Current Month Hours, computed same as the Overview/PM
+// Summary figure), so it's rendered as an extra always-read-only column
+// rather than a real header, the same way the PM column already is.
+const PENDING_HOURS_COL = '__pendingHours';
+
 const MONTH_ORDER: Record<string, number> = {
   january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
   july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
@@ -575,14 +581,14 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   // this list — it's a separate always-shown column (see showPmCol) whenever
   // the view spans more than one PM.
   const colLevelPresets = useMemo<Record<ShowDataLevel, string[]>>(() => ({
-    low: [projectCol, clientCol, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, statusCol].filter((c): c is string => !!c),
+    low: [projectCol, clientCol, totalHoursCol, currentMonthHoursCol, statusCol].filter((c): c is string => !!c).concat(PENDING_HOURS_COL),
     medium: [
       departmentCol, projectCol, clientCol, totalHoursCol,
       statusCol, currentMonthHoursCol, paymentStatusCol, followupDateCol,
     ].filter((c): c is string => !!c),
     full: tableCols,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [projectCol, clientCol, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, statusCol, departmentCol, paymentStatusCol, followupDateCol, tableCols]);
+  }), [projectCol, clientCol, totalHoursCol, currentMonthHoursCol, statusCol, departmentCol, paymentStatusCol, followupDateCol, tableCols]);
 
   // Re-applies whenever the level changes (button click or the per-tab
   // default above) — manual Columns picker edits in between still work,
@@ -806,6 +812,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const clearAll = () => { setFilters({}); setPage(1); };
 
   const visibleHeaders = visibleCols.length === 0 ? tableCols : tableCols.filter(h => visibleCols.includes(h));
+  const showPendingCol = visibleCols.includes(PENDING_HOURS_COL);
 
   if (!headers.length) {
     return <div className="text-center py-12 text-sm" style={{ color: 'var(--cn-text-muted)' }}>No data available</div>;
@@ -883,7 +890,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                 </button>
               </div>
             )}
-            <div className="flex flex-col gap-1 col-span-2 sm:col-span-1 sm:ml-auto">
+            <div className="flex flex-col gap-1 col-span-2 sm:col-span-1">
               <span className="text-xs font-medium" style={{ color: 'var(--cn-text-muted)' }}>Show Data</span>
               <div className="inline-flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--cn-border)' }}>
                 {(['low', 'medium', 'full'] as const).map(level => (
@@ -1039,12 +1046,15 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                   </div>
                 </th>
               ))}
+              {showPendingCol && (
+                <th style={{ color: 'var(--cn-text-muted)' }} className="px-4 py-2 font-semibold uppercase tracking-wide text-[10px] min-w-[120px]">Pending Hours</th>
+              )}
             </tr>
           </thead>
           <tbody>
             {pageData.length === 0 ? (
               <tr>
-                <td colSpan={visibleHeaders.length + (showPmCol ? 2 : 1)} style={{ color: 'var(--cn-text-muted)' }} className="text-center py-12">
+                <td colSpan={visibleHeaders.length + (showPmCol ? 2 : 1) + (showPendingCol ? 1 : 0)} style={{ color: 'var(--cn-text-muted)' }} className="text-center py-12">
                   No records found
                 </td>
               </tr>
@@ -1101,6 +1111,13 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                       </td>
                     );
                   })}
+                  {showPendingCol && (
+                    <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-primary)' }}>
+                      {totalHoursCol && currentMonthHoursCol
+                        ? fmtHours(parseDurationDecimal(row[totalHoursCol]) - parseDurationDecimal(row[currentMonthHoursCol]))
+                        : '—'}
+                    </td>
+                  )}
                 </tr>
               ))
             )}
