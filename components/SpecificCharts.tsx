@@ -324,7 +324,7 @@ function workloadStatus(hours: number, isMonthlyBlock: boolean): { label: string
   if (hours === 0)  return { label: 'Available',           bg: '#22c55e' };
   if (hours <= 3.5) return { label: 'Partially Available', bg: '#16a34a' };
   if (hours <= 6.5) return { label: 'Partially Occupied',  bg: '#f59e0b' };
-  if (hours <= 7.5) return { label: 'Occupied',            bg: '#ea580c' };
+  if (hours <= 7)   return { label: 'Occupied',            bg: '#ea580c' };
   return                     { label: 'Overload',            bg: '#dc2626' };
 }
 
@@ -3005,9 +3005,9 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
       : workloadStatus(displayHours, isMonthlyBlock);
 
     // Bandwidth — same "headroom left before Overload"
-    // formula as PM Projects, just against this person's own daily (7.5h)
+    // formula as PM Projects, just against this person's own daily (7h)
     // or monthly-retainer (125h) ceiling instead of the PM 450h one.
-    const cap = isMonthlyBlock ? 125 : 7.5;
+    const cap = isMonthlyBlock ? 125 : 7;
     const availableHours = Math.max(0, cap - displayHours);
 
     return { name, status, displayHours, availableHours };
@@ -3140,8 +3140,8 @@ export function MyWorkloadSummary({ sheet1Data, sheet1Headers, availData, availH
 
   const status = onLeave ? { label: 'On Leave', bg: '#ef4444' } : workloadStatus(displayHours, isMonthlyBlock);
   // Gauge reads against the Overload threshold — 125h/month for PPC & SEO,
-  // 7.5h/day for everyone else.
-  const cap = isMonthlyBlock ? 125 : 7.5;
+  // 7h/day for everyone else.
+  const cap = isMonthlyBlock ? 125 : 7;
   const pct = Math.min((displayHours / cap) * 100, 100);
   const hoursLabel = isMonthlyBlock
     ? `${formatHoursClock(displayHours)}h of ${formatHoursClock(cap)}h this month`
@@ -3259,9 +3259,9 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
       : workloadStatus(displayHours, isMonthlyBlock);
 
     // Bandwidth — same "headroom left before Overload"
-    // formula as PM Projects, against this person's own daily (7.5h) or
+    // formula as PM Projects, against this person's own daily (7h) or
     // monthly-retainer (125h) ceiling instead of the PM 450h one.
-    const cap = isMonthlyBlock ? 125 : 7.5;
+    const cap = isMonthlyBlock ? 125 : 7;
     const availableHours = Math.max(0, cap - displayHours);
 
     return { name, displayHours, availableHours, status };
@@ -3404,7 +3404,7 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
         return !BANDWIDTH_SUBMITTED_STATUSES.includes(st);
       })
       .reduce((s, r) => s + getHours(r), 0);
-    const cap = isMonthlyBlock ? 125 : 7.5;
+    const cap = isMonthlyBlock ? 125 : 7;
     return sum + Math.max(0, cap - hours);
   }, 0);
 
