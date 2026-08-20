@@ -1110,6 +1110,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   onCellChange={effectivePmBandwidthSubTab === 'mine' ? handlePmBandwidthChange : undefined}
                   allData={pmBandwidthData}
                   defaultToCurrentMonth={effectivePmBandwidthSubTab !== 'archive'}
+                  hideYearMonthFilter={effectivePmBandwidthSubTab === 'current'}
                 />
               </div>
             </section>

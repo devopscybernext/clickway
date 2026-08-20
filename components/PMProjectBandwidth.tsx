@@ -7,7 +7,7 @@ import { MultiSelect } from './FilteredDataTable';
 import { parseHHMM, formatHHMM, hhmmToDecimalHours, DURATION_MINUTE_OPTIONS } from './SpecificCharts';
 import { memberPhoto, memberColor } from '@/lib/memberColors';
 
-const PAGE_SIZE = 30;
+const PAGE_SIZE = 50;
 const FOLLOWUP_DUE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days since last follow-up counts as due
 
 const MONTH_ORDER: Record<string, number> = {
@@ -504,9 +504,13 @@ interface Props {
   // to the real current month/year would show zero rows on first load,
   // since that tab never has current-month data.
   defaultToCurrentMonth?: boolean;
+  // True for the "Current Month" tab — that tab's data is already scoped to
+  // a single month server-side, so Year/Month filters are redundant; Status
+  // takes their place in the always-visible primary row instead.
+  hideYearMonthFilter?: boolean;
 }
 
-export default function PMProjectBandwidth({ data, headers, canEdit = false, onCellChange, allData, defaultToCurrentMonth = true }: Props) {
+export default function PMProjectBandwidth({ data, headers, canEdit = false, onCellChange, allData, defaultToCurrentMonth = true, hideYearMonthFilter = false }: Props) {
   const optionSourceData = allData ?? data;
   // Cells only become editable after clicking "Edit", same pattern as Tasks Assigned
   const [editMode, setEditMode] = useState(false);
@@ -626,24 +630,31 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     h === departmentCol || h === yearCol || h === monthCol || h === statusCol || h === phaseCol ||
     h === milestonesCol || h === upsellCol || h === paymentStatusCol || h === assignedCol;
 
+  // Current Month tab is already scoped to one month server-side, so
+  // Year/Month are redundant there — drop them and promote Status into the
+  // always-visible row in their place.
   const filterCols = useMemo(
     () => ([
       showPmCol ? { col: '__pm', label: 'PM' } : null,
       projectCol ? { col: projectCol, label: 'Project' } : null,
       clientCol ? { col: clientCol, label: 'Client' } : null,
-      yearCol ? { col: yearCol, label: 'Year' } : null,
-      monthCol ? { col: monthCol, label: 'Month' } : null,
+      (yearCol && !hideYearMonthFilter) ? { col: yearCol, label: 'Year' } : null,
+      (monthCol && !hideYearMonthFilter) ? { col: monthCol, label: 'Month' } : null,
       statusCol ? { col: statusCol, label: 'Status' } : null,
       phaseCol ? { col: phaseCol, label: 'Phase' } : null,
       milestonesCol ? { col: milestonesCol, label: 'Upcoming Milestones' } : null,
       upsellCol ? { col: upsellCol, label: 'Upsell/Cross-Sell' } : null,
       paymentStatusCol ? { col: paymentStatusCol, label: 'Payment Status' } : null,
     ].filter((c): c is { col: string; label: string } => c !== null)),
-    [showPmCol, projectCol, clientCol, yearCol, monthCol, statusCol, phaseCol, milestonesCol, upsellCol, paymentStatusCol]
+    [showPmCol, projectCol, clientCol, yearCol, monthCol, statusCol, phaseCol, milestonesCol, upsellCol, paymentStatusCol, hideYearMonthFilter]
   );
   // PM/Project/Client/Year/Month stay always visible; the rest collapse
-  // behind "More Filters" so the primary bar doesn't grow unbounded.
-  const secondaryFilterCols = filterCols.filter(({ col }) => col === statusCol || col === phaseCol || col === milestonesCol || col === upsellCol || col === paymentStatusCol);
+  // behind "More Filters" so the primary bar doesn't grow unbounded. Status
+  // joins the primary row instead when Year/Month are hidden (Current Month
+  // tab), so the bar still leads with a genuinely useful filter.
+  const secondaryFilterCols = filterCols.filter(({ col }) =>
+    (col === statusCol && !hideYearMonthFilter) || col === phaseCol || col === milestonesCol || col === upsellCol || col === paymentStatusCol
+  );
   const primaryFilterCols = filterCols.filter(fc => !secondaryFilterCols.includes(fc));
   const secondaryActiveCount = secondaryFilterCols.filter(({ col }) => (filters[col] ?? []).length > 0).length;
 
@@ -681,10 +692,12 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
 
   // Default to the current Year/Month once, when they're available as filter
   // columns — skipped on the All Data tab (defaultToCurrentMonth=false),
-  // which is historical-only and would show zero rows if pinned to now.
+  // which is historical-only and would show zero rows if pinned to now, and
+  // skipped entirely on Current Month (hideYearMonthFilter=true), which has
+  // no Year/Month controls to default and no need for a hidden filter.
   const defaultsApplied = useRef(false);
   useEffect(() => {
-    if (defaultsApplied.current || !yearCol || !monthCol || !defaultToCurrentMonth) return;
+    if (defaultsApplied.current || !yearCol || !monthCol || !defaultToCurrentMonth || hideYearMonthFilter) return;
     defaultsApplied.current = true;
     const now = new Date();
     setFilters(prev => ({
