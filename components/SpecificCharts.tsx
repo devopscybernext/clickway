@@ -3057,7 +3057,7 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
                 <div className="flex flex-col gap-1 px-3.5 py-2.5" style={{ background: 'var(--cn-bg-card)' }}>
                   <div className="flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#2563eb' }} />
-                    <span className="text-[9px] font-semibold uppercase tracking-wide leading-tight" style={{ color: 'var(--cn-text-muted)' }}>Total</span>
+                    <span className="text-[9px] font-semibold uppercase tracking-wide leading-tight" style={{ color: 'var(--cn-text-muted)' }}>Assigned</span>
                   </div>
                   <span className="text-sm font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{Math.round(c.displayHours * 10) / 10}h</span>
                 </div>
@@ -3363,7 +3363,6 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
   const submittedAkashCount  = statusCol ? data.filter(r => getStatus(r) === 'submitted to akash').length : 0;
   const submittedPMCount     = statusCol ? data.filter(r => getStatus(r) === 'submitted to pm').length : 0;
   const onHoldCount          = statusCol ? data.filter(r => getStatus(r) === 'on hold').length : 0;
-  const toBeExpectedCount    = bucketCol ? data.filter(r => String(r[bucketCol] ?? '').trim().toLowerCase() === 'to be expected').length : 0;
   // Unfiltered roster (scopedData, not the date-filtered `data`) — otherwise
   // anyone with zero today/everyday tasks (e.g. someone on leave with
   // nothing assigned) would silently drop out of the roster and never get
@@ -3375,6 +3374,24 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
         return av ? isOnLeaveText(String(av[availStatusCol] ?? '').trim()) : false;
       }).length
     : 0;
+  // Bandwidth — same "headroom left before Overload" formula as Team
+  // Workload's per-person figure, summed across the whole roster.
+  const BANDWIDTH_SUBMITTED_STATUSES = ['submitted to client', 'submitted to pm', 'submitted to akash', 'submitted to admin'];
+  const bandwidthTotal = rosterNames.reduce((sum, name) => {
+    const isMonthlyBlock = MONTHLY_BLOCK_MARKETING_NAMES.has(name.trim().toLowerCase());
+    const hours = scopedData
+      .filter(r => getPerson(r) === name)
+      .filter(r => {
+        const st = getStatus(r);
+        if (SKIP_STATUSES.includes(st)) return false;
+        const b = getBucket(r);
+        if (!(b === 'today' || b === 'everyday')) return false;
+        return !BANDWIDTH_SUBMITTED_STATUSES.includes(st);
+      })
+      .reduce((s, r) => s + getHours(r), 0);
+    const cap = isMonthlyBlock ? 125 : 7.3;
+    return sum + Math.max(0, cap - hours);
+  }, 0);
 
   const IC = ({ label, value, sub, color, icon, badge }: { label: string; value: string | number; sub?: string; color: string; icon: React.ReactNode; badge?: React.ReactNode }) => (
     <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl border" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
@@ -3419,7 +3436,7 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
       { label: 'On Hold',              value: onHoldCount,                      color: '#7c3aed', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/></svg> },
       { label: 'Submitted To Admin',   value: submittedAkashCount,              color: '#d97706', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.84 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.77 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8 8.09a16 16 0 0 0 6 6l1.06-1.06a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg> },
       { label: 'Submitted to PM',      value: submittedPMCount,                 color: '#10b981', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
-      { label: 'To Be Expected',       value: toBeExpectedCount,                color: '#d97706', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> },
+      { label: 'Bandwidth',            value: `${Math.round(bandwidthTotal * 10) / 10}h`,  color: '#22c55e', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> },
       { label: 'Leave',                value: onLeaveCount,                     color: '#8b5cf6', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M9 16l2 2 4-4"/></svg> },
     ];
     return (
