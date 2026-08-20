@@ -816,6 +816,16 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     { label: 'Project Yet To Start', value: stats.yetToStart },
     { label: 'Project Ongoing', value: stats.ongoing },
   ];
+  // Overview cards follow the same Low/Medium/Full ladder as everything
+  // else: Low = the first 4 (Total/Current/Risk/Pending), Medium adds Pay
+  // Pending + Follow-up Due (6), Full shows all 8.
+  const statCardCounts: Record<ShowDataLevel, number> = { low: 4, medium: 6, full: 8 };
+  const visibleStatCards = statCards.slice(0, statCardCounts[showDataLevel]);
+  const statGridCols = showDataLevel === 'low'
+    ? 'grid-cols-2 sm:grid-cols-4'
+    : showDataLevel === 'medium'
+      ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-6'
+      : 'grid-cols-2 sm:grid-cols-4 lg:grid-cols-8';
 
   return (
     <div className="space-y-4">
@@ -902,11 +912,6 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>Overview</p>
         <div className="flex items-center gap-3 flex-wrap">
-          {activeFilterCount > 0 && (
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: 'rgba(254,74,35,0.12)', color: '#FE4A23' }}>
-              Reflecting {activeFilterCount} filter{activeFilterCount === 1 ? '' : 's'}
-            </span>
-          )}
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium" style={{ color: 'var(--cn-text-muted)' }}>Show Data</span>
             <div className="inline-flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--cn-border)' }}>
@@ -927,8 +932,8 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
         </div>
       </div>
       <div className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-px" style={{ background: 'var(--cn-border)' }}>
-          {statCards.map(({ label, value }) => (
+        <div className={`grid ${statGridCols} gap-px`} style={{ background: 'var(--cn-border)' }}>
+          {visibleStatCards.map(({ label, value }) => (
             <div key={label} className="flex flex-col gap-1.5 p-3" style={{ background: 'var(--cn-bg-card)' }}>
               <p className="text-[9px] font-semibold uppercase tracking-wide leading-tight" style={{ color: 'var(--cn-text-muted)' }}>{label}</p>
               <p className="text-xl font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{value}</p>
