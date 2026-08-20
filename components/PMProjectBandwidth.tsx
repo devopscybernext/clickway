@@ -269,9 +269,12 @@ type PmStatKey = keyof ReturnType<typeof computeStatsFor>;
 // Risk Month Hours is deliberately not shown here — it still feeds the
 // Current Month Hours net calculation above, just isn't surfaced as its own
 // card anywhere on Overview/PM Summary per request.
+// Label text pulled into a constant since it's compared against by string in
+// several field-list/lookup spots below — keeps them all in sync.
+const AVAILABLE_LABEL = 'Bandwidth (Availability)';
 const PM_CARD_METRIC_DEFS: { key: PmStatKey; label: string; color: string; isHours: boolean }[] = [
   { key: 'totalHours', label: 'Total', color: '#2563eb', isHours: true },
-  { key: 'availableHours', label: 'Available', color: '#22c55e', isHours: true },
+  { key: 'availableHours', label: AVAILABLE_LABEL, color: '#22c55e', isHours: true },
   { key: 'currentMonthHours', label: 'Current', color: '#0891b2', isHours: true },
   { key: 'pendingHours', label: 'Pending', color: '#d97706', isHours: true },
   { key: 'paymentPendingHours', label: 'Pay Pending', color: '#dc2626', isHours: true },
@@ -284,15 +287,15 @@ const PM_CARD_METRIC_DEFS: { key: PmStatKey; label: string; color: string; isHou
 // company-wide snapshot, while PM Summary's Low is deliberately bare (2
 // fields) since it repeats per PM card.
 const LEVEL_FIELDS_SHARED: Record<'medium' | 'full', string[]> = {
-  medium: ['Total', 'Available', 'Current', 'Pending', 'Pay Pending'],
+  medium: ['Total', AVAILABLE_LABEL, 'Current', 'Pending', 'Pay Pending'],
   full: PM_CARD_METRIC_DEFS.map(d => d.label),
 };
 const LEVEL_FIELDS_OVERVIEW: Record<'low' | 'medium' | 'full', string[]> = {
-  low: ['Total', 'Available', 'Current', 'Pending'],
+  low: ['Total', AVAILABLE_LABEL, 'Current', 'Pending'],
   ...LEVEL_FIELDS_SHARED,
 };
 const LEVEL_FIELDS_PM: Record<'low' | 'medium' | 'full', string[]> = {
-  low: ['Total', 'Available'],
+  low: ['Total', AVAILABLE_LABEL],
   ...LEVEL_FIELDS_SHARED,
 };
 
@@ -878,7 +881,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   // per-PM) instead of stats.availableHours (see that comment above).
   const statCards = PM_CARD_METRIC_DEFS.map(({ key, label, isHours }) => ({
     label,
-    value: label === 'Available' ? fmtHours(availableHoursTotal) : isHours ? fmtHours(stats[key]) : stats[key],
+    value: label === AVAILABLE_LABEL ? fmtHours(availableHoursTotal) : isHours ? fmtHours(stats[key]) : stats[key],
   }));
   const visibleStatCards = statCards.filter(c => LEVEL_FIELDS_OVERVIEW[showDataLevel].includes(c.label));
   const statGridCols = showDataLevel === 'low'
