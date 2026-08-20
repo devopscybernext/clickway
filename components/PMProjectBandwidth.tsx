@@ -555,32 +555,30 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   // Timestamp/Email stay usable for sorting & filtering but aren't shown as table columns
   const tableCols = headers.filter(h => h !== timestampCol && h !== emailCol);
 
-  // Show Data default, applied once per tab: All Projects (read-only,
-  // !canEdit) starts at Medium since the table is shared by every PM at
-  // once; My Projects (canEdit) starts at Full since it's a PM's own, much
-  // smaller, editable list. Keyed by canEdit (not a plain once-ever flag)
-  // since both tabs share this same component instance — switching tabs
-  // must re-apply the right default level. The user can still override
-  // with the Low/Medium/Full button within either tab.
-  const levelDefaultApplied = useRef<boolean | null>(null);
+  // Show Data always starts at Low — Dashboard.tsx remounts this component
+  // (key={effectivePmBandwidthSubTab}) on every tab switch, so a plain
+  // once-per-mount flag is enough; the user can still override with the
+  // Low/Medium/Full button within any tab.
+  const levelDefaultApplied = useRef(false);
   useEffect(() => {
-    if (levelDefaultApplied.current === canEdit || !headers.length) return;
-    levelDefaultApplied.current = canEdit;
-    setShowDataLevel(canEdit ? 'full' : 'medium');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [headers.length, canEdit]);
+    if (levelDefaultApplied.current || !headers.length) return;
+    levelDefaultApplied.current = true;
+    setShowDataLevel('low');
+  }, [headers.length]);
 
   // Column presets per level — Low is a bare-minimum glance, Medium is the
-  // previous curated default, Full is every column.
+  // previous curated default, Full is every column. PM itself isn't part of
+  // this list — it's a separate always-shown column (see showPmCol) whenever
+  // the view spans more than one PM.
   const colLevelPresets = useMemo<Record<ShowDataLevel, string[]>>(() => ({
-    low: [projectCol, clientCol, totalHoursCol, statusCol].filter((c): c is string => !!c),
+    low: [projectCol, clientCol, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, statusCol].filter((c): c is string => !!c),
     medium: [
       departmentCol, projectCol, clientCol, totalHoursCol,
       statusCol, currentMonthHoursCol, paymentStatusCol, followupDateCol,
     ].filter((c): c is string => !!c),
     full: tableCols,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [projectCol, clientCol, totalHoursCol, statusCol, departmentCol, currentMonthHoursCol, paymentStatusCol, followupDateCol, tableCols]);
+  }), [projectCol, clientCol, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, statusCol, departmentCol, paymentStatusCol, followupDateCol, tableCols]);
 
   // Re-applies whenever the level changes (button click or the per-tab
   // default above) — manual Columns picker edits in between still work,
@@ -824,6 +822,23 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   return (
     <div className="space-y-4">
       <div className="sticky top-16 z-10 space-y-2 py-2 -mx-3 sm:-mx-6 px-3 sm:px-6 border-b" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+        <div className="flex items-center justify-end gap-2">
+          <span className="text-xs font-medium" style={{ color: 'var(--cn-text-muted)' }}>Show Data</span>
+          <div className="inline-flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--cn-border)' }}>
+            {(['low', 'medium', 'full'] as const).map(level => (
+              <button
+                key={level}
+                onClick={() => setShowDataLevel(level)}
+                className="px-3 py-1.5 text-xs font-semibold cursor-pointer transition-all capitalize"
+                style={showDataLevel === level
+                  ? { background: 'var(--cn-accent)', color: '#fff' }
+                  : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)' }}
+              >
+                {level}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="space-y-2">
           <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-2 sm:gap-3">
             {primaryFilterCols.map(({ col, label }) =>
@@ -896,28 +911,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>Overview</p>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium" style={{ color: 'var(--cn-text-muted)' }}>Show Data</span>
-            <div className="inline-flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--cn-border)' }}>
-              {(['low', 'medium', 'full'] as const).map(level => (
-                <button
-                  key={level}
-                  onClick={() => setShowDataLevel(level)}
-                  className="px-3 py-1.5 text-xs font-semibold cursor-pointer transition-all capitalize"
-                  style={showDataLevel === level
-                    ? { background: 'var(--cn-accent)', color: '#fff' }
-                    : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)' }}
-                >
-                  {level}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+      <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>Overview</p>
       <div className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
         <div className={`grid ${statGridCols} gap-px`} style={{ background: 'var(--cn-border)' }}>
           {visibleStatCards.map(({ label, value }) => (
