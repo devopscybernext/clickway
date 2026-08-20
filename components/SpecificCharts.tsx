@@ -324,7 +324,7 @@ function workloadStatus(hours: number, isMonthlyBlock: boolean): { label: string
   if (hours === 0)  return { label: 'Available',           bg: '#22c55e' };
   if (hours <= 3.5) return { label: 'Partially Available', bg: '#16a34a' };
   if (hours <= 6.5) return { label: 'Partially Occupied',  bg: '#f59e0b' };
-  if (hours <= 7.3) return { label: 'Occupied',            bg: '#ea580c' };
+  if (hours <= 7.5) return { label: 'Occupied',            bg: '#ea580c' };
   return                     { label: 'Overload',            bg: '#dc2626' };
 }
 
@@ -633,6 +633,15 @@ export function toHM(val: string): { h: number; m: number } {
   const m = Math.round((decimal - h) * 60);
   return m === 60 ? { h: h + 1, m: 0 } : { h, m };
 }
+// Decimal hours -> zero-padded "HH:MM" clock display (e.g. 7.5 -> "07:30").
+// Distinct from formatHHMM's "HH.MM Hours" edit-field notation above — this
+// is for read-only summary/stat figures (Bandwidth, Assigned, etc.).
+export function formatHoursClock(decimal: number): string {
+  const totalMinutes = Math.round(Math.max(0, decimal) * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
 
 function ResourceDurationEdit({ value, raw, colName, onStatusChange }: {
   value: string; raw: SheetData; colName: string;
@@ -865,7 +874,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
               style={{ background: '#f59e0b22', color: '#f59e0b' }}
               title="Today + Everyday Tasks & Hours">
               <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              {row.todayTasks} Tasks · {Math.round(row.todayHours * 10) / 10}h
+              {row.todayTasks} Tasks · {formatHoursClock(row.todayHours)}h
             </div>
           )}
           <div className="flex items-center gap-1.5 text-xs" title="In Progress">
@@ -2748,7 +2757,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
                       style={{ background: row.status.bg + '22', color: row.status.bg }}>{row.status.label}</span>
                     {row.tabCount > 0 && (
                       <span className="text-[10px] font-semibold truncate" style={{ color: '#f59e0b' }}>
-                        {row.tabCount} Tasks · {Math.round(row.displayHours * 10) / 10}h
+                        {row.tabCount} Tasks · {formatHoursClock(row.displayHours)}h
                       </span>
                     )}
                   </div>
@@ -2876,7 +2885,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
                                 </td>
                                 <td className="px-3 py-2.5" style={{ minWidth: 60 }}>
                                   {!!t.hours && t.hours > 0
-                                    ? <span className="font-bold px-1.5 py-0.5 rounded-full text-[11px]" style={{ background: '#f59e0b22', color: '#f59e0b' }}>{Math.round(t.hours * 10) / 10}h</span>
+                                    ? <span className="font-bold px-1.5 py-0.5 rounded-full text-[11px]" style={{ background: '#f59e0b22', color: '#f59e0b' }}>{formatHoursClock(t.hours)}h</span>
                                     : <span style={{ color: 'var(--cn-text-faint)' }}>—</span>}
                                 </td>
                                 {showTotalHours2 && (
@@ -2996,9 +3005,9 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
       : workloadStatus(displayHours, isMonthlyBlock);
 
     // Bandwidth — same "headroom left before Overload"
-    // formula as PM Projects, just against this person's own daily (7.3h)
+    // formula as PM Projects, just against this person's own daily (7.5h)
     // or monthly-retainer (125h) ceiling instead of the PM 450h one.
-    const cap = isMonthlyBlock ? 125 : 7.3;
+    const cap = isMonthlyBlock ? 125 : 7.5;
     const availableHours = Math.max(0, cap - displayHours);
 
     return { name, status, displayHours, availableHours };
@@ -3062,14 +3071,14 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
                     <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#2563eb' }} />
                     <span className="text-[9px] font-semibold uppercase tracking-wide leading-tight" style={{ color: 'var(--cn-text-muted)' }}>Assigned</span>
                   </div>
-                  <span className="text-sm font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{Math.round(c.displayHours * 10) / 10}h</span>
+                  <span className="text-sm font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{formatHoursClock(c.displayHours)}h</span>
                 </div>
                 <div className="flex flex-col gap-1 px-3.5 py-2.5" style={{ background: 'var(--cn-bg-card)' }}>
                   <div className="flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#22c55e' }} />
                     <span className="text-[9px] font-semibold uppercase tracking-wide leading-tight" style={{ color: 'var(--cn-text-muted)' }}>Bandwidth</span>
                   </div>
-                  <span className="text-sm font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{Math.round(c.availableHours * 10) / 10}h</span>
+                  <span className="text-sm font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{formatHoursClock(c.availableHours)}h</span>
                 </div>
               </div>
             </div>
@@ -3131,12 +3140,12 @@ export function MyWorkloadSummary({ sheet1Data, sheet1Headers, availData, availH
 
   const status = onLeave ? { label: 'On Leave', bg: '#ef4444' } : workloadStatus(displayHours, isMonthlyBlock);
   // Gauge reads against the Overload threshold — 125h/month for PPC & SEO,
-  // 7.3h/day for everyone else.
-  const cap = isMonthlyBlock ? 125 : 7.3;
+  // 7.5h/day for everyone else.
+  const cap = isMonthlyBlock ? 125 : 7.5;
   const pct = Math.min((displayHours / cap) * 100, 100);
   const hoursLabel = isMonthlyBlock
-    ? `${Math.round(displayHours * 10) / 10}h of ${cap}h this month`
-    : `${Math.round(displayHours * 10) / 10}h of ${cap}h today`;
+    ? `${formatHoursClock(displayHours)}h of ${formatHoursClock(cap)}h this month`
+    : `${formatHoursClock(displayHours)}h of ${formatHoursClock(cap)}h today`;
 
   return (
     <div className="space-y-4">
@@ -3196,7 +3205,7 @@ export function MyWorkloadSummary({ sheet1Data, sheet1Headers, availData, availH
                     )}
                     {proj && <p className="text-[11px] truncate mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>{proj}</p>}
                     {hrs > 0 && (
-                      <p className="text-sm font-bold tabular-nums mt-1.5" style={{ color: '#10b981' }}>{Math.round(hrs * 10) / 10}h</p>
+                      <p className="text-sm font-bold tabular-nums mt-1.5" style={{ color: '#10b981' }}>{formatHoursClock(hrs)}h</p>
                     )}
                   </div>
                 </div>
@@ -3250,9 +3259,9 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
       : workloadStatus(displayHours, isMonthlyBlock);
 
     // Bandwidth — same "headroom left before Overload"
-    // formula as PM Projects, against this person's own daily (7.3h) or
+    // formula as PM Projects, against this person's own daily (7.5h) or
     // monthly-retainer (125h) ceiling instead of the PM 450h one.
-    const cap = isMonthlyBlock ? 125 : 7.3;
+    const cap = isMonthlyBlock ? 125 : 7.5;
     const availableHours = Math.max(0, cap - displayHours);
 
     return { name, displayHours, availableHours, status };
@@ -3289,8 +3298,8 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
                     <span className="truncate" style={{ color: 'var(--cn-text-primary)' }}>{m.name}</span>
                   </span>
                   <span className="flex items-center gap-2 shrink-0 tabular-nums">
-                    <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{Math.round(m.displayHours * 10) / 10}h</span>
-                    <span style={{ color: '#22c55e' }}>{Math.round(m.availableHours * 10) / 10}h avail</span>
+                    <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{formatHoursClock(m.displayHours)}h</span>
+                    <span style={{ color: '#22c55e' }}>{formatHoursClock(m.availableHours)}h avail</span>
                   </span>
                 </div>
               ))}
@@ -3395,7 +3404,7 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
         return !BANDWIDTH_SUBMITTED_STATUSES.includes(st);
       })
       .reduce((s, r) => s + getHours(r), 0);
-    const cap = isMonthlyBlock ? 125 : 7.3;
+    const cap = isMonthlyBlock ? 125 : 7.5;
     return sum + Math.max(0, cap - hours);
   }, 0);
 
@@ -3417,7 +3426,7 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
 
   const TrendBadge = ({ diff }: { diff: number }) => diff === 0 ? null : (
     <span className="text-[10px] font-bold px-1 py-0.5 rounded-full" style={{ background: diff > 0 ? '#22c55e18' : '#ef444418', color: diff > 0 ? '#22c55e' : '#ef4444' }}>
-      {diff > 0 ? '↑' : '↓'}{Math.abs(Math.round(diff * 10) / 10)}h
+      {diff > 0 ? '↑' : '↓'}{formatHoursClock(Math.abs(diff))}h
     </span>
   );
 
@@ -3442,7 +3451,7 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
       { label: 'On Hold',              value: onHoldCount,                      color: '#7c3aed', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/></svg> },
       { label: 'Submitted To Admin',   value: submittedAkashCount,              color: '#d97706', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.84 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.77 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8 8.09a16 16 0 0 0 6 6l1.06-1.06a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg> },
       { label: 'Submitted to PM',      value: submittedPMCount,                 color: '#10b981', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
-      { label: 'Bandwidth',            value: `${Math.round(bandwidthTotal * 10) / 10}h`,  color: '#22c55e', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> },
+      { label: 'Bandwidth',            value: `${formatHoursClock(bandwidthTotal)}h`,  color: '#22c55e', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> },
       { label: 'Leave',                value: onLeaveCount,                     color: '#8b5cf6', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M9 16l2 2 4-4"/></svg> },
     ];
     return (
@@ -3496,7 +3505,7 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
           icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.84 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.77 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8 8.09a16 16 0 0 0 6 6l1.06-1.06a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>} />
         <IC label="On Hold" value={onHoldCount} sub="paused tasks" color="#7c3aed"
           icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/></svg>} />
-        <IC label="Client vs Internal" value={`${clientPct}% / ${internalPct}%`} sub={`${Math.round(clientH*10)/10}h client · ${Math.round((totalH-clientH)*10)/10}h internal`} color="#8b5cf6"
+        <IC label="Client vs Internal" value={`${clientPct}% / ${internalPct}%`} sub={`${formatHoursClock(clientH)}h client · ${formatHoursClock(totalH-clientH)}h internal`} color="#8b5cf6"
           icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><line x1="2" y1="12" x2="22" y2="12"/></svg>} />
       </Section>
       </div>}
@@ -3717,7 +3726,7 @@ export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = fal
                         <div className="h-full rounded-full" style={{ width: `${topProjectMax > 0 ? (hrs / topProjectMax) * 100 : 0}%`, background: '#10b981' }} />
                       </div>
                     </div>
-                    <span className="text-xs font-bold tabular-nums shrink-0" style={{ color: 'var(--cn-text-primary)' }}>{Math.round(hrs * 10) / 10}h</span>
+                    <span className="text-xs font-bold tabular-nums shrink-0" style={{ color: 'var(--cn-text-primary)' }}>{formatHoursClock(hrs)}h</span>
                   </div>
                 ))}
               </div>
@@ -3765,7 +3774,7 @@ export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = fal
               )}
             </div>
             {longestTask && (
-              <span className="text-2xl font-bold tabular-nums shrink-0" style={{ color: '#10b981' }}>{Math.round(longestHours * 10) / 10}h</span>
+              <span className="text-2xl font-bold tabular-nums shrink-0" style={{ color: '#10b981' }}>{formatHoursClock(longestHours)}h</span>
             )}
           </div>
 
@@ -3775,11 +3784,11 @@ export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = fal
             <div className="flex items-center gap-6">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>This Month</p>
-                <p className="text-2xl font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{Math.round(thisMonthHours * 10) / 10}h</p>
+                <p className="text-2xl font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{formatHoursClock(thisMonthHours)}h</p>
               </div>
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>Last Month</p>
-                <p className="text-2xl font-bold tabular-nums" style={{ color: 'var(--cn-text-muted)' }}>{Math.round(lastMonthHours * 10) / 10}h</p>
+                <p className="text-2xl font-bold tabular-nums" style={{ color: 'var(--cn-text-muted)' }}>{formatHoursClock(lastMonthHours)}h</p>
               </div>
               {(thisMonthHours > 0 || lastMonthHours > 0) && (
                 <div className="flex items-center gap-1 ml-auto shrink-0" style={{ color: monthDelta >= 0 ? '#16a34a' : '#dc2626' }}>

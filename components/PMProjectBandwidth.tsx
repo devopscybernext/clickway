@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronLeft, ChevronRight, Pencil, SlidersHorizontal } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { MultiSelect } from './FilteredDataTable';
-import { parseHHMM, formatHHMM, hhmmToDecimalHours, DURATION_MINUTE_OPTIONS } from './SpecificCharts';
+import { parseHHMM, formatHHMM, hhmmToDecimalHours, DURATION_MINUTE_OPTIONS, formatHoursClock } from './SpecificCharts';
 import { memberPhoto, memberColor } from '@/lib/memberColors';
 
 const PAGE_SIZE = 50;
@@ -819,7 +819,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, filtered, showPmCol, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol]);
 
-  const fmtHours = (n: number) => `${Math.round(n * 10) / 10}h`;
+  const fmtHours = (n: number) => `${formatHoursClock(n)}h`;
 
   // Default: newest project period first (Year desc, then calendar Month desc,
   // then Timestamp desc as a tiebreaker); any clicked column overrides this.
