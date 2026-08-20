@@ -1056,7 +1056,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
             </section>
           )}
 
-          {/* ── PM Project Bandwidth: Current Month / All Data / My Projects ── */}
+          {/* ── PM Project Bandwidth: Current Month / All Projects / My Projects ── */}
           {isPmBandwidth && (
             <section
               className="cn-card rounded-lg border transition-colors"
@@ -1066,7 +1066,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 <div className="flex items-center gap-3 flex-wrap">
                   {([
                     { key: 'current', label: 'Current Month' },
-                    { key: 'archive', label: 'All Data' },
+                    { key: 'archive', label: 'All Projects' },
                     // Admin/HM/Mod don't have their own projects — no "My Projects" view for them
                     ...(isAdmin ? [] : [{ key: 'mine', label: 'My Projects' } as const]),
                   ] as const).map(tab => (
