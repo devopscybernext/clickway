@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SheetData } from '@/lib/googleSheets';
-import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, PM_PROJECT_FORM_URLS, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, MARKETING_ASSIGNED_PERSONS, WEB_TEAM, TAB_BANDWIDTH, LEAVE_SHEET_ID, TAB_LEAVE, RANGE_LEAVE, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
+import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, PM_BANDWIDTH_ALL_DATA_SHEET_ID, PM_PROJECT_FORM_URLS, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, MARKETING_ASSIGNED_PERSONS, WEB_TEAM, TAB_BANDWIDTH, LEAVE_SHEET_ID, TAB_LEAVE, RANGE_LEAVE, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
 
 import { AuthUser, SheetId, Team, getAllowedSheets, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, getTasksAssignedLockedTeam } from '@/lib/auth';
 import Sidebar from './Sidebar';
@@ -295,7 +295,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [analysisSubTab, setAnalysisSubTab] = useState<'resources' | 'pm'>('resources');
   const [toolsSubTab, setToolsSubTab] = useState<'clock' | 'holiday' | 'ai'>('clock');
-  const [pmBandwidthSubTab, setPmBandwidthSubTab] = useState<'all' | 'mine'>('all');
+  const [pmBandwidthSubTab, setPmBandwidthSubTab] = useState<'current' | 'archive' | 'mine'>('current');
   const [showAddProjectForm, setShowAddProjectForm] = useState(false);
   const [teamBandwidthSubTab, setTeamBandwidthSubTab] = useState<Team>(lockedTeamBandwidthTeam ?? 'web');
   const [tasksOverviewTeam, setTasksOverviewTeam] = useState<Team>(lockedTasksOverviewTeam ?? 'web');
@@ -568,9 +568,10 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const isResourceOverview = selectedSheet === '9';
   const isIndividualAnalysis = selectedSheet === '10';
   const isPmBandwidth       = selectedSheet === '11';
-  // Admin/HM/Mod have no projects of their own — always show them "All
-  // Projects" regardless of whatever pmBandwidthSubTab happens to hold.
-  const effectivePmBandwidthSubTab = isAdmin ? 'all' : pmBandwidthSubTab;
+  // Admin/HM/Mod have no projects of their own — the My Projects tab isn't
+  // even shown to them, but fall back to Current Month if pmBandwidthSubTab
+  // somehow still holds 'mine' (e.g. stale state from a role change).
+  const effectivePmBandwidthSubTab = (isAdmin && pmBandwidthSubTab === 'mine') ? 'current' : pmBandwidthSubTab;
   const isTeamBandwidth     = selectedSheet === '12';
   const isLeaveStatus       = selectedSheet === '2';
   const isTools             = selectedSheet === '14';
@@ -1055,7 +1056,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
             </section>
           )}
 
-          {/* ── PM Project Bandwidth: All Projects / My Projects ── */}
+          {/* ── PM Project Bandwidth: Current Month / All Data / My Projects ── */}
           {isPmBandwidth && (
             <section
               className="cn-card rounded-lg border transition-colors"
@@ -1064,7 +1065,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               <div className="flex items-center justify-between gap-3 px-4 sm:px-6 pt-4 sm:pt-5 pb-0 flex-wrap">
                 <div className="flex items-center gap-3 flex-wrap">
                   {([
-                    { key: 'all', label: 'All Projects' },
+                    { key: 'current', label: 'Current Month' },
+                    { key: 'archive', label: 'All Data' },
                     // Admin/HM/Mod don't have their own projects — no "My Projects" view for them
                     ...(isAdmin ? [] : [{ key: 'mine', label: 'My Projects' } as const]),
                   ] as const).map(tab => (
@@ -1095,15 +1097,19 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               <div style={{ borderTop: '1px solid var(--cn-border)' }} />
               <div className="p-3 sm:p-6">
                 <PMProjectBandwidth
+                  key={effectivePmBandwidthSubTab}
                   data={
                     effectivePmBandwidthSubTab === 'mine'
                       ? pmBandwidthData.filter(r => String(r['__pm'] ?? '').trim().toLowerCase() === user.displayName.trim().toLowerCase())
-                      : pmBandwidthData
+                      : effectivePmBandwidthSubTab === 'current'
+                        ? pmBandwidthData.filter(r => r['__sheetId'] === PM_BANDWIDTH_SHEET_ID)
+                        : pmBandwidthData.filter(r => r['__sheetId'] === PM_BANDWIDTH_ALL_DATA_SHEET_ID)
                   }
                   headers={pmBandwidthHeaders}
                   canEdit={effectivePmBandwidthSubTab === 'mine'}
                   onCellChange={effectivePmBandwidthSubTab === 'mine' ? handlePmBandwidthChange : undefined}
                   allData={pmBandwidthData}
+                  defaultToCurrentMonth={effectivePmBandwidthSubTab !== 'archive'}
                 />
               </div>
             </section>

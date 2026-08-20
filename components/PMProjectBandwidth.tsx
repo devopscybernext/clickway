@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronLeft, ChevronRight, Clock, CalendarClock, Hourglass, Rocket, Activity, AlertTriangle, Wallet, PhoneCall, Pencil, SlidersHorizontal } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronLeft, ChevronRight, Pencil, SlidersHorizontal } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { MultiSelect } from './FilteredDataTable';
 import SearchFilter from './SearchFilter';
@@ -259,11 +259,11 @@ type PmStatKey = keyof ReturnType<typeof computeStatsFor>;
 // show is driven by the page's Low/Medium/Full Show Data level (see
 // pmCardFields in the component below) instead of an explicit picker.
 const PM_CARD_METRIC_DEFS: { key: PmStatKey; label: string; color: string; isHours: boolean }[] = [
-  { key: 'totalHours', label: 'Total Hours', color: '#2563eb', isHours: true },
-  { key: 'currentMonthHours', label: 'Current Month Hours', color: '#0891b2', isHours: true },
-  { key: 'riskMonthHours', label: 'Risk Month Hours', color: '#dc2626', isHours: true },
-  { key: 'pendingHours', label: 'Pending Hours', color: '#d97706', isHours: true },
-  { key: 'paymentPendingHours', label: 'Payment Pending', color: '#dc2626', isHours: true },
+  { key: 'totalHours', label: 'Total', color: '#2563eb', isHours: true },
+  { key: 'currentMonthHours', label: 'Current', color: '#0891b2', isHours: true },
+  { key: 'riskMonthHours', label: 'Risk', color: '#dc2626', isHours: true },
+  { key: 'pendingHours', label: 'Pending', color: '#d97706', isHours: true },
+  { key: 'paymentPendingHours', label: 'Pay Pending', color: '#dc2626', isHours: true },
   { key: 'followupDue', label: 'Follow-up Due', color: '#7c3aed', isHours: false },
   { key: 'yetToStart', label: 'Project Yet To Start', color: '#dc2626', isHours: false },
   { key: 'ongoing', label: 'Project Ongoing', color: '#16a34a', isHours: false },
@@ -501,9 +501,13 @@ interface Props {
   // Full unfiltered dataset (across every PM) used to build dropdown option
   // lists for Department/Year/Month/Status/Phase — falls back to `data`.
   allData?: SheetData[];
+  // False for the "All Data" (historical-only) tab — defaulting its filters
+  // to the real current month/year would show zero rows on first load,
+  // since that tab never has current-month data.
+  defaultToCurrentMonth?: boolean;
 }
 
-export default function PMProjectBandwidth({ data, headers, canEdit = false, onCellChange, allData }: Props) {
+export default function PMProjectBandwidth({ data, headers, canEdit = false, onCellChange, allData, defaultToCurrentMonth = true }: Props) {
   const optionSourceData = allData ?? data;
   // Cells only become editable after clicking "Edit", same pattern as Tasks Assigned
   const [editMode, setEditMode] = useState(false);
@@ -590,10 +594,10 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showDataLevel, headers.length]);
 
-  // PM Summary card fields per level — Low is just the headline number,
-  // Medium is Total/Current Month/Pending in one row, Full is every metric.
-  const PM_FIELDS_LOW = ['Total Hours'];
-  const PM_FIELDS_MEDIUM = ['Total Hours', 'Current Month Hours', 'Pending Hours'];
+  // PM Summary card fields per level — Low is Total/Pending, Medium adds
+  // Current in between, Full is every metric.
+  const PM_FIELDS_LOW = ['Total', 'Pending'];
+  const PM_FIELDS_MEDIUM = ['Total', 'Current', 'Pending'];
   const pmCardFields = showDataLevel === 'low' ? PM_FIELDS_LOW : showDataLevel === 'medium' ? PM_FIELDS_MEDIUM : PM_CARD_METRIC_DEFS.map(d => d.label);
 
   // Dropdown columns — canonical lists (matching the sheet's actual data
@@ -679,10 +683,12 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     return opts;
   }, [data, filterCols, filters, yearCol, monthCol, statusCol, phaseCol, milestonesCol, upsellCol, paymentStatusCol, dropdownOptions]);
 
-  // Default to the current Year/Month once, when they're available as filter columns
+  // Default to the current Year/Month once, when they're available as filter
+  // columns — skipped on the All Data tab (defaultToCurrentMonth=false),
+  // which is historical-only and would show zero rows if pinned to now.
   const defaultsApplied = useRef(false);
   useEffect(() => {
-    if (defaultsApplied.current || !yearCol || !monthCol) return;
+    if (defaultsApplied.current || !yearCol || !monthCol || !defaultToCurrentMonth) return;
     defaultsApplied.current = true;
     const now = new Date();
     setFilters(prev => ({
@@ -722,13 +728,18 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
 
   // Per-PM summary cards — only meaningful when this view spans more than
   // one PM (the All Projects tab; My Projects is always a single PM
-  // already). Only PMs actually present in the filtered rows get a card, so
-  // e.g. filtering to one Project doesn't clutter the row with 0h cards for
-  // PMs who have nothing in it.
+  // already). That "can this view ever have multiple PMs" check has to run
+  // against the full unfiltered data, not the filtered rows — otherwise
+  // narrowing a filter down to a single PM's projects (very easy to do)
+  // made the whole section disappear instead of just showing that one card.
+  // Only PMs actually present in the filtered rows get a card, so e.g.
+  // filtering to one Project doesn't clutter the row with 0h cards for PMs
+  // who have nothing in it.
   const pmSummaries = useMemo(() => {
     if (!showPmCol) return [];
+    const allNames = new Set(data.map(r => String(r['__pm'] ?? '').trim()).filter(Boolean));
+    if (allNames.size <= 1) return [];
     const names = [...new Set(filtered.map(r => String(r['__pm'] ?? '').trim()).filter(Boolean))].sort();
-    if (names.length <= 1) return [];
     return names.map(name => ({
       name,
       ...computeStatsFor(
@@ -796,112 +807,18 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   }
 
   const statCards = [
-    { label: 'Total Hours', value: fmtHours(stats.totalHours), color: '#2563eb', icon: <Clock className="w-3.5 h-3.5" /> },
-    { label: 'Current Month Hours', value: fmtHours(stats.currentMonthHours), color: '#0891b2', icon: <CalendarClock className="w-3.5 h-3.5" /> },
-    { label: 'Risk Month Hours', value: fmtHours(stats.riskMonthHours), color: '#dc2626', icon: <AlertTriangle className="w-3.5 h-3.5" /> },
-    { label: 'Pending Hours', value: fmtHours(stats.pendingHours), color: '#d97706', icon: <Hourglass className="w-3.5 h-3.5" /> },
-    { label: 'Payment Pending', value: fmtHours(stats.paymentPendingHours), color: '#dc2626', icon: <Wallet className="w-3.5 h-3.5" /> },
-    { label: 'Follow-up Due', value: stats.followupDue, color: '#7c3aed', icon: <PhoneCall className="w-3.5 h-3.5" /> },
-    { label: 'Project Yet To Start', value: stats.yetToStart, color: '#dc2626', icon: <Rocket className="w-3.5 h-3.5" /> },
-    { label: 'Project Ongoing', value: stats.ongoing, color: '#16a34a', icon: <Activity className="w-3.5 h-3.5" /> },
+    { label: 'Total', value: fmtHours(stats.totalHours) },
+    { label: 'Current', value: fmtHours(stats.currentMonthHours) },
+    { label: 'Risk', value: fmtHours(stats.riskMonthHours) },
+    { label: 'Pending', value: fmtHours(stats.pendingHours) },
+    { label: 'Pay Pending', value: fmtHours(stats.paymentPendingHours) },
+    { label: 'Follow-up Due', value: stats.followupDue },
+    { label: 'Project Yet To Start', value: stats.yetToStart },
+    { label: 'Project Ongoing', value: stats.ongoing },
   ];
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>Overview</p>
-        <div className="flex items-center gap-3 flex-wrap">
-          {activeFilterCount > 0 && (
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: 'rgba(254,74,35,0.12)', color: '#FE4A23' }}>
-              Reflecting {activeFilterCount} filter{activeFilterCount === 1 ? '' : 's'}
-            </span>
-          )}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium" style={{ color: 'var(--cn-text-muted)' }}>Show Data</span>
-            <div className="inline-flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--cn-border)' }}>
-              {(['low', 'medium', 'full'] as const).map(level => (
-                <button
-                  key={level}
-                  onClick={() => setShowDataLevel(level)}
-                  className="px-3 py-1.5 text-xs font-semibold cursor-pointer transition-all capitalize"
-                  style={showDataLevel === level
-                    ? { background: 'var(--cn-accent)', color: '#fff' }
-                    : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)' }}
-                >
-                  {level}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-px" style={{ background: 'var(--cn-border)' }}>
-          {statCards.map(({ label, value, color, icon }) => (
-            <div key={label} className="flex flex-col gap-1.5 p-3" style={{ background: 'var(--cn-bg-card)' }}>
-              <div className="flex items-center justify-between gap-1">
-                <p className="text-[9px] font-semibold uppercase tracking-wide leading-tight" style={{ color: 'var(--cn-text-muted)' }}>{label}</p>
-                <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0" style={{ background: color + '18', color }}>{icon}</div>
-              </div>
-              <p className="text-xl font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{value}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {pmSummaries.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>PM Summary</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-            {pmSummaries.map(pm => {
-              const photo = memberPhoto(pm.name);
-              const bg = memberColor(pm.name);
-              const initials = pm.name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
-              const activeMetrics = PM_CARD_METRIC_DEFS.filter(d => pmCardFields.includes(d.label));
-              // Low = one field, full width; Medium = three fields in a
-              // single row; Full (8 fields) wraps two-per-row.
-              const metricsGridCols = showDataLevel === 'low' ? 'grid-cols-1' : showDataLevel === 'medium' ? 'grid-cols-3' : 'grid-cols-2';
-              const workload = pmWorkloadStatus(pm.totalHours);
-              return (
-                <div key={pm.name} className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
-                  <div className="flex items-center gap-2.5 px-3.5 pt-3.5 pb-3">
-                    {photo ? (
-                      <img src={photo} alt={pm.name} className="w-9 h-9 rounded-full object-cover shrink-0"
-                        onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                    ) : (
-                      <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                        style={{ background: `linear-gradient(135deg, ${bg}cc, ${bg}66)` }}>{initials}</div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold truncate" style={{ color: 'var(--cn-text-primary)' }}>{pm.name}</p>
-                      <p className="text-[11px] truncate" style={{ color: 'var(--cn-text-muted)' }}>Project Management</p>
-                    </div>
-                    <span className="text-[10px] font-bold px-2 py-1 rounded-full shrink-0" style={{ background: workload.bg + '22', color: workload.bg }}>
-                      {workload.label}
-                    </span>
-                  </div>
-                  {activeMetrics.length > 0 && (
-                    <div className={`grid ${metricsGridCols} gap-px`} style={{ background: 'var(--cn-border)', borderTop: '1px solid var(--cn-border)' }}>
-                      {activeMetrics.map(({ key, label, color, isHours }) => (
-                        <div key={key} className="flex flex-col gap-1 px-3.5 py-2.5" style={{ background: 'var(--cn-bg-card)' }}>
-                          <div className="flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
-                            <span className="text-[9px] font-semibold uppercase tracking-wide leading-tight" style={{ color: 'var(--cn-text-muted)' }}>{label}</span>
-                          </div>
-                          <span className="text-sm font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>
-                            {isHours ? fmtHours(pm[key]) : pm[key]}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       <div className="sticky top-16 z-10 space-y-2 py-2 -mx-3 sm:-mx-6 px-3 sm:px-6 border-b" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
         <SearchFilter
           searchTerm={searchTerm}
@@ -981,6 +898,93 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
           )}
         </div>
       </div>
+
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>Overview</p>
+        <div className="flex items-center gap-3 flex-wrap">
+          {activeFilterCount > 0 && (
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: 'rgba(254,74,35,0.12)', color: '#FE4A23' }}>
+              Reflecting {activeFilterCount} filter{activeFilterCount === 1 ? '' : 's'}
+            </span>
+          )}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium" style={{ color: 'var(--cn-text-muted)' }}>Show Data</span>
+            <div className="inline-flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--cn-border)' }}>
+              {(['low', 'medium', 'full'] as const).map(level => (
+                <button
+                  key={level}
+                  onClick={() => setShowDataLevel(level)}
+                  className="px-3 py-1.5 text-xs font-semibold cursor-pointer transition-all capitalize"
+                  style={showDataLevel === level
+                    ? { background: 'var(--cn-accent)', color: '#fff' }
+                    : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)' }}
+                >
+                  {level}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-px" style={{ background: 'var(--cn-border)' }}>
+          {statCards.map(({ label, value }) => (
+            <div key={label} className="flex flex-col gap-1.5 p-3" style={{ background: 'var(--cn-bg-card)' }}>
+              <p className="text-[9px] font-semibold uppercase tracking-wide leading-tight" style={{ color: 'var(--cn-text-muted)' }}>{label}</p>
+              <p className="text-xl font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {pmSummaries.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>PM Summary</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            {pmSummaries.map(pm => {
+              const photo = memberPhoto(pm.name);
+              const bg = memberColor(pm.name);
+              const initials = pm.name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
+              const activeMetrics = PM_CARD_METRIC_DEFS.filter(d => pmCardFields.includes(d.label));
+              // Low/Medium (2-3 fields) fit one row; Full (8 fields) wraps two-per-row.
+              const metricsGridCols = showDataLevel === 'full' ? 'grid-cols-2' : showDataLevel === 'medium' ? 'grid-cols-3' : 'grid-cols-2';
+              const workload = pmWorkloadStatus(pm.totalHours);
+              return (
+                <div key={pm.name} className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+                  <div className="flex items-center gap-2.5 px-3.5 pt-3.5 pb-3">
+                    {photo ? (
+                      <img src={photo} alt={pm.name} className="w-9 h-9 rounded-full object-cover shrink-0"
+                        onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                    ) : (
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                        style={{ background: `linear-gradient(135deg, ${bg}cc, ${bg}66)` }}>{initials}</div>
+                    )}
+                    <p className="text-sm font-semibold truncate min-w-0 flex-1" style={{ color: 'var(--cn-text-primary)' }}>{pm.name}</p>
+                    <span className="text-[10px] font-bold px-2 py-1 rounded-full shrink-0" style={{ background: workload.bg + '22', color: workload.bg }}>
+                      {workload.label}
+                    </span>
+                  </div>
+                  {activeMetrics.length > 0 && (
+                    <div className={`grid ${metricsGridCols} gap-px`} style={{ background: 'var(--cn-border)', borderTop: '1px solid var(--cn-border)' }}>
+                      {activeMetrics.map(({ key, label, color, isHours }) => (
+                        <div key={key} className="flex flex-col gap-1 px-3.5 py-2.5" style={{ background: 'var(--cn-bg-card)' }}>
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
+                            <span className="text-[9px] font-semibold uppercase tracking-wide leading-tight" style={{ color: 'var(--cn-text-muted)' }}>{label}</span>
+                          </div>
+                          <span className="text-sm font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>
+                            {isHours ? fmtHours(pm[key]) : pm[key]}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center justify-between gap-3">
         <p style={{ color: 'var(--cn-text-muted)' }} className="text-sm">
