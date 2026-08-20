@@ -271,7 +271,7 @@ type PmStatKey = keyof ReturnType<typeof computeStatsFor>;
 // card anywhere on Overview/PM Summary per request.
 // Label text pulled into a constant since it's compared against by string in
 // several field-list/lookup spots below — keeps them all in sync.
-const AVAILABLE_LABEL = 'Bandwidth (Availability)';
+const AVAILABLE_LABEL = 'Bandwidth';
 const PM_CARD_METRIC_DEFS: { key: PmStatKey; label: string; color: string; isHours: boolean }[] = [
   { key: 'totalHours', label: 'Total', color: '#2563eb', isHours: true },
   { key: 'availableHours', label: AVAILABLE_LABEL, color: '#22c55e', isHours: true },

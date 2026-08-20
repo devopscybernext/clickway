@@ -2993,7 +2993,7 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
       ? { label: 'On Leave', bg: '#8b5cf6' }
       : workloadStatus(displayHours, isMonthlyBlock);
 
-    // Bandwidth (Availability) — same "headroom left before Overload"
+    // Bandwidth — same "headroom left before Overload"
     // formula as PM Projects, just against this person's own daily (7.3h)
     // or monthly-retainer (125h) ceiling instead of the PM 450h one.
     const cap = isMonthlyBlock ? 125 : 7.3;
@@ -3243,7 +3243,7 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
       ? { label: 'On Leave', bg: '#8b5cf6' }
       : workloadStatus(displayHours, isMonthlyBlock);
 
-    // Bandwidth (Availability) — same "headroom left before Overload"
+    // Bandwidth — same "headroom left before Overload"
     // formula as PM Projects, against this person's own daily (7.3h) or
     // monthly-retainer (125h) ceiling instead of the PM 450h one.
     const cap = isMonthlyBlock ? 125 : 7.3;
