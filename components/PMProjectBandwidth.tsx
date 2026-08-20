@@ -835,23 +835,6 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   return (
     <div className="space-y-4">
       <div className="sticky top-16 z-10 space-y-2 py-2 -mx-3 sm:-mx-6 px-3 sm:px-6 border-b" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
-        <div className="flex items-center justify-end gap-2">
-          <span className="text-xs font-medium" style={{ color: 'var(--cn-text-muted)' }}>Show Data</span>
-          <div className="inline-flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--cn-border)' }}>
-            {(['low', 'medium', 'full'] as const).map(level => (
-              <button
-                key={level}
-                onClick={() => setShowDataLevel(level)}
-                className="px-3 py-1.5 text-xs font-semibold cursor-pointer transition-all capitalize"
-                style={showDataLevel === level
-                  ? { background: 'var(--cn-accent)', color: '#fff' }
-                  : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)' }}
-              >
-                {level}
-              </button>
-            ))}
-          </div>
-        </div>
         <div className="space-y-2">
           <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-2 sm:gap-3">
             {primaryFilterCols.map(({ col, label }) =>
@@ -872,12 +855,6 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                 />
               )
             )}
-            <MultiSelect
-              label="Columns"
-              options={tableCols}
-              selected={visibleCols}
-              onChange={vals => { setVisibleCols(vals); setColsTouched(true); setPage(1); }}
-            />
             <div className="flex items-end">
               <button
                 onClick={() => setShowMoreFilters(o => !o)}
@@ -898,7 +875,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                 <button
                   onClick={clearAll}
                   title={`Clear all ${activeFilterCount} filter(s)`}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg cursor-pointer transition-all text-xs font-medium"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg cursor-pointer transition-all text-xs font-medium"
                   style={{ background: 'var(--cn-bg-input)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }}
                 >
                   <X className="w-3.5 h-3.5" />
@@ -906,6 +883,23 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                 </button>
               </div>
             )}
+            <div className="flex flex-col gap-1 col-span-2 sm:col-span-1 sm:ml-auto">
+              <span className="text-xs font-medium" style={{ color: 'var(--cn-text-muted)' }}>Show Data</span>
+              <div className="inline-flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--cn-border)' }}>
+                {(['low', 'medium', 'full'] as const).map(level => (
+                  <button
+                    key={level}
+                    onClick={() => setShowDataLevel(level)}
+                    className="px-3 py-2 text-xs font-semibold cursor-pointer transition-all capitalize"
+                    style={showDataLevel === level
+                      ? { background: 'var(--cn-accent)', color: '#fff' }
+                      : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)' }}
+                  >
+                    {level}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {showMoreFilters && (
@@ -985,12 +979,19 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-end justify-between gap-3 flex-wrap">
         <p style={{ color: 'var(--cn-text-muted)' }} className="text-sm">
           <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{sorted.length}</span> of {data.length} records
           {activeFilterCount > 0 && <span className="text-[#FE4A23]"> (filtered)</span>}
         </p>
-        {canEdit && (
+        <div className="flex items-end gap-3">
+          <MultiSelect
+            label="Columns"
+            options={tableCols}
+            selected={visibleCols}
+            onChange={vals => { setVisibleCols(vals); setColsTouched(true); setPage(1); }}
+          />
+          {canEdit && (
           <button
             onClick={() => setEditMode(m => !m)}
             title={editMode ? 'Stop editing' : 'Edit'}
@@ -1002,7 +1003,8 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
             <Pencil className="w-3.5 h-3.5" />
             {editMode ? 'Done Editing' : 'Edit'}
           </button>
-        )}
+          )}
+        </div>
       </div>
 
       <div style={{ borderColor: 'var(--cn-border)' }} className="overflow-x-auto rounded-md border">
