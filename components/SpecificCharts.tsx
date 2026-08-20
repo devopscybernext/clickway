@@ -297,6 +297,19 @@ function isOnLeaveText(v: string): boolean {
   return t !== '' && t !== 'no action taken';
 }
 
+// How many hours a leave entry knocks off someone's Bandwidth — matched
+// against the sheet's canonical leave-type options (see LeaveStatus.tsx's
+// CANONICAL_LEAVE_OPTIONS). "Short Leave" is a couple hours out, a half day
+// is half the daily cap, and a full day (or any multi-day leave) is the
+// whole daily cap.
+function leaveHoursDeduction(v: string): number {
+  const t = v.trim().toLowerCase();
+  if (!isOnLeaveText(t)) return 0;
+  if (t.includes('short leave')) return 2;
+  if (t.includes('half day')) return 3.5;
+  return 7; // Full Day Leave, Two/Three/More than Three Days Leave, or anything else non-blank.
+}
+
 // Deadline column is "M/D/YYYY" (confirmed against the live Marketing sheet,
 // e.g. "8/31/2026" = Aug 31) — parse to a local Date, or null if unparseable.
 function parseDeadlineDate(val: string): Date | null {
@@ -2995,9 +3008,14 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
     const displayHours = activeTasks.reduce((s, r) => s + getTime(r), 0);
 
     let onLeave = false;
+    let leaveDeduction = 0;
     if (availData && availNameCol && availStatusCol) {
       const av = availData.find(r => String(r[availNameCol] ?? '').trim().toLowerCase() === name.toLowerCase());
-      if (av) { const v = String(av[availStatusCol] ?? '').trim().toLowerCase(); onLeave = isOnLeaveText(v); }
+      if (av) {
+        const v = String(av[availStatusCol] ?? '').trim().toLowerCase();
+        onLeave = isOnLeaveText(v);
+        leaveDeduction = leaveHoursDeduction(v);
+      }
     }
 
     const status = onLeave
@@ -3006,9 +3024,11 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
 
     // Bandwidth — same "headroom left before Overload"
     // formula as PM Projects, just against this person's own daily (7h)
-    // or monthly-retainer (125h) ceiling instead of the PM 450h one.
+    // or monthly-retainer (125h) ceiling instead of the PM 450h one. A
+    // leave entry knocks its hours off too, so someone on Full Day Leave
+    // (or worse) shows 0 instead of their full untouched cap.
     const cap = isMonthlyBlock ? 125 : 7;
-    const availableHours = Math.max(0, cap - displayHours);
+    const availableHours = Math.max(0, cap - displayHours - leaveDeduction);
 
     return { name, status, displayHours, availableHours };
   });
@@ -3248,9 +3268,14 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
       .reduce((s, r) => s + getTime(r), 0);
 
     let onLeave = false;
+    let leaveDeduction = 0;
     if (availData && availNameCol && availStatusCol) {
       const av = availData.find(r => String(r[availNameCol] ?? '').trim().toLowerCase() === name.toLowerCase());
-      if (av) { const v = String(av[availStatusCol] ?? '').trim().toLowerCase(); onLeave = isOnLeaveText(v); }
+      if (av) {
+        const v = String(av[availStatusCol] ?? '').trim().toLowerCase();
+        onLeave = isOnLeaveText(v);
+        leaveDeduction = leaveHoursDeduction(v);
+      }
     }
 
     const isMonthlyBlock = MONTHLY_BLOCK_MARKETING_NAMES.has(name.trim().toLowerCase());
@@ -3260,9 +3285,10 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
 
     // Bandwidth — same "headroom left before Overload"
     // formula as PM Projects, against this person's own daily (7h) or
-    // monthly-retainer (125h) ceiling instead of the PM 450h one.
+    // monthly-retainer (125h) ceiling instead of the PM 450h one, minus
+    // whatever a leave entry knocks off.
     const cap = isMonthlyBlock ? 125 : 7;
-    const availableHours = Math.max(0, cap - displayHours);
+    const availableHours = Math.max(0, cap - displayHours - leaveDeduction);
 
     return { name, displayHours, availableHours, status };
   }).sort((a, b) => a.displayHours - b.displayHours);
@@ -3404,8 +3430,13 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
         return !BANDWIDTH_SUBMITTED_STATUSES.includes(st);
       })
       .reduce((s, r) => s + getHours(r), 0);
+    let leaveDeduction = 0;
+    if (availData && availNameCol && availStatusCol) {
+      const av = availData.find(r => String(r[availNameCol] ?? '').trim().toLowerCase() === name.toLowerCase());
+      if (av) leaveDeduction = leaveHoursDeduction(String(av[availStatusCol] ?? '').trim());
+    }
     const cap = isMonthlyBlock ? 125 : 7;
-    return sum + Math.max(0, cap - hours);
+    return sum + Math.max(0, cap - hours - leaveDeduction);
   }, 0);
 
   const IC = ({ label, value, sub, color, icon, badge }: { label: string; value: string | number; sub?: string; color: string; icon: React.ReactNode; badge?: React.ReactNode }) => (
