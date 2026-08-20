@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronLeft, ChevronRight, Pencil, SlidersHorizontal } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { MultiSelect } from './FilteredDataTable';
-import SearchFilter from './SearchFilter';
 import { parseHHMM, formatHHMM, hhmmToDecimalHours, DURATION_MINUTE_OPTIONS } from './SpecificCharts';
 import { memberPhoto, memberColor } from '@/lib/memberColors';
 
@@ -512,7 +511,6 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   // Cells only become editable after clicking "Edit", same pattern as Tasks Assigned
   const [editMode, setEditMode] = useState(false);
   const isEditable = canEdit && editMode;
-  const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   const [sortCol, setSortCol] = useState('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -704,12 +702,8 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
       const selected = filters[col] ?? [];
       if (selected.length > 0) rows = rows.filter(r => selected.includes(String(r[col] ?? '').trim()));
     });
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
-      rows = rows.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(term)));
-    }
     return rows;
-  }, [data, filters, filterCols, searchTerm]);
+  }, [data, filters, filterCols]);
 
   // Top KPI cards and PM summary cards now share the same filtered rows as
   // the table below — every bottom-bar filter (PM/Project/Client/Year/
@@ -830,13 +824,6 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   return (
     <div className="space-y-4">
       <div className="sticky top-16 z-10 space-y-2 py-2 -mx-3 sm:-mx-6 px-3 sm:px-6 border-b" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
-        <SearchFilter
-          searchTerm={searchTerm}
-          totalCount={data.length}
-          filteredCount={filtered.length}
-          onChange={val => { setSearchTerm(val); setPage(1); }}
-        />
-
         <div className="space-y-2">
           <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-2 sm:gap-3">
             {primaryFilterCols.map(({ col, label }) =>
