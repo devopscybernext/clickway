@@ -279,12 +279,21 @@ const PM_CARD_METRIC_DEFS: { key: PmStatKey; label: string; color: string; isHou
   { key: 'yetToStart', label: 'Project Yet To Start', color: '#dc2626', isHours: false },
   { key: 'ongoing', label: 'Project Ongoing', color: '#16a34a', isHours: false },
 ];
-// Same order/field set drives both Overview and PM Summary at each level —
-// Low is a bare glance, Medium adds Pending/Pay Pending, Full is everything.
-const LEVEL_FIELDS: Record<'low' | 'medium' | 'full', string[]> = {
-  low: ['Total', 'Available', 'Current'],
+// Medium/Full are identical between Overview and PM Summary; Low differs —
+// Overview's Low still gives a fuller glance (4 fields) since it's one
+// company-wide snapshot, while PM Summary's Low is deliberately bare (2
+// fields) since it repeats per PM card.
+const LEVEL_FIELDS_SHARED: Record<'medium' | 'full', string[]> = {
   medium: ['Total', 'Available', 'Current', 'Pending', 'Pay Pending'],
   full: PM_CARD_METRIC_DEFS.map(d => d.label),
+};
+const LEVEL_FIELDS_OVERVIEW: Record<'low' | 'medium' | 'full', string[]> = {
+  low: ['Total', 'Available', 'Current', 'Pending'],
+  ...LEVEL_FIELDS_SHARED,
+};
+const LEVEL_FIELDS_PM: Record<'low' | 'medium' | 'full', string[]> = {
+  low: ['Total', 'Available'],
+  ...LEVEL_FIELDS_SHARED,
 };
 
 // Bandwidth-formula ceiling — same 450h threshold pmWorkloadStatus already
@@ -626,7 +635,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showDataLevel, headers.length]);
 
-  const pmCardFields = LEVEL_FIELDS[showDataLevel];
+  const pmCardFields = LEVEL_FIELDS_PM[showDataLevel];
 
   // Dropdown columns — canonical lists (matching the sheet's actual data
   // validation) unioned with anything already in the data, so a value that
@@ -846,9 +855,9 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     label,
     value: isHours ? fmtHours(stats[key]) : stats[key],
   }));
-  const visibleStatCards = statCards.filter(c => LEVEL_FIELDS[showDataLevel].includes(c.label));
+  const visibleStatCards = statCards.filter(c => LEVEL_FIELDS_OVERVIEW[showDataLevel].includes(c.label));
   const statGridCols = showDataLevel === 'low'
-    ? 'grid-cols-2 sm:grid-cols-3'
+    ? 'grid-cols-2 sm:grid-cols-4'
     : showDataLevel === 'medium'
       ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'
       : 'grid-cols-2 sm:grid-cols-4 lg:grid-cols-8';
@@ -962,8 +971,10 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
               const bg = memberColor(pm.name);
               const initials = pm.name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
               const activeMetrics = PM_CARD_METRIC_DEFS.filter(d => pmCardFields.includes(d.label));
-              // Low (3 fields) and Medium (5 fields) fit one row; Full (8 fields) wraps two-per-row.
-              const metricsGridCols = showDataLevel === 'full' ? 'grid-cols-2' : showDataLevel === 'medium' ? 'grid-cols-5' : 'grid-cols-3';
+              // Low (2 fields) fits one row; Medium (5) and Full (8) wrap into
+              // 3-per-row instead of cramming everything into a single row,
+              // which was truncating labels like "Available"/"Pay Pending".
+              const metricsGridCols = showDataLevel === 'low' ? 'grid-cols-2' : 'grid-cols-3';
               const workload = pmWorkloadStatus(pm.totalHours);
               return (
                 <div key={pm.name} className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
