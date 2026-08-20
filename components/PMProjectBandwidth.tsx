@@ -548,9 +548,13 @@ interface Props {
   // True for "My Projects" — the PM filter is meaningless there since the
   // whole tab is already scoped to one PM (the logged-in user).
   hidePmFilter?: boolean;
+  // True for "Previous Months" — PM Summary's per-PM totals are dominated
+  // by however many old months happen to be in that sheet, which reads as
+  // noise rather than a useful workload snapshot for a historical tab.
+  hidePmSummary?: boolean;
 }
 
-export default function PMProjectBandwidth({ data, headers, canEdit = false, onCellChange, allData, defaultToCurrentMonth = true, hideYearMonthFilter = false, lockShowDataFull = false, hidePmFilter = false }: Props) {
+export default function PMProjectBandwidth({ data, headers, canEdit = false, onCellChange, allData, defaultToCurrentMonth = true, hideYearMonthFilter = false, lockShowDataFull = false, hidePmFilter = false, hidePmSummary = false }: Props) {
   const optionSourceData = allData ?? data;
   // Cells only become editable after clicking "Edit", same pattern as Tasks Assigned
   const [editMode, setEditMode] = useState(false);
@@ -768,6 +772,25 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     [data, filtered, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol]
   );
 
+  // Overview's Available Hours has to be summed per-PM, not derived from the
+  // combined Total Hours — the 450h capacity is a per-PM ceiling, so running
+  // it against everyone's hours added together (e.g. 1000h+) always clamps
+  // to 0. Each PM's own headroom is summed instead, same figure the PM
+  // Summary cards below already show individually.
+  const availableHoursTotal = useMemo(() => {
+    if (!totalHoursCol) return 0;
+    if (!showPmCol) {
+      const total = filtered.reduce((s, r) => s + parseDurationDecimal(r[totalHoursCol]), 0);
+      return Math.max(0, PM_BANDWIDTH_CAPACITY - total);
+    }
+    const totalsByPm = new Map<string, number>();
+    filtered.forEach(r => {
+      const pm = String(r['__pm'] ?? '').trim();
+      totalsByPm.set(pm, (totalsByPm.get(pm) ?? 0) + parseDurationDecimal(r[totalHoursCol]));
+    });
+    return [...totalsByPm.values()].reduce((sum, total) => sum + Math.max(0, PM_BANDWIDTH_CAPACITY - total), 0);
+  }, [filtered, totalHoursCol, showPmCol]);
+
   // Per-PM summary cards — only meaningful when this view spans more than
   // one PM (the All Projects tab; My Projects is always a single PM
   // already). That "can this view ever have multiple PMs" check has to run
@@ -851,9 +874,11 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
 
   // Same metric list/order as PM Summary (PM_CARD_METRIC_DEFS) — Overview is
   // just those metrics scoped to the whole filtered view instead of one PM.
+  // Available is the one exception — it uses availableHoursTotal (summed
+  // per-PM) instead of stats.availableHours (see that comment above).
   const statCards = PM_CARD_METRIC_DEFS.map(({ key, label, isHours }) => ({
     label,
-    value: isHours ? fmtHours(stats[key]) : stats[key],
+    value: label === 'Available' ? fmtHours(availableHoursTotal) : isHours ? fmtHours(stats[key]) : stats[key],
   }));
   const visibleStatCards = statCards.filter(c => LEVEL_FIELDS_OVERVIEW[showDataLevel].includes(c.label));
   const statGridCols = showDataLevel === 'low'
@@ -962,7 +987,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
         </div>
       </div>
 
-      {pmSummaries.length > 0 && (
+      {!hidePmSummary && pmSummaries.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>PM Summary</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
@@ -971,10 +996,10 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
               const bg = memberColor(pm.name);
               const initials = pm.name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
               const activeMetrics = PM_CARD_METRIC_DEFS.filter(d => pmCardFields.includes(d.label));
-              // Low (2 fields) fits one row; Medium (5) and Full (8) wrap into
-              // 3-per-row instead of cramming everything into a single row,
-              // which was truncating labels like "Available"/"Pay Pending".
-              const metricsGridCols = showDataLevel === 'low' ? 'grid-cols-2' : 'grid-cols-3';
+              // Two-per-row at every level — gives each label enough width to
+              // avoid truncation (grid-cols-3+ was cutting off "Available"/
+              // "Pay Pending"), and Full's 8 fields divide evenly into it.
+              const metricsGridCols = 'grid-cols-2';
               const workload = pmWorkloadStatus(pm.totalHours);
               return (
                 <div key={pm.name} className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
