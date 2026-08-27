@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { SheetData } from '@/lib/googleSheets';
 import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, PM_BANDWIDTH_ALL_DATA_SHEET_ID, PM_PROJECT_FORM_URLS, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, MARKETING_ASSIGNED_PERSONS, WEB_TEAM, TAB_BANDWIDTH, LEAVE_SHEET_ID, TAB_LEAVE, RANGE_LEAVE, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
 
-import { AuthUser, SheetId, Team, NavEntry, getNavEntries, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam } from '@/lib/auth';
+import { AuthUser, SheetId, Team, NavLeaf, getFirstNavLeaf, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam } from '@/lib/auth';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import SpecificCharts, { ResourceOverview, PmStatusOverview, KpiCards, ResourceStatusGrid, TeamWorkloadCards, MyWorkloadSummary, InsightCards, PmStatusChart, ResourceBandwidthChips, SubDept } from './SpecificCharts';
@@ -250,14 +250,14 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ user, onLogout }: DashboardProps) {
-  const navEntries = getNavEntries(user);
-  const [selectedSheet, setSelectedSheet] = useState<SheetId>(navEntries[0].id);
+  const firstLeaf = getFirstNavLeaf(user);
+  const [selectedSheet, setSelectedSheet] = useState<SheetId>(firstLeaf.id);
   // Which team's data the currently-selected department-scoped page shows
   // (Team Bandwidth / Tasks Assigned / Tasks Overview / Add Task) — set by
   // whichever sidebar nav entry was clicked (see handleSheetChange), since
   // each of those pages is now reached via its own Web or Marketing entry
   // instead of an in-page toggle.
-  const [navTeam, setNavTeam] = useState<Team>(navEntries[0].team ?? 'web');
+  const [navTeam, setNavTeam] = useState<Team>(firstLeaf.team ?? 'web');
   const analyticsTeam = navTeam, tasksAssignedTeam = navTeam, tasksOverviewTeam = navTeam, addTaskTeam = navTeam;
 
   // Role tiers (see lib/auth.ts) — used instead of scattering user.role === '...'
@@ -553,12 +553,14 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     setMarketingTeamData(prev => prev.map(r => r['__id'] === row['__id'] ? { ...r, [colName]: newValue } : r));
   };
 
-  const handleSheetChange = (entry: NavEntry) => {
-    setSelectedSheet(entry.id);
-    if (entry.team) { setNavTeam(entry.team); setAnalyticsSubDept('all'); }
+  const handleSheetChange = (leaf: NavLeaf) => {
+    setSelectedSheet(leaf.id);
+    if (leaf.team) { setNavTeam(leaf.team); setAnalyticsSubDept('all'); }
+    if (leaf.id === '11' && leaf.subTab) setPmBandwidthSubTab(leaf.subTab as 'current' | 'archive' | 'mine');
+    if (leaf.id === '14' && leaf.subTab) setToolsSubTab(leaf.subTab as 'clock' | 'holiday' | 'ai');
     setSearchTerm('');
     // tableKey intentionally NOT incremented here so filters persist across tab switches
-    if (entry.id === '6') { iframeLoadCount.current = 0; setFormSubmitted(false); }
+    if (leaf.id === '6') { iframeLoadCount.current = 0; setFormSubmitted(false); }
   };
 
   const isSheet1           = selectedSheet === '1';
@@ -695,6 +697,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
       <Sidebar
         selectedSheet={selectedSheet}
         selectedTeam={navTeam}
+        selectedPmSubTab={pmBandwidthSubTab}
+        selectedToolsSubTab={toolsSubTab}
         user={user}
         onSheetChange={handleSheetChange}
         onLogout={onLogout}
@@ -977,27 +981,6 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               className="cn-card rounded-lg border transition-colors"
               style={{ display: isTools ? 'block' : 'none', background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
             >
-              <div className="flex items-center gap-3 px-4 sm:px-6 pt-4 sm:pt-5 pb-0 flex-wrap">
-                {([
-                  { key: 'clock', label: 'Clock Room' },
-                  { key: 'holiday', label: 'Holiday Calendar' },
-                  { key: 'ai', label: 'AI Tools' },
-                ] as const).map(tab => (
-                  <button
-                    key={tab.key}
-                    onClick={() => setToolsSubTab(tab.key)}
-                    className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
-                    style={{
-                      borderColor: toolsSubTab === tab.key ? 'var(--cn-accent)' : 'transparent',
-                      color: toolsSubTab === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
-                      background: 'transparent',
-                    }}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-              <div style={{ borderTop: '1px solid var(--cn-border)' }} />
               <div className="p-3 sm:p-6 space-y-4">
                 <div style={{ display: toolsSubTab === 'clock' ? 'block' : 'none' }}><ClockRoom /></div>
                 {toolsSubTab === 'holiday' && (
@@ -1019,29 +1002,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               className="cn-card rounded-lg border transition-colors"
               style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
             >
-              <div className="flex items-center justify-between gap-3 px-4 sm:px-6 pt-4 sm:pt-5 pb-0 flex-wrap">
-                <div className="flex items-center gap-3 flex-wrap">
-                  {([
-                    { key: 'current', label: 'Current Month' },
-                    { key: 'archive', label: 'Previous Months' },
-                    // Admin/HM/Mod don't have their own projects — no "My Projects" view for them
-                    ...(isAdmin ? [] : [{ key: 'mine', label: 'My Projects' } as const]),
-                  ] as const).map(tab => (
-                    <button
-                      key={tab.key}
-                      onClick={() => setPmBandwidthSubTab(tab.key)}
-                      className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
-                      style={{
-                        borderColor: effectivePmBandwidthSubTab === tab.key ? 'var(--cn-accent)' : 'transparent',
-                        color: effectivePmBandwidthSubTab === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
-                        background: 'transparent',
-                      }}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-                {myProjectFormUrl && (
+              {myProjectFormUrl && (
+                <div className="flex items-center justify-end gap-3 px-4 sm:px-6 pt-4 sm:pt-5 pb-0">
                   <button
                     onClick={() => setShowAddProjectForm(true)}
                     className="px-4 py-2 mb-2 text-sm font-semibold rounded-lg cursor-pointer transition-colors"
@@ -1049,9 +1011,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   >
                     + Add New Project
                   </button>
-                )}
-              </div>
-              <div style={{ borderTop: '1px solid var(--cn-border)' }} />
+                </div>
+              )}
               <div className="p-3 sm:p-6">
                 <PMProjectBandwidth
                   key={effectivePmBandwidthSubTab}

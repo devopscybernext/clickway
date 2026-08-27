@@ -1,33 +1,31 @@
 'use client';
 
 import { useState } from 'react';
-import { BarChart3, CalendarOff, Layers, Menu, X, UsersRound, CalendarDays, ClipboardPlus, Trophy, ListChecks, LayoutDashboard, BarChart2, Wrench, Briefcase, Building2 } from 'lucide-react';
-import { AuthUser, SheetId, Team, NavEntry, getNavEntries, getSheetLabel } from '@/lib/auth';
+import { CalendarOff, Menu, X, ChevronDown, Globe, Megaphone, Briefcase, Wrench } from 'lucide-react';
+import { AuthUser, SheetId, Team, NavLeaf, isNavParent, getNavItems, getSheetLabel } from '@/lib/auth';
 import { memberPhoto } from '@/lib/memberColors';
 
 interface SidebarProps {
   selectedSheet: SheetId;
   selectedTeam?: Team;
+  selectedPmSubTab?: string;
+  selectedToolsSubTab?: string;
   user: AuthUser;
-  onSheetChange: (entry: NavEntry) => void;
+  onSheetChange: (leaf: NavLeaf) => void;
   onLogout: () => void;
   isAdmin?: boolean;
 }
 
-const NAV_ICONS: Record<SheetId, React.ReactNode> = {
-  '1': <Layers        className="w-4 h-4 shrink-0" />,
-  '2': <CalendarOff   className="w-4 h-4 shrink-0" />,
-  '3': <BarChart3     className="w-4 h-4 shrink-0" />,
-  '4': <UsersRound    className="w-4 h-4 shrink-0" />,
-  '5': <CalendarDays  className="w-4 h-4 shrink-0" />,
-  '6': <ClipboardPlus className="w-4 h-4 shrink-0" />,
-  '7': <Trophy           className="w-4 h-4 shrink-0" />,
-  '8': <ListChecks       className="w-4 h-4 shrink-0" />,
-  '9': <LayoutDashboard  className="w-4 h-4 shrink-0" />,
-  '10': <BarChart2       className="w-4 h-4 shrink-0" />,
-  '11': <Briefcase       className="w-4 h-4 shrink-0" />,
-  '12': <Building2       className="w-4 h-4 shrink-0" />,
-  '14': <Wrench          className="w-4 h-4 shrink-0" />,
+// One icon per dropdown; standalone leaves (only Leave Status today) get
+// their own straight from this same map, keyed by sheet id instead.
+const PARENT_ICONS: Record<string, React.ReactNode> = {
+  Web:          <Globe      className="w-4 h-4 shrink-0" />,
+  Marketing:    <Megaphone  className="w-4 h-4 shrink-0" />,
+  'PM Projects': <Briefcase className="w-4 h-4 shrink-0" />,
+  Tools:        <Wrench     className="w-4 h-4 shrink-0" />,
+};
+const LEAF_ICONS: Partial<Record<SheetId, React.ReactNode>> = {
+  '2': <CalendarOff className="w-4 h-4 shrink-0" />,
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -63,9 +61,34 @@ function getUserDesignation(username: string, role: string): string {
   return ROLE_LABELS[role] ?? role;
 }
 
-export default function Sidebar({ selectedSheet, selectedTeam, user, onSheetChange, isAdmin }: SidebarProps) {
+export default function Sidebar({ selectedSheet, selectedTeam, selectedPmSubTab, selectedToolsSubTab, user, onSheetChange, isAdmin }: SidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const navEntries = getNavEntries(user);
+  const navItems = getNavItems(user);
+
+  const isLeafActive = (leaf: NavLeaf) => {
+    if (selectedSheet !== leaf.id) return false;
+    if (leaf.team !== undefined && leaf.team !== selectedTeam) return false;
+    if (leaf.subTab !== undefined) {
+      const activeSubTab = leaf.id === '11' ? selectedPmSubTab : leaf.id === '14' ? selectedToolsSubTab : undefined;
+      if (leaf.subTab !== activeSubTab) return false;
+    }
+    return true;
+  };
+
+  // Dropdowns start open if they contain the page currently on screen, so
+  // the active page is never hidden behind a collapsed section on load.
+  const [openParents, setOpenParents] = useState<Set<string>>(() => {
+    const open = new Set<string>();
+    for (const item of navItems) {
+      if (isNavParent(item) && item.children.some(isLeafActive)) open.add(item.label);
+    }
+    return open;
+  });
+  const toggleParent = (label: string) => setOpenParents(prev => {
+    const next = new Set(prev);
+    if (next.has(label)) next.delete(label); else next.add(label);
+    return next;
+  });
 
   const navContent = (
     <>
@@ -94,41 +117,82 @@ export default function Sidebar({ selectedSheet, selectedTeam, user, onSheetChan
 
       {/* ── Navigation ────────────────────────────────────────────────────── */}
       <nav className="flex-1 px-3 py-3 space-y-0.5">
-        {navEntries.map((entry, i) => {
-          const active = selectedSheet === entry.id && (entry.team === undefined || entry.team === selectedTeam);
-          return (
-            <div key={`${entry.id}-${entry.team ?? 'x'}`}>
-              {entry.group && (
-                <p
-                  className={`px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest ${i === 0 ? 'pt-0.5' : 'pt-4'}`}
-                  style={{ color: 'var(--cn-text-faint)' }}
-                >
-                  {entry.group}
-                </p>
-              )}
+        {navItems.map(item => {
+          if (!isNavParent(item)) {
+            const active = isLeafActive(item);
+            return (
               <button
-                onClick={() => { onSheetChange(entry); setMobileOpen(false); }}
+                key={item.id}
+                onClick={() => { onSheetChange(item); setMobileOpen(false); }}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all text-left cursor-pointer"
                 style={{
                   background: active ? 'var(--cn-bg-hover)' : 'transparent',
                   color:      active ? 'var(--cn-text-primary)' : 'var(--cn-text-muted)',
                   fontWeight: active ? '600' : '400',
                 }}
-                onMouseEnter={e => {
-                  if (!active) (e.currentTarget as HTMLButtonElement).style.background = 'var(--cn-bg-input)';
-                }}
-                onMouseLeave={e => {
-                  if (!active) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-                }}
+                onMouseEnter={e => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = 'var(--cn-bg-input)'; }}
+                onMouseLeave={e => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
               >
                 <span style={{ color: active ? 'var(--cn-accent)' : 'var(--cn-text-muted)' }}>
-                  {NAV_ICONS[entry.id]}
+                  {LEAF_ICONS[item.id]}
                 </span>
-                <span>{getSheetLabel(entry.id, user.role)}</span>
+                <span>{item.label ?? getSheetLabel(item.id, user.role)}</span>
                 {active && (
                   <span className="ml-auto w-1.5 h-1.5 rounded-full shrink-0" style={{ background: 'var(--cn-accent)' }} />
                 )}
               </button>
+            );
+          }
+
+          const open = openParents.has(item.label);
+          const hasActiveChild = item.children.some(isLeafActive);
+          return (
+            <div key={item.label}>
+              <button
+                onClick={() => toggleParent(item.label)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all text-left cursor-pointer"
+                style={{
+                  color: hasActiveChild ? 'var(--cn-text-primary)' : 'var(--cn-text-muted)',
+                  fontWeight: hasActiveChild ? '600' : '400',
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--cn-bg-input)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+              >
+                <span style={{ color: hasActiveChild ? 'var(--cn-accent)' : 'var(--cn-text-muted)' }}>
+                  {PARENT_ICONS[item.label]}
+                </span>
+                <span className="flex-1">{item.label}</span>
+                <ChevronDown
+                  className="w-3.5 h-3.5 shrink-0 transition-transform duration-200"
+                  style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)', color: 'var(--cn-text-faint)' }}
+                />
+              </button>
+              {open && (
+                <div className="mt-0.5 ml-4 pl-3 space-y-0.5" style={{ borderLeft: '1px solid var(--cn-border)' }}>
+                  {item.children.map(leaf => {
+                    const active = isLeafActive(leaf);
+                    return (
+                      <button
+                        key={`${leaf.id}-${leaf.team ?? ''}-${leaf.subTab ?? ''}`}
+                        onClick={() => { onSheetChange(leaf); setMobileOpen(false); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all text-left cursor-pointer"
+                        style={{
+                          background: active ? 'var(--cn-bg-hover)' : 'transparent',
+                          color:      active ? 'var(--cn-text-primary)' : 'var(--cn-text-muted)',
+                          fontWeight: active ? '600' : '400',
+                        }}
+                        onMouseEnter={e => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = 'var(--cn-bg-input)'; }}
+                        onMouseLeave={e => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+                      >
+                        <span>{leaf.label ?? getSheetLabel(leaf.id, user.role)}</span>
+                        {active && (
+                          <span className="ml-auto w-1.5 h-1.5 rounded-full shrink-0" style={{ background: 'var(--cn-accent)' }} />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })}
