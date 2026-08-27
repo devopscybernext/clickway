@@ -64,7 +64,7 @@ export default function TopBar({ lastUpdated, loading, selectedSheet, onRefresh,
 
   return (
     <header
-      className="sticky top-0 z-10 border-b px-4 sm:px-6 xl:px-8 py-3 flex items-center justify-between gap-4 transition-colors"
+      className="sticky top-0 z-30 border-b px-4 sm:px-6 xl:px-8 py-3 flex items-center justify-between gap-4 transition-colors"
       style={{ background: 'var(--cn-bg-header)', borderColor: 'var(--cn-border)' }}
     >
       {/* Left: page title */}
