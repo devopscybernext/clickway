@@ -67,66 +67,111 @@ const ROLE_TEAM_LOCK: Partial<Record<Role, Team>> = {
   MarketingAdmin: 'marketing', MarketingTeam: 'marketing',
 };
 
-// Tasks Assigned locks PMWebAdmin/PMMarketingAdmin to their own team too,
-// even though those roles see both teams everywhere else.
-const TASKS_ASSIGNED_TEAM_LOCK: Partial<Record<Role, Team>> = {
-  ...ROLE_TEAM_LOCK,
-  PMWebAdmin: 'web',
-  PMMarketingAdmin: 'marketing',
-};
-
 export function getLockedTeam(role: Role): Team | undefined {
   return ROLE_TEAM_LOCK[role];
 }
-export function getTasksAssignedLockedTeam(role: Role): Team | undefined {
-  return TASKS_ASSIGNED_TEAM_LOCK[role];
+
+// Individual Analysis ('10') and the legacy standalone Team Bandwidth ('12')
+// stay removed from every role's nav — component code is left in place
+// (unreachable) rather than deleted, to keep this change low-risk.
+//
+// ─── Grouped sidebar nav ────────────────────────────────────────────────────
+// The sidebar is sorted by department: Web's own Team Bandwidth/Tasks
+// Assigned/Tasks Overview/Add Task/Leaderboard, then Marketing's own copies
+// (no Leaderboard yet — no Marketing scoring system), then a PM section,
+// then standalone Leave Status/Tools. `team` on an entry both scopes its
+// data and removes the in-page Web/Marketing toggle those pages used to
+// have (see Dashboard.tsx); `group` marks the first entry of a new section
+// so the sidebar knows where to draw a header. Array order IS sidebar order.
+export type NavGroupLabel = 'Web' | 'Marketing' | 'PM';
+export interface NavEntry {
+  id: SheetId;
+  team?: Team;
+  group?: NavGroupLabel;
 }
 
-// Individual Analysis ('10') and Team Bandwidth ('12') removed from every
-// role's nav — component code is left in place (unreachable) rather than
-// deleted, to keep this change low-risk.
-// Nav order below is deliberate per-role (not alphabetical/id order) — the
-// array order IS the sidebar order (see Sidebar.tsx, which just maps over
-// getAllowedSheets(user)).
+// Sheet '3' used to be the single shared "Dashboard" page with an in-page
+// Web/Marketing toggle; it's now reached only via a team-scoped "Team
+// Bandwidth" nav entry per department (see SHEET_LABELS below).
+const WEB_FULL: NavEntry[] = [
+  { id: '3', team: 'web', group: 'Web' },
+  { id: '1', team: 'web' },
+  { id: '9', team: 'web' },
+  { id: '6', team: 'web' },
+  { id: '7' },
+];
+const WEB_NO_TASKS_ASSIGNED: NavEntry[] = [
+  { id: '3', team: 'web', group: 'Web' },
+  { id: '9', team: 'web' },
+  { id: '6', team: 'web' },
+  { id: '7' },
+];
+const WEB_INDIVIDUAL: NavEntry[] = [
+  { id: '3', team: 'web', group: 'Web' },
+  { id: '9', team: 'web' },
+  { id: '7' },
+];
+const MARKETING_FULL: NavEntry[] = [
+  { id: '3', team: 'marketing', group: 'Marketing' },
+  { id: '1', team: 'marketing' },
+  { id: '9', team: 'marketing' },
+  { id: '6', team: 'marketing' },
+];
+const MARKETING_NO_TASKS_ASSIGNED: NavEntry[] = [
+  { id: '3', team: 'marketing', group: 'Marketing' },
+  { id: '9', team: 'marketing' },
+  { id: '6', team: 'marketing' },
+];
+const MARKETING_INDIVIDUAL: NavEntry[] = [
+  { id: '3', team: 'marketing', group: 'Marketing' },
+  { id: '9', team: 'marketing' },
+];
+const PM_GROUP: NavEntry[] = [{ id: '11', group: 'PM' }];
+const LEAVE_STATUS: NavEntry = { id: '2' };
+const TOOLS: NavEntry = { id: '14' };
 
-// HM / Admin / Mod / PMWebAdmin / PMMarketingAdmin — full access, same order
-const ADMIN_ORDER: SheetId[] = ['3', '6', '2', '11', '1', '9', '7', '14'];
-// legacy "pm" — like ADMIN_ORDER but no Tasks Assigned
-const PM_ORDER: SheetId[] = ['3', '6', '2', '11', '9', '7', '14'];
-// WebAdmin — no Leave Status, no PM Projects
-const WEB_ADMIN_ORDER: SheetId[] = ['3', '6', '1', '9', '7', '14'];
+// HM / Admin / Mod — full access, both teams in full
+const ADMIN_NAV: NavEntry[] = [...WEB_FULL, ...MARKETING_FULL, ...PM_GROUP, LEAVE_STATUS, TOOLS];
+// PMWebAdmin / PMMarketingAdmin — full access everywhere except Tasks
+// Assigned, which stays pinned to their own team (see old
+// TASKS_ASSIGNED_TEAM_LOCK behavior this replaces).
+const PM_WEB_ADMIN_NAV: NavEntry[] = [...WEB_FULL, ...MARKETING_NO_TASKS_ASSIGNED, ...PM_GROUP, LEAVE_STATUS, TOOLS];
+const PM_MARKETING_ADMIN_NAV: NavEntry[] = [...WEB_NO_TASKS_ASSIGNED, ...MARKETING_FULL, ...PM_GROUP, LEAVE_STATUS, TOOLS];
+// legacy "pm" — like ADMIN_NAV but no Tasks Assigned at all
+const PM_LEGACY_NAV: NavEntry[] = [...WEB_NO_TASKS_ASSIGNED, ...MARKETING_NO_TASKS_ASSIGNED, ...PM_GROUP, LEAVE_STATUS, TOOLS];
+// WebAdmin — no Leave Status, no PM Projects, no Marketing group
+const WEB_ADMIN_NAV: NavEntry[] = [...WEB_FULL, TOOLS];
 // WebTeam / legacy "resource" — individual contributor, own team
-const WEB_TEAM_ORDER: SheetId[] = ['3', '9', '7', '14'];
-// MarketingAdmin — no Leave Status, no PM Projects, no Leaderboard (no
-// Marketing scoring system yet)
-const MARKETING_ADMIN_ORDER: SheetId[] = ['3', '6', '1', '9', '14'];
-// MarketingTeam — individual contributor, own team, no Leaderboard
-const MARKETING_TEAM_ORDER: SheetId[] = ['3', '9', '14'];
+const WEB_TEAM_NAV: NavEntry[] = [...WEB_INDIVIDUAL, TOOLS];
+// MarketingAdmin — no Leave Status, no PM Projects, no Web group
+const MARKETING_ADMIN_NAV: NavEntry[] = [...MARKETING_FULL, TOOLS];
+// MarketingTeam — individual contributor, own team
+const MARKETING_TEAM_NAV: NavEntry[] = [...MARKETING_INDIVIDUAL, TOOLS];
 
-export const ROLE_SHEETS: Record<Role, SheetId[]> = {
-  HM:    ADMIN_ORDER,
-  Admin: ADMIN_ORDER,
-  Mod:   ADMIN_ORDER,
-  PMWebAdmin:       ADMIN_ORDER,
-  PMMarketingAdmin: ADMIN_ORDER,
-  WebAdmin:       WEB_ADMIN_ORDER,
-  MarketingAdmin: MARKETING_ADMIN_ORDER,
-  WebTeam:       WEB_TEAM_ORDER,
-  MarketingTeam: MARKETING_TEAM_ORDER,
+export const ROLE_NAV: Record<Role, NavEntry[]> = {
+  HM:    ADMIN_NAV,
+  Admin: ADMIN_NAV,
+  Mod:   ADMIN_NAV,
+  PMWebAdmin:       PM_WEB_ADMIN_NAV,
+  PMMarketingAdmin: PM_MARKETING_ADMIN_NAV,
+  WebAdmin:       WEB_ADMIN_NAV,
+  MarketingAdmin: MARKETING_ADMIN_NAV,
+  WebTeam:       WEB_TEAM_NAV,
+  MarketingTeam: MARKETING_TEAM_NAV,
   // legacy — unmigrated accounts behave exactly like their new-taxonomy
   // equivalent (akash/admin/high/mod ≈ HM/Admin/Mod, resource ≈ WebTeam)
-  pm:       PM_ORDER,
-  resource: WEB_TEAM_ORDER,
-  akash:    ADMIN_ORDER,
-  admin:    ADMIN_ORDER,
-  high:     ADMIN_ORDER,
-  mod:      ADMIN_ORDER,
+  pm:       PM_LEGACY_NAV,
+  resource: WEB_TEAM_NAV,
+  akash:    ADMIN_NAV,
+  admin:    ADMIN_NAV,
+  high:     ADMIN_NAV,
+  mod:      ADMIN_NAV,
 };
 
 export const SHEET_LABELS: Record<SheetId, string> = {
   '1': 'Tasks Assigned',
   '2': 'Leave Status',
-  '3': 'Dashboard',
+  '3': 'Team Bandwidth',
   '4': 'Team',
   '5': 'Daily Bucket',
   '6': 'Add Task',
@@ -144,7 +189,19 @@ export function getSheetLabel(id: SheetId, role: Role): string {
 }
 
 // QA Testing ('8') lives as a nested tab inside Vinay's Tasks Overview instead
-// of its own sidebar entry — admin still gets the standalone tab via ROLE_SHEETS.
+// of its own sidebar entry — admin still gets the standalone tab via ROLE_NAV.
+export function getNavEntries(user: AuthUser): NavEntry[] {
+  return ROLE_NAV[user.role];
+}
+
+// Flat, deduplicated list of sheet ids a role can reach — used where only
+// "can this role see this page at all" matters, not the grouped/team nav
+// shape (e.g. Dashboard's initial selectedSheet, the legacy Header.tsx).
 export function getAllowedSheets(user: AuthUser): SheetId[] {
-  return ROLE_SHEETS[user.role];
+  const seen = new Set<SheetId>();
+  const ids: SheetId[] = [];
+  for (const entry of ROLE_NAV[user.role]) {
+    if (!seen.has(entry.id)) { seen.add(entry.id); ids.push(entry.id); }
+  }
+  return ids;
 }

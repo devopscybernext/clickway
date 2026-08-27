@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { SheetData } from '@/lib/googleSheets';
 import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, PM_BANDWIDTH_ALL_DATA_SHEET_ID, PM_PROJECT_FORM_URLS, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, MARKETING_ASSIGNED_PERSONS, WEB_TEAM, TAB_BANDWIDTH, LEAVE_SHEET_ID, TAB_LEAVE, RANGE_LEAVE, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
 
-import { AuthUser, SheetId, Team, getAllowedSheets, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, getTasksAssignedLockedTeam } from '@/lib/auth';
+import { AuthUser, SheetId, Team, NavEntry, getNavEntries, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam } from '@/lib/auth';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import SpecificCharts, { ResourceOverview, PmStatusOverview, KpiCards, ResourceStatusGrid, TeamWorkloadCards, MyWorkloadSummary, InsightCards, PmStatusChart, ResourceBandwidthChips, SubDept } from './SpecificCharts';
@@ -250,8 +250,15 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ user, onLogout }: DashboardProps) {
-  const allowedSheets = getAllowedSheets(user);
-  const [selectedSheet, setSelectedSheet] = useState<SheetId>(allowedSheets[0]);
+  const navEntries = getNavEntries(user);
+  const [selectedSheet, setSelectedSheet] = useState<SheetId>(navEntries[0].id);
+  // Which team's data the currently-selected department-scoped page shows
+  // (Team Bandwidth / Tasks Assigned / Tasks Overview / Add Task) — set by
+  // whichever sidebar nav entry was clicked (see handleSheetChange), since
+  // each of those pages is now reached via its own Web or Marketing entry
+  // instead of an in-page toggle.
+  const [navTeam, setNavTeam] = useState<Team>(navEntries[0].team ?? 'web');
+  const analyticsTeam = navTeam, tasksAssignedTeam = navTeam, tasksOverviewTeam = navTeam, addTaskTeam = navTeam;
 
   // Role tiers (see lib/auth.ts) — used instead of scattering user.role === '...'
   // checks everywhere. isAdmin/isPmTier/isTeamAdmin/isIndividual are mutually exclusive.
@@ -261,13 +268,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const isIndividual  = isIndividualTierRole(user.role);
   // Roles pinned to one team everywhere (WebAdmin/WebTeam/MarketingAdmin/MarketingTeam)
   const lockedTeam: Team | undefined = getLockedTeam(user.role);
-  // Tasks Assigned additionally pins PMWebAdmin/PMMarketingAdmin to their own team
-  const lockedTasksAssignedTeam: Team | undefined = getTasksAssignedLockedTeam(user.role);
-  // Tasks Overview & Team Bandwidth: only individual-tier roles (WebTeam/
-  // MarketingTeam) stay pinned to one team — WebAdmin/MarketingAdmin (and
-  // everyone above them) get both tabs here even though they're locked
-  // everywhere else.
-  const lockedTasksOverviewTeam: Team | undefined = isIndividual ? lockedTeam : undefined;
+  // Legacy standalone Team Bandwidth page (sheet '12') — unreachable from
+  // nav, kept only so its component code isn't dead-deleted.
   const lockedTeamBandwidthTeam: Team | undefined = isIndividual ? lockedTeam : undefined;
 
   const [bandwidthData, setBandwidthData] = useState<SheetData[]>([]);
@@ -298,10 +300,6 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [pmBandwidthSubTab, setPmBandwidthSubTab] = useState<'current' | 'archive' | 'mine'>('current');
   const [showAddProjectForm, setShowAddProjectForm] = useState(false);
   const [teamBandwidthSubTab, setTeamBandwidthSubTab] = useState<Team>(lockedTeamBandwidthTeam ?? 'web');
-  const [tasksOverviewTeam, setTasksOverviewTeam] = useState<Team>(lockedTasksOverviewTeam ?? 'web');
-  const [tasksAssignedTeam, setTasksAssignedTeam] = useState<Team>(lockedTasksAssignedTeam ?? 'web');
-  const [addTaskTeam, setAddTaskTeam] = useState<Team>(lockedTeam ?? 'web');
-  const [analyticsTeam, setAnalyticsTeam] = useState<Team>(lockedTeam ?? 'web');
   const [analyticsSubDept, setAnalyticsSubDept] = useState<SubDept>('all');
   const [analysisDateFilter, setAnalysisDateFilter] = useState<'all' | 'daily' | 'weekly' | 'monthly'>('all');
   const iframeLoadCount = useRef(0);
@@ -555,11 +553,12 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     setMarketingTeamData(prev => prev.map(r => r['__id'] === row['__id'] ? { ...r, [colName]: newValue } : r));
   };
 
-  const handleSheetChange = (sheet: SheetId) => {
-    setSelectedSheet(sheet);
+  const handleSheetChange = (entry: NavEntry) => {
+    setSelectedSheet(entry.id);
+    if (entry.team) { setNavTeam(entry.team); setAnalyticsSubDept('all'); }
     setSearchTerm('');
     // tableKey intentionally NOT incremented here so filters persist across tab switches
-    if (sheet === '6') { iframeLoadCount.current = 0; setFormSubmitted(false); }
+    if (entry.id === '6') { iframeLoadCount.current = 0; setFormSubmitted(false); }
   };
 
   const isSheet1           = selectedSheet === '1';
@@ -695,7 +694,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
       {/* Sidebar */}
       <Sidebar
         selectedSheet={selectedSheet}
-        allowedSheets={allowedSheets}
+        selectedTeam={navTeam}
         user={user}
         onSheetChange={handleSheetChange}
         onLogout={onLogout}
@@ -741,31 +740,6 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   </p>
                 </div>
               </div>
-
-              {/* ── Web / Marketing tab (hidden for roles pinned to one team) ── */}
-              {!lockedTeam && (
-                <div className="cn-card rounded-lg border transition-colors" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
-                  <div className="flex items-center gap-3 px-4 sm:px-6 pt-3 pb-0 flex-wrap">
-                    {([
-                      { key: 'web', label: 'Web' },
-                      { key: 'marketing', label: 'Marketing' },
-                    ] as const).map(tab => (
-                      <button
-                        key={tab.key}
-                        onClick={() => { setAnalyticsTeam(tab.key); setAnalyticsSubDept('all'); }}
-                        className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
-                        style={{
-                          borderColor: analyticsTeam === tab.key ? 'var(--cn-accent)' : 'transparent',
-                          color: analyticsTeam === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
-                          background: 'transparent',
-                        }}
-                      >
-                        {tab.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {/* ── Project State cards — admin + PM + Team Admin ── */}
               {(isAdmin || isPmTier || isTeamAdmin) && (
@@ -877,27 +851,6 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               <h2 className="font-semibold text-base" style={{ color: 'var(--cn-text-primary)' }}>Tasks Assigned</h2>
               <p className="text-xs mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>Active task assignments across all team members and projects</p>
             </div>
-            {!lockedTasksAssignedTeam && (
-              <div className="flex items-center gap-3 flex-wrap -mt-1">
-                {([
-                  { key: 'web', label: 'Web' },
-                  { key: 'marketing', label: 'Marketing' },
-                ] as const).map(tab => (
-                  <button
-                    key={tab.key}
-                    onClick={() => setTasksAssignedTeam(tab.key)}
-                    className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
-                    style={{
-                      borderColor: tasksAssignedTeam === tab.key ? 'var(--cn-accent)' : 'transparent',
-                      color: tasksAssignedTeam === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
-                      background: 'transparent',
-                    }}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-            )}
             <ResourceBandwidthChips
               sheet1Data={tasksAssignedTeamData}
               sheet1Headers={tasksAssignedHeadersForSort}
@@ -1226,28 +1179,6 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           {/* ── Tasks Overview (Web / Marketing) ──────────────────────────────────── */}
           {isResourceOverview && (
             <section className="cn-card rounded-lg border transition-colors" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
-              {!lockedTasksOverviewTeam && (
-                <div className="flex items-center gap-3 px-4 sm:px-6 pt-4 sm:pt-5 pb-0 flex-wrap">
-                  {([
-                    { key: 'web', label: 'Web' },
-                    { key: 'marketing', label: 'Marketing' },
-                  ] as const).map(tab => (
-                    <button
-                      key={tab.key}
-                      onClick={() => setTasksOverviewTeam(tab.key)}
-                      className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
-                      style={{
-                        borderColor: tasksOverviewTeam === tab.key ? 'var(--cn-accent)' : 'transparent',
-                        color: tasksOverviewTeam === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
-                        background: 'transparent',
-                      }}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <div style={{ borderTop: '1px solid var(--cn-border)' }} />
               <div className="p-3 sm:p-6">
                 {tasksOverviewTeam === 'web' ? (
                   <ResourceOverview
@@ -1319,34 +1250,6 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               className="cn-card rounded-lg p-3 sm:p-6 border transition-colors space-y-4"
               style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
             >
-              {!lockedTeam && (
-                <div className="flex items-center gap-3 flex-wrap">
-                  {([
-                    { key: 'web', label: 'Web' },
-                    { key: 'marketing', label: 'Marketing' },
-                  ] as const).map(tab => (
-                    <button
-                      key={tab.key}
-                      onClick={() => {
-                        // The iframe remounts (key={addTaskTeam}) on tab switch,
-                        // which fires onLoad again — reset the counter so that
-                        // fresh load isn't mistaken for a submission.
-                        iframeLoadCount.current = 0;
-                        setFormSubmitted(false);
-                        setAddTaskTeam(tab.key);
-                      }}
-                      className="px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer"
-                      style={{
-                        borderColor: addTaskTeam === tab.key ? 'var(--cn-accent)' : 'transparent',
-                        color: addTaskTeam === tab.key ? 'var(--cn-accent)' : 'var(--cn-text-muted)',
-                        background: 'transparent',
-                      }}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-              )}
               {(() => {
               const addTaskFormUrl = addTaskTeam === 'web'
                 ? 'https://docs.google.com/forms/d/e/1FAIpQLSfBDYMZ6trWVeDVRhqz2AGUpcAfzlItvHTQLhUu8Ooly9h7YA'

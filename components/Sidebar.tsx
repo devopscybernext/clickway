@@ -2,14 +2,14 @@
 
 import { useState } from 'react';
 import { BarChart3, CalendarOff, Layers, Menu, X, UsersRound, CalendarDays, ClipboardPlus, Trophy, ListChecks, LayoutDashboard, BarChart2, Wrench, Briefcase, Building2 } from 'lucide-react';
-import { AuthUser, SheetId, getSheetLabel } from '@/lib/auth';
+import { AuthUser, SheetId, Team, NavEntry, getNavEntries, getSheetLabel } from '@/lib/auth';
 import { memberPhoto } from '@/lib/memberColors';
 
 interface SidebarProps {
   selectedSheet: SheetId;
-  allowedSheets: SheetId[];
+  selectedTeam?: Team;
   user: AuthUser;
-  onSheetChange: (sheet: SheetId) => void;
+  onSheetChange: (entry: NavEntry) => void;
   onLogout: () => void;
   isAdmin?: boolean;
 }
@@ -63,8 +63,9 @@ function getUserDesignation(username: string, role: string): string {
   return ROLE_LABELS[role] ?? role;
 }
 
-export default function Sidebar({ selectedSheet, allowedSheets, user, onSheetChange, isAdmin }: SidebarProps) {
+export default function Sidebar({ selectedSheet, selectedTeam, user, onSheetChange, isAdmin }: SidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const navEntries = getNavEntries(user);
 
   const navContent = (
     <>
@@ -93,36 +94,42 @@ export default function Sidebar({ selectedSheet, allowedSheets, user, onSheetCha
 
       {/* ── Navigation ────────────────────────────────────────────────────── */}
       <nav className="flex-1 px-3 py-3 space-y-0.5">
-        <p className="px-3 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--cn-text-faint)' }}>
-          Navigation
-        </p>
-        {allowedSheets.map(id => {
-          const active = selectedSheet === id;
+        {navEntries.map((entry, i) => {
+          const active = selectedSheet === entry.id && (entry.team === undefined || entry.team === selectedTeam);
           return (
-            <button
-              key={id}
-              onClick={() => { onSheetChange(id); setMobileOpen(false); }}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all text-left cursor-pointer"
-              style={{
-                background: active ? 'var(--cn-bg-hover)' : 'transparent',
-                color:      active ? 'var(--cn-text-primary)' : 'var(--cn-text-muted)',
-                fontWeight: active ? '600' : '400',
-              }}
-              onMouseEnter={e => {
-                if (!active) (e.currentTarget as HTMLButtonElement).style.background = 'var(--cn-bg-input)';
-              }}
-              onMouseLeave={e => {
-                if (!active) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-              }}
-            >
-              <span style={{ color: active ? 'var(--cn-accent)' : 'var(--cn-text-muted)' }}>
-                {NAV_ICONS[id]}
-              </span>
-              <span>{getSheetLabel(id, user.role)}</span>
-              {active && (
-                <span className="ml-auto w-1.5 h-1.5 rounded-full shrink-0" style={{ background: 'var(--cn-accent)' }} />
+            <div key={`${entry.id}-${entry.team ?? 'x'}`}>
+              {entry.group && (
+                <p
+                  className={`px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest ${i === 0 ? 'pt-0.5' : 'pt-4'}`}
+                  style={{ color: 'var(--cn-text-faint)' }}
+                >
+                  {entry.group}
+                </p>
               )}
-            </button>
+              <button
+                onClick={() => { onSheetChange(entry); setMobileOpen(false); }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all text-left cursor-pointer"
+                style={{
+                  background: active ? 'var(--cn-bg-hover)' : 'transparent',
+                  color:      active ? 'var(--cn-text-primary)' : 'var(--cn-text-muted)',
+                  fontWeight: active ? '600' : '400',
+                }}
+                onMouseEnter={e => {
+                  if (!active) (e.currentTarget as HTMLButtonElement).style.background = 'var(--cn-bg-input)';
+                }}
+                onMouseLeave={e => {
+                  if (!active) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                }}
+              >
+                <span style={{ color: active ? 'var(--cn-accent)' : 'var(--cn-text-muted)' }}>
+                  {NAV_ICONS[entry.id]}
+                </span>
+                <span>{getSheetLabel(entry.id, user.role)}</span>
+                {active && (
+                  <span className="ml-auto w-1.5 h-1.5 rounded-full shrink-0" style={{ background: 'var(--cn-accent)' }} />
+                )}
+              </button>
+            </div>
           );
         })}
       </nav>
