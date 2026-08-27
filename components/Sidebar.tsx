@@ -145,7 +145,7 @@ export default function Sidebar({ selectedSheet, selectedTeam, selectedPmSubTab,
           return (
             <div key={item.label}>
               <button
-                onClick={() => toggleParent(item.label)}
+                onClick={() => { toggleParent(item.label); onSheetChange(item.children[0]); setMobileOpen(false); }}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all text-left cursor-pointer"
                 style={{
                   color: hasActiveChild ? 'var(--cn-text-primary)' : 'var(--cn-text-muted)',
