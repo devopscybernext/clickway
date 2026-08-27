@@ -139,12 +139,16 @@ const PM_WEB_ADMIN_NAV: NavEntry[] = [...WEB_FULL, ...MARKETING_NO_TASKS_ASSIGNE
 const PM_MARKETING_ADMIN_NAV: NavEntry[] = [...WEB_NO_TASKS_ASSIGNED, ...MARKETING_FULL, ...PM_GROUP, LEAVE_STATUS, TOOLS];
 // legacy "pm" — like ADMIN_NAV but no Tasks Assigned at all
 const PM_LEGACY_NAV: NavEntry[] = [...WEB_NO_TASKS_ASSIGNED, ...MARKETING_NO_TASKS_ASSIGNED, ...PM_GROUP, LEAVE_STATUS, TOOLS];
-// WebAdmin — no Leave Status, no PM Projects, no Marketing group
-const WEB_ADMIN_NAV: NavEntry[] = [...WEB_FULL, TOOLS];
+// WebAdmin — no Leave Status, no PM Projects; otherwise Web-only, except
+// Tasks Overview also carries a lone cross-team peek at Marketing's (a
+// pre-existing exception — every other page stays strictly Web-only).
+const WEB_ADMIN_NAV: NavEntry[] = [...WEB_FULL, { id: '9', team: 'marketing', group: 'Marketing' }, TOOLS];
 // WebTeam / legacy "resource" — individual contributor, own team
 const WEB_TEAM_NAV: NavEntry[] = [...WEB_INDIVIDUAL, TOOLS];
-// MarketingAdmin — no Leave Status, no PM Projects, no Web group
-const MARKETING_ADMIN_NAV: NavEntry[] = [...MARKETING_FULL, TOOLS];
+// MarketingAdmin — no Leave Status, no PM Projects; otherwise
+// Marketing-only, except Tasks Overview also peeks at Web's (mirrors the
+// WebAdmin exception above).
+const MARKETING_ADMIN_NAV: NavEntry[] = [...MARKETING_FULL, { id: '9', team: 'web', group: 'Web' }, TOOLS];
 // MarketingTeam — individual contributor, own team
 const MARKETING_TEAM_NAV: NavEntry[] = [...MARKETING_INDIVIDUAL, TOOLS];
 
