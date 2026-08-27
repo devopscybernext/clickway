@@ -75,20 +75,16 @@ export default function Sidebar({ selectedSheet, selectedTeam, selectedPmSubTab,
     return true;
   };
 
-  // Dropdowns start open if they contain the page currently on screen, so
-  // the active page is never hidden behind a collapsed section on load.
-  const [openParents, setOpenParents] = useState<Set<string>>(() => {
-    const open = new Set<string>();
+  // Accordion — only one dropdown open at a time. Starts open on whichever
+  // one contains the page currently on screen, so the active page is never
+  // hidden behind a collapsed section on load.
+  const [openParent, setOpenParent] = useState<string | null>(() => {
     for (const item of navItems) {
-      if (isNavParent(item) && item.children.some(isLeafActive)) open.add(item.label);
+      if (isNavParent(item) && item.children.some(isLeafActive)) return item.label;
     }
-    return open;
+    return null;
   });
-  const toggleParent = (label: string) => setOpenParents(prev => {
-    const next = new Set(prev);
-    if (next.has(label)) next.delete(label); else next.add(label);
-    return next;
-  });
+  const toggleParent = (label: string) => setOpenParent(prev => prev === label ? null : label);
 
   const navContent = (
     <>
@@ -144,7 +140,7 @@ export default function Sidebar({ selectedSheet, selectedTeam, selectedPmSubTab,
             );
           }
 
-          const open = openParents.has(item.label);
+          const open = openParent === item.label;
           const hasActiveChild = item.children.some(isLeafActive);
           return (
             <div key={item.label}>
