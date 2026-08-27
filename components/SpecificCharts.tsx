@@ -3100,7 +3100,12 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
           const bg = memberColor(c.name);
           const initials = c.name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
           return (
-            <div key={c.name} className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+            <div
+              key={c.name}
+              onClick={() => c.tasks.length > 0 && toggleOpen(c.name)}
+              className="rounded-xl border overflow-hidden"
+              style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)', cursor: c.tasks.length > 0 ? 'pointer' : 'default' }}
+            >
               <div className="flex items-center gap-2.5 px-3.5 pt-3.5 pb-3">
                 {photo ? (
                   <img src={photo} alt={c.name} className="w-9 h-9 rounded-full object-cover shrink-0"
@@ -3114,14 +3119,12 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
                   {c.status.label}
                 </span>
                 {c.tasks.length > 0 && (
-                  <button
-                    onClick={() => toggleOpen(c.name)}
-                    title="View tasks"
-                    className="shrink-0 w-6 h-6 rounded-lg inline-flex items-center justify-center cursor-pointer transition-colors"
+                  <span
+                    className="shrink-0 w-6 h-6 rounded-lg inline-flex items-center justify-center"
                     style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}
                   >
                     {openName === c.name ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                  </button>
+                  </span>
                 )}
               </div>
               <div className="grid grid-cols-2 gap-px" style={{ background: 'var(--cn-border)', borderTop: '1px solid var(--cn-border)' }}>
