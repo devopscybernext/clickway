@@ -2975,18 +2975,32 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
   const [localSubDept, setLocalSubDept] = useState<SubDept>('all');
   const subDept = subDeptProp ?? localSubDept;
   const setSubDept = onSubDeptChange ?? setLocalSubDept;
+  const [openName, setOpenName] = useState<string | null>(null);
   const resourceCol = findCol(sheet1Headers, 'assigned person', 'assigned to', 'resource');
   const statusCol   = findCol(sheet1Headers, 'task status', 'status');
   const bucketCol   = findCol(sheet1Headers, 'task daily bucket', 'bucket');
   const timeEstCol  = findCol(sheet1Headers, 'time estimation', 'time estimate', 'estimation');
+  const taskCol      = findCol(sheet1Headers, 'task name', 'task title', 'task');
+  const projectCol   = findCol(sheet1Headers, 'project name', 'project');
+  const taskUrlCol   = findCol(sheet1Headers, 'task url', 'task link', 'link', 'url');
+  const bucketSetCol = sheet1Headers.find(h => h.toLowerCase().includes('today bucket set') || h.toLowerCase().includes('bucket set'));
+  const pmStatusCol  = sheet1Headers.find(h => h.toLowerCase().includes('pm status'));
   const availNameCol   = availHeaders ? findCol(availHeaders, 'name', 'resource', 'person', 'team') : undefined;
   const availStatusCol = availHeaders ? findCol(availHeaders, 'availability', 'status', 'leave') : undefined;
 
   if (!sheet1Data.length || !resourceCol) return null;
 
-  const getStatus = (r: SheetData) => statusCol  ? String(r[statusCol]  ?? '').trim().toLowerCase() : '';
-  const getBucket = (r: SheetData) => bucketCol  ? String(r[bucketCol]  ?? '').trim().toLowerCase() : '';
-  const getTime   = (r: SheetData) => timeEstCol ? parseHours(String(r[timeEstCol] ?? '').trim()) : 0;
+  const getStatus    = (r: SheetData) => statusCol    ? String(r[statusCol]    ?? '').trim().toLowerCase() : '';
+  const getBucket    = (r: SheetData) => bucketCol    ? String(r[bucketCol]    ?? '').trim().toLowerCase() : '';
+  const getTime      = (r: SheetData) => timeEstCol   ? parseHours(String(r[timeEstCol] ?? '').trim()) : 0;
+  const getTask      = (r: SheetData) => taskCol      ? String(r[taskCol]      ?? '').trim() : '';
+  const getProject   = (r: SheetData) => projectCol   ? String(r[projectCol]   ?? '').trim() : '';
+  const getTaskUrl   = (r: SheetData) => taskUrlCol   ? String(r[taskUrlCol]   ?? '').trim() : '';
+  const getBucketSet = (r: SheetData) => bucketSetCol ? String(r[bucketSetCol] ?? '').trim() : '';
+  const getPmStatus  = (r: SheetData) => pmStatusCol  ? String(r[pmStatusCol]  ?? '').trim() : '';
+  // What counts as "still relevant" for the monthly task list — a task
+  // that's fully done and delivered shouldn't clutter it.
+  const HIDE_FROM_TABLE = ['task closed', 'submitted to client', 'n/a', ''];
 
   const names = [...new Set(sheet1Data.map(r => String(r[resourceCol] ?? '').trim()).filter(Boolean))].sort();
 
@@ -3030,7 +3044,21 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
     const cap = isMonthlyBlock ? 125 : 7;
     const availableHours = Math.max(0, cap - displayHours - leaveDeduction);
 
-    return { name, status, displayHours, availableHours };
+    // All of this person's tasks for the month, flat — not grouped by
+    // project — so clicking their name/Assigned figure shows the whole
+    // picture, not just what's driving today's workload number above.
+    const tasks = myTasks
+      .filter(r => !HIDE_FROM_TABLE.includes(getStatus(r)))
+      .map(r => ({
+        task: getTask(r), project: getProject(r), taskUrl: getTaskUrl(r),
+        timeEst: timeEstCol ? String(r[timeEstCol] ?? '').trim() : '',
+        bucket: getBucket(r), bucketSet: getBucketSet(r),
+        status: statusCol ? String(r[statusCol] ?? '').trim() : '',
+        pmStatus: getPmStatus(r),
+        _raw: r,
+      }));
+
+    return { name, status, displayHours, availableHours, tasks };
   });
 
   // Marketing rosters get SEO/PPC/SMM tabs, Web rosters get UIUX/Front End/
@@ -3044,6 +3072,8 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
       ? [{ key: 'all', label: 'All' }, { key: 'uiux', label: 'UIUX' }, { key: 'frontend', label: 'Front End' }, { key: 'backend', label: 'Back End' }]
       : [];
   const visibleCards = cards.filter(c => matchesSubDept(c.name, subDept));
+  const openCard = visibleCards.find(c => c.name === openName);
+  const toggleOpen = (name: string) => setOpenName(prev => prev === name ? null : name);
 
   return (
     <div className="space-y-3">
@@ -3071,7 +3101,7 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
           const bg = memberColor(c.name);
           const initials = c.name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
           return (
-            <div key={c.name} className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+            <div key={c.name} className="rounded-xl border overflow-hidden transition-colors" style={{ background: 'var(--cn-bg-card)', borderColor: openName === c.name ? 'var(--cn-accent)' : 'var(--cn-border)' }}>
               <div className="flex items-center gap-2.5 px-3.5 pt-3.5 pb-3">
                 {photo ? (
                   <img src={photo} alt={c.name} className="w-9 h-9 rounded-full object-cover shrink-0"
@@ -3080,13 +3110,23 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
                   <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
                     style={{ background: `linear-gradient(135deg, ${bg}cc, ${bg}66)` }}>{initials}</div>
                 )}
-                <p className="text-sm font-semibold truncate min-w-0 flex-1" style={{ color: 'var(--cn-text-primary)' }}>{c.name}</p>
+                <p
+                  onClick={() => c.tasks.length > 0 && toggleOpen(c.name)}
+                  className="text-sm font-semibold truncate min-w-0 flex-1"
+                  style={{ color: 'var(--cn-text-primary)', cursor: c.tasks.length > 0 ? 'pointer' : 'default', textDecoration: openName === c.name ? 'underline' : 'none' }}
+                >
+                  {c.name}
+                </p>
                 <span className="text-[10px] font-bold px-2 py-1 rounded-full shrink-0" style={{ background: c.status.bg + '22', color: c.status.bg }}>
                   {c.status.label}
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-px" style={{ background: 'var(--cn-border)', borderTop: '1px solid var(--cn-border)' }}>
-                <div className="flex flex-col gap-1 px-3.5 py-2.5" style={{ background: 'var(--cn-bg-card)' }}>
+                <div
+                  onClick={() => c.tasks.length > 0 && toggleOpen(c.name)}
+                  className="flex flex-col gap-1 px-3.5 py-2.5 transition-colors"
+                  style={{ background: openName === c.name ? 'var(--cn-bg-hover)' : 'var(--cn-bg-card)', cursor: c.tasks.length > 0 ? 'pointer' : 'default' }}
+                >
                   <div className="flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#2563eb' }} />
                     <span className="text-[9px] font-semibold uppercase tracking-wide leading-tight" style={{ color: 'var(--cn-text-muted)' }}>Assigned</span>
@@ -3105,6 +3145,108 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
           );
         })}
       </div>
+
+      {openCard && (
+        <div className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-accent)' }}>
+          <div className="flex items-center gap-3 px-4 py-3 flex-wrap" style={{ borderBottom: '1px solid var(--cn-border)' }}>
+            <p className="text-sm font-semibold flex-1 min-w-0 truncate" style={{ color: 'var(--cn-text-primary)' }}>
+              {openCard.name}&apos;s Tasks
+            </p>
+            <span className="text-[10px] font-bold px-2 py-1 rounded-full shrink-0" style={{ background: 'var(--cn-accent)' + '18', color: 'var(--cn-accent)' }}>
+              {openCard.tasks.length} task{openCard.tasks.length === 1 ? '' : 's'}
+            </span>
+            <button
+              onClick={() => setOpenName(null)}
+              className="shrink-0 w-7 h-7 rounded-lg inline-flex items-center justify-center cursor-pointer transition-all"
+              style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}
+              title="Close"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          {openCard.tasks.length === 0 ? (
+            <p className="px-4 py-6 text-center text-xs" style={{ color: 'var(--cn-text-faint)' }}>No active tasks</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="text-xs" style={{ width: '100%', minWidth: 800 }}>
+                <thead>
+                  <tr style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}>
+                    <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Project</th>
+                    <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task</th>
+                    <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Link</th>
+                    <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Est.</th>
+                    <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task Daily Bucket</th>
+                    <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Bucket Set</th>
+                    <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Status</th>
+                    <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">PM Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {openCard.tasks.map((t, i) => {
+                    const sColor = STATUS_COLORS[t.status.toLowerCase()] ?? '#6b7280';
+                    const pmColor: Record<string, string> = {
+                      'approved': '#16a34a', 'submitted to client': '#6d28d9',
+                      'changes': '#dc2626', 'no action taken': '#6b7280', 'n/a': '#6b7280', 'ticketclosed': '#7c3aed',
+                    };
+                    const pmC = pmColor[t.pmStatus.toLowerCase()] ?? '#6b7280';
+                    const bucketColors: Record<string, string> = { today: '#16a34a', tomorrow: '#3b82f6', 'day after tomorrow': '#f59e0b' };
+                    const bColor = bucketColors[t.bucket] ?? '#6b7280';
+                    return (
+                      <tr key={String(t._raw['__id'] ?? t._raw['__row'] ?? i)} style={{ borderTop: '1px solid var(--cn-border-light, var(--cn-border))' }}>
+                        <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-muted)' }}>{t.project || '—'}</td>
+                        <td className="px-4 py-2 truncate" style={{ color: 'var(--cn-text-primary)' }}>{t.task || '—'}</td>
+                        <td className="px-4 py-2">
+                          {t.taskUrl ? (
+                            <a href={t.taskUrl} target="_blank" rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                              style={{ color: 'var(--cn-accent)', background: 'var(--cn-accent)' + '15' }}
+                            >
+                              Open ↗
+                            </a>
+                          ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>}
+                        </td>
+                        <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
+                          {t.timeEst.trim() ? formatHHMM(toHM(t.timeEst).h, toHM(t.timeEst).m) : '—'}
+                        </td>
+                        <td className="px-4 py-2">
+                          {t.bucket ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize" style={{ background: bColor + '20', color: bColor }}>
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: bColor }} />
+                              {t.bucket}
+                            </span>
+                          ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>}
+                        </td>
+                        <td className="px-4 py-2">
+                          {t.bucketSet ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize whitespace-nowrap" style={{ background: bColor + '20', color: bColor }}>
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: bColor }} />
+                              {t.bucketSet.toLowerCase() === 'tommorow' ? 'Tomorrow' : t.bucketSet}
+                            </span>
+                          ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>}
+                        </td>
+                        <td className="px-4 py-2">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize" style={{ background: sColor + '20', color: sColor }}>
+                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: sColor }} />
+                            {t.status || '—'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2">
+                          {t.pmStatus && t.pmStatus.toLowerCase() !== 'n/a' && t.pmStatus !== '' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize" style={{ background: pmC + '20', color: pmC }}>
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: pmC }} />
+                              {t.pmStatus}
+                            </span>
+                          ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
