@@ -417,15 +417,18 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     return () => clearInterval(id);
   }, [fetchAiTools]);
 
-  // PM roster for Individual Analysis (admin only) — fetched server-side via
-  // /api/pm-users so the password hash never reaches the browser
+  // PM roster (Individual Analysis, and PM Projects' full-PM-list cards) —
+  // fetched server-side via /api/pm-users so the password hash never
+  // reaches the browser. PM-tier users need it too (not just admin) so
+  // Current Month/Previous Months still shows every PM's card, not just
+  // whoever already has project rows.
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isAdmin && !isPmTier) return;
     fetch('/api/pm-users')
       .then(res => res.json())
       .then(json => { if (json.success) setPmUsers(json.pmUsers); })
       .catch(() => {});
-  }, [isAdmin]);
+  }, [isAdmin, isPmTier]);
 
   // PM Project Bandwidth — one tab per PM in a separate spreadsheet, merged
   // server-side via /api/pm-bandwidth (each row tagged with its PM's tab name)
@@ -1030,6 +1033,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   canEdit={effectivePmBandwidthSubTab === 'mine'}
                   onCellChange={effectivePmBandwidthSubTab === 'mine' ? handlePmBandwidthChange : undefined}
                   allData={pmBandwidthData}
+                  allPmNames={pmUsers.map(u => u.displayName).filter(Boolean)}
                   defaultToCurrentMonth={effectivePmBandwidthSubTab !== 'archive'}
                   hideYearMonthFilter={effectivePmBandwidthSubTab === 'current'}
                   lockShowDataFull={effectivePmBandwidthSubTab === 'mine'}

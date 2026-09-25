@@ -555,9 +555,14 @@ interface Props {
   // by however many old months happen to be in that sheet, which reads as
   // noise rather than a useful workload snapshot for a historical tab.
   hidePmSummary?: boolean;
+  // Every PM's display name (from UserDetails, regardless of whether they
+  // have any project rows yet) — merged into PM Summary and the PM filter
+  // so a PM with zero projects still gets a card (full Bandwidth,
+  // Available) instead of being invisible until their first submission.
+  allPmNames?: string[];
 }
 
-export default function PMProjectBandwidth({ data, headers, canEdit = false, onCellChange, allData, defaultToCurrentMonth = true, hideYearMonthFilter = false, lockShowDataFull = false, hidePmFilter = false, hidePmSummary = false }: Props) {
+export default function PMProjectBandwidth({ data, headers, canEdit = false, onCellChange, allData, defaultToCurrentMonth = true, hideYearMonthFilter = false, lockShowDataFull = false, hidePmFilter = false, hidePmSummary = false, allPmNames = [] }: Props) {
   const optionSourceData = allData ?? data;
   // Cells only become editable after clicking "Edit", same pattern as Tasks Assigned
   const [editMode, setEditMode] = useState(false);
@@ -724,7 +729,10 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
           return selected.includes(String(r[otherCol] ?? '').trim());
         })
       );
-      const vals = [...new Set(rows.map(r => String(r[col] ?? '').trim()).filter(Boolean))];
+      // PM filter also offers every known PM (allPmNames), not just those
+      // with rows already — same reasoning as PM Summary's cards below.
+      const extra = col === '__pm' ? allPmNames : [];
+      const vals = [...new Set([...rows.map(r => String(r[col] ?? '').trim()).filter(Boolean), ...extra])];
       opts[col] = col === yearCol
         ? vals.sort((a, b) => Number(b) - Number(a))
         : col === monthCol
@@ -732,7 +740,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
         : vals.sort();
     });
     return opts;
-  }, [data, filterCols, filters, yearCol, monthCol, statusCol, phaseCol, milestonesCol, upsellCol, paymentStatusCol, dropdownOptions]);
+  }, [data, filterCols, filters, yearCol, monthCol, statusCol, phaseCol, milestonesCol, upsellCol, paymentStatusCol, dropdownOptions, allPmNames]);
 
   // Default to the current Year/Month once, when they're available as filter
   // columns — skipped on the All Data tab (defaultToCurrentMonth=false),
@@ -797,17 +805,25 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   // Per-PM summary cards — only meaningful when this view spans more than
   // one PM (the All Projects tab; My Projects is always a single PM
   // already). That "can this view ever have multiple PMs" check has to run
-  // against the full unfiltered data, not the filtered rows — otherwise
-  // narrowing a filter down to a single PM's projects (very easy to do)
-  // made the whole section disappear instead of just showing that one card.
-  // Only PMs actually present in the filtered rows get a card, so e.g.
-  // filtering to one Project doesn't clutter the row with 0h cards for PMs
-  // who have nothing in it.
+  // against the full unfiltered data (not allPmNames — My Projects would
+  // otherwise wrongly see every PM merged in), not the filtered rows —
+  // otherwise narrowing a filter down to a single PM's projects (very easy
+  // to do) made the whole section disappear instead of just showing that
+  // one card.
+  // Only PMs actually present in the filtered rows get a card when a
+  // filter is active, so e.g. filtering to one Project doesn't clutter the
+  // row with 0h cards for PMs who have nothing in it — but with no active
+  // filter, every known PM (allPmNames) gets a card too, even ones with
+  // zero project rows yet, so a new PM shows up immediately at full
+  // Bandwidth/Available instead of staying invisible until their first
+  // submission.
+  const hasActiveFilter = Object.values(filters).some(v => v.length > 0);
   const pmSummaries = useMemo(() => {
     if (!showPmCol) return [];
     const allNames = new Set(data.map(r => String(r['__pm'] ?? '').trim()).filter(Boolean));
     if (allNames.size <= 1) return [];
-    const names = [...new Set(filtered.map(r => String(r['__pm'] ?? '').trim()).filter(Boolean))].sort();
+    const fromFiltered = filtered.map(r => String(r['__pm'] ?? '').trim()).filter(Boolean);
+    const names = [...new Set(hasActiveFilter ? fromFiltered : [...fromFiltered, ...allPmNames])].sort();
     return names.map(name => ({
       name,
       ...computeStatsFor(
@@ -817,7 +833,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
       ),
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, filtered, showPmCol, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol]);
+  }, [data, filtered, showPmCol, hasActiveFilter, allPmNames, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol]);
 
   const fmtHours = (n: number) => `${formatHoursClock(n)}h`;
 
