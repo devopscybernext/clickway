@@ -22,6 +22,7 @@ const TEAM_PHOTOS: Record<string, string> = {
   'muskan':     '/team/Muskan.png',
   'moon':       '/team/Moon.png',
   'sameer':     '/team/Sameer.png',
+  'ayush':      '/team/Ayush.png',
   'atul':       '/team/PPC/Atul.png',
   'shiwangi':   '/team/PPC/Shiwangi.png',
   'dheeraj':    '/team/PPC/Dheeraj.png',
@@ -33,6 +34,7 @@ const TEAM_PHOTOS: Record<string, string> = {
   'kshitij':    '/team/SEO/Kshitij.png',
   'payal':      '/team/SMM/Payal.png',
   'akanksha':   '/team/SMM/Akanksha.png',
+  'manas':      '/team/SMM/Manas.png',
 };
 
 function teamPhoto(name: string): string {

@@ -120,7 +120,7 @@ export const MARKETING_DEPARTMENT_OPTIONS = ['SEO', 'PPC', 'SMM'];
 export const MARKETING_ASSIGNED_PERSONS = [
   'Bhavya', 'Kshitij', 'Akshay', // SEO
   'Atul', 'Shiwangi', 'Anjali', 'Dheeraj', 'Anurag', 'Vansh', // PPC (Akshay shared with SEO)
-  'Payal', 'Akanksha', // SMM
+  'Payal', 'Akanksha', 'Manas', // SMM
 ];
 
 // Task Status Updation options for the Marketing Team sheet — differs from

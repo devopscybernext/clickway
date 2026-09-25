@@ -9,7 +9,11 @@ export type Role =
   | 'WebAdmin' | 'MarketingAdmin'
   | 'WebTeam' | 'MarketingTeam'
   // legacy — still read from the sheet for accounts not yet migrated
-  | 'pm' | 'resource' | 'akash' | 'admin' | 'high' | 'mod';
+  | 'pm' | 'resource' | 'akash' | 'admin' | 'high' | 'mod'
+  // 'smm' behaves exactly like MarketingTeam — an alias for entering
+  // Social Media Marketing hires under a role name that reads clearly in
+  // the UserDetails sheet, same idea as 'resource' aliasing WebTeam.
+  | 'smm';
 
 export type Team = 'web' | 'marketing';
 
@@ -44,7 +48,7 @@ export const MOD_ENABLED = false;
 const ADMIN_TIER_ROLES: Role[] = ['HM', 'Admin', 'Mod', 'admin', 'high', 'mod', 'akash'];
 const PM_TIER_ROLES: Role[] = ['pm', 'PMWebAdmin', 'PMMarketingAdmin'];
 const TEAM_ADMIN_TIER_ROLES: Role[] = ['WebAdmin', 'MarketingAdmin'];
-const INDIVIDUAL_TIER_ROLES: Role[] = ['resource', 'WebTeam', 'MarketingTeam'];
+const INDIVIDUAL_TIER_ROLES: Role[] = ['resource', 'WebTeam', 'MarketingTeam', 'smm'];
 
 export function isAdminTierRole(role: Role): boolean {
   return ADMIN_TIER_ROLES.includes(role);
@@ -64,7 +68,7 @@ export function isIndividualTierRole(role: Role): boolean {
 // sub-tab switcher on every split page is hidden and forced to this value.
 const ROLE_TEAM_LOCK: Partial<Record<Role, Team>> = {
   WebAdmin: 'web', WebTeam: 'web',
-  MarketingAdmin: 'marketing', MarketingTeam: 'marketing',
+  MarketingAdmin: 'marketing', MarketingTeam: 'marketing', smm: 'marketing',
 };
 
 export function getLockedTeam(role: Role): Team | undefined {
@@ -229,9 +233,11 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
   WebTeam:       WEB_TEAM_NAV,
   MarketingTeam: MARKETING_TEAM_NAV,
   // legacy — unmigrated accounts behave exactly like their new-taxonomy
-  // equivalent (akash/admin/high/mod ≈ HM/Admin/Mod, resource ≈ WebTeam)
+  // equivalent (akash/admin/high/mod ≈ HM/Admin/Mod, resource ≈ WebTeam,
+  // smm ≈ MarketingTeam)
   pm:       PM_LEGACY_NAV,
   resource: WEB_TEAM_NAV,
+  smm:      MARKETING_TEAM_NAV,
   akash:    ADMIN_NAV,
   admin:    ADMIN_NAV,
   high:     ADMIN_NAV,

@@ -195,13 +195,14 @@ const TEAM_PHOTOS: Record<string, string> = {
   vinay: '/team/Vinay.png', dhruv: '/team/Dhruv.png',
   kiran: '/team/Kiran.png', yash: '/team/Yash.png',
   muskan: '/team/Muskan.png', moon: '/team/Moon.png',
-  sameer: '/team/Sameer.png',
+  sameer: '/team/Sameer.png', ayush: '/team/Ayush.png',
   atul: '/team/PPC/Atul.png', shiwangi: '/team/PPC/Shiwangi.png',
   dheeraj: '/team/PPC/Dheeraj.png', anjali: '/team/PPC/Anjali.png',
   anurag: '/team/PPC/Anurag.png', vansh: '/team/PPC/Vansh.png',
   akshay: '/team/SEO/Akshay.png', bhavya: '/team/SEO/Bhavya.png',
   kshitij: '/team/SEO/Kshitij.png',
   payal: '/team/SMM/Payal.png', akanksha: '/team/SMM/Akanksha.png',
+  manas: '/team/SMM/Manas.png',
 };
 
 const TEAM_DESIGNATIONS: Record<string, string> = {
@@ -213,12 +214,12 @@ const TEAM_DESIGNATIONS: Record<string, string> = {
   // Project Management
   yash: 'Project Management', kiran: 'Project Management',
   muskan: 'Project Management', moon: 'Project Management',
-  sameer: 'Project Management',
+  sameer: 'Project Management', ayush: 'Project Management',
   // Marketing — PPC
   atul: 'PPC', anjali: 'PPC', anurag: 'PPC',
   vansh: 'PPC', dheeraj: 'PPC', shiwangi: 'PPC',
   // Marketing — SMM
-  payal: 'SMM', akanksha: 'SMM',
+  payal: 'SMM', akanksha: 'SMM', manas: 'SMM',
   // Marketing — SEO
   akshay: 'SEO', bhavya: 'SEO', kshitij: 'SEO',
 };
@@ -240,7 +241,7 @@ function teamPhoto(name: string): string {
 // both), unlike teamDesignation() above which only ever shows one label.
 const SEO_NAMES = ['bhavya', 'kshitij', 'akshay'];
 const PPC_NAMES = ['atul', 'shiwangi', 'anjali', 'dheeraj', 'anurag', 'vansh', 'akshay'];
-const SMM_NAMES = ['payal', 'akanksha'];
+const SMM_NAMES = ['payal', 'akanksha', 'manas'];
 function inMarketingSubDept(name: string, dept: 'seo' | 'ppc' | 'smm'): boolean {
   const lower = name.trim().toLowerCase();
   const list = dept === 'seo' ? SEO_NAMES : dept === 'ppc' ? PPC_NAMES : SMM_NAMES;

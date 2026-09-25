@@ -33,7 +33,7 @@ const ROLE_LABELS: Record<string, string> = {
   akash: 'Admin', admin: 'Admin', high: 'Admin', mod: 'Admin',
   pm: 'Project Manager', PMWebAdmin: 'Project Manager', PMMarketingAdmin: 'Project Manager',
   WebAdmin: 'Team Admin', MarketingAdmin: 'Team Admin',
-  resource: 'Team Member', WebTeam: 'Team Member', MarketingTeam: 'Team Member',
+  resource: 'Team Member', WebTeam: 'Team Member', MarketingTeam: 'Team Member', smm: 'Team Member',
 };
 
 const USER_DESIGNATIONS: Record<string, string> = {
@@ -45,12 +45,12 @@ const USER_DESIGNATIONS: Record<string, string> = {
   // Project Management
   yash: 'Project Management', kiran: 'Project Management',
   muskan: 'Project Management', moon: 'Project Management',
-  sameer: 'Project Management',
+  sameer: 'Project Management', ayush: 'Project Management',
   // Marketing — PPC
   atul: 'PPC', anjali: 'PPC', anurag: 'PPC',
   vansh: 'PPC', dheeraj: 'PPC', shiwangi: 'PPC',
   // Marketing — SMM
-  payal: 'SMM', akanksha: 'SMM',
+  payal: 'SMM', akanksha: 'SMM', manas: 'SMM',
   // Marketing — SEO
   akshay: 'SEO', bhavya: 'SEO', kshitij: 'SEO',
 };

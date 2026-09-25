@@ -363,15 +363,15 @@ const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'Ju
 const DEPARTMENT_OPTIONS = ['Web', 'Marketing'];
 const YEAR_OPTIONS = ['2026', '2025'];
 const STATUS_OPTIONS = [
-  'Yet to Start', 'In Progress', 'Initial setup', 'On Going', 'Paused by client',
+  'No Action Taken', 'Yet to Start', 'In Progress', 'Initial setup', 'On Going', 'Paused by client',
   'Paused by Cybernext', 'Escalated', 'Completed', 'Submitted - waiting for feedback',
-  'Closed: Without feedback', 'Closed: Good Feedback', 'Closed: Bad Feedback', 'Move to Next Month',
+  'Closed: Without feedback', 'Closed: Good Feedback', 'Closed: Bad Feedback', 'Move to Next Month', 'On Hold',
 ];
-const PHASE_OPTIONS = ['Initial Setup', 'Design', 'Development', 'Testing', 'Maintenance', 'Ongoing Optimization', 'Need Based Support'];
+const PHASE_OPTIONS = ['No Action Taken', 'Requirement Gathering', 'Design', 'Development', 'QA', 'Deployed', 'Marketing', 'Maintenance', 'Retainer', 'On Hold', 'Completed', 'Design + Dev'];
 const MILESTONES_OPTIONS = ['No Action Taken'];
 const UPSELL_OPTIONS = ['No Action Taken', 'Upsell', 'Cross-Sell'];
-const PAYMENT_STATUS_OPTIONS = ['No Action Taken', 'Pending', 'Done', 'On Hold', 'QA_Done', 'Not Started Yet', 'In Progress', 'Automated Payment'];
-const ASSIGNED_OPTIONS = ['Atul', 'Shiwangi', 'Dheeraj', 'Anjali', 'Anurag', 'Vansh', 'Akshay', 'Kshitij', 'Bhavya', 'Payal', 'Akanksha', 'Akash'];
+const PAYMENT_STATUS_OPTIONS = ['No Action Taken', 'Pending', 'Done', 'On Hold', 'QA_Done', 'Not Started Yet', 'In Progress', 'Ongoing', 'Automated Payment'];
+const ASSIGNED_OPTIONS = ['No Action Taken', 'Akash', 'Pawan', 'Dhruv', 'Robin', 'Shubham', 'Lovepreet', 'Atul', 'Anjali', 'Dheeraj', 'Shiwangi', 'Anurag', 'Vansh', 'Manas', 'Akshay', 'Kshitij', 'Bhavya', 'Payal', 'Akanksha'];
 
 const CHEVRON_WHITE = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`;
 const CHEVRON_MUTED = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`;
