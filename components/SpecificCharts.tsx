@@ -8,7 +8,7 @@ import {
 import { CheckCircle2, PauseCircle, LayoutGrid, Send, CalendarCheck, CalendarClock, UserCheck, ChevronDown, ChevronUp, AlertTriangle, ThumbsUp, RefreshCw, BadgeCheck, Copy, Check, Search, X, Pencil } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { memberColor, MONTHLY_BLOCK_MARKETING_NAMES } from '@/lib/memberColors';
-import { MARKETING_STATUS_OPTIONS } from '@/lib/config';
+import { MARKETING_STATUS_OPTIONS, MARKETING_ASSIGNED_PERSONS, WEB_TEAM } from '@/lib/config';
 
 // "Task Closed" is a Tasks Assigned-only action — Tasks Overview (team's own
 // view of their work) doesn't offer it.
@@ -264,6 +264,20 @@ function matchesSubDept(name: string, dept: SubDept): boolean {
   if (dept === 'all') return true;
   if (dept === 'seo' || dept === 'ppc' || dept === 'smm') return inMarketingSubDept(name, dept);
   return inWebSubDept(name, dept);
+}
+
+// Full canonical roster (from lib/config's team lists) for whichever team a
+// given set of names belongs to, merged with whatever's actually in the
+// sheet data — so someone with zero tasks/rows so far (e.g. a new hire)
+// still gets a card showing full Bandwidth/Available instead of silently
+// disappearing until they're assigned something. Detects which team by
+// checking whether any of the given names already match one of that
+// team's sub-department rosters.
+function fullRosterFor(names: string[]): string[] {
+  const isMarketing = names.some(n => inMarketingSubDept(n, 'seo') || inMarketingSubDept(n, 'ppc') || inMarketingSubDept(n, 'smm'));
+  const isWeb = names.some(n => inWebSubDept(n, 'uiux') || inWebSubDept(n, 'frontend') || inWebSubDept(n, 'backend'));
+  const canonical = isMarketing ? MARKETING_ASSIGNED_PERSONS : isWeb ? WEB_TEAM : [];
+  return [...new Set([...names, ...canonical])].sort();
 }
 
 // Parse time strings like "3 Hours", "0.5 Hour", "1.5 Hours", "90 min", "3",
@@ -3002,7 +3016,7 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
   // that's fully done and delivered shouldn't clutter it.
   const HIDE_FROM_TABLE = ['task closed', 'submitted to client', 'n/a', ''];
 
-  const names = [...new Set(sheet1Data.map(r => String(r[resourceCol] ?? '').trim()).filter(Boolean))].sort();
+  const names = fullRosterFor([...new Set(sheet1Data.map(r => String(r[resourceCol] ?? '').trim()).filter(Boolean))]);
 
   const cards = names.map(name => {
     const myTasks = sheet1Data.filter(r => String(r[resourceCol] ?? '').trim() === name);
@@ -3384,7 +3398,7 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
   const getTime   = (r: SheetData) => timeEstCol ? parseHours(String(r[timeEstCol] ?? '').trim()) : 0;
   const getStatus = (r: SheetData) => statusCol  ? String(r[statusCol]  ?? '').trim().toLowerCase() : '';
 
-  const names = [...new Set(sheet1Data.map(r => String(r[resourceCol] ?? '').trim()).filter(Boolean))];
+  const names = fullRosterFor([...new Set(sheet1Data.map(r => String(r[resourceCol] ?? '').trim()).filter(Boolean))]);
 
   const rows = names.map(name => {
     // Closed tasks no longer count toward someone's bandwidth — a task
@@ -3533,8 +3547,13 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
   // Unfiltered roster (scopedData, not the date-filtered `data`) — otherwise
   // anyone with zero today/everyday tasks (e.g. someone on leave with
   // nothing assigned) would silently drop out of the roster and never get
-  // counted here, even though Team Workload still shows their card.
-  const rosterNames = resourceCol ? [...new Set(scopedData.map(r => String(r[resourceCol] ?? '').trim()).filter(Boolean))] : [];
+  // counted here, even though Team Workload still shows their card. Also
+  // widened to the full canonical team roster (fullRosterFor) so someone
+  // with zero rows at all still counts as fully available — but only when
+  // this isn't already scoped to one person (personFilter), since expanding
+  // a single-person roster would wrongly pull in the whole team.
+  const rawRosterNames = resourceCol ? [...new Set(scopedData.map(r => String(r[resourceCol] ?? '').trim()).filter(Boolean))] : [];
+  const rosterNames = personFilter ? rawRosterNames : fullRosterFor(rawRosterNames);
   const onLeaveCount = (availData && availNameCol && availStatusCol)
     ? rosterNames.filter(name => {
         const av = availData.find(r => String(r[availNameCol] ?? '').trim().toLowerCase() === name.toLowerCase());
