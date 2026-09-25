@@ -299,16 +299,16 @@ const LEVEL_FIELDS_PM: Record<'low' | 'medium' | 'full', string[]> = {
   ...LEVEL_FIELDS_SHARED,
 };
 
-// Bandwidth-formula ceiling — same 450h threshold pmWorkloadStatus already
+// Bandwidth-formula ceiling — same 300h threshold pmWorkloadStatus already
 // bands Overload at. Available Hours = how much headroom is left under it.
-const PM_BANDWIDTH_CAPACITY = 450;
+const PM_BANDWIDTH_CAPACITY = 300;
 
 // PM workload badge — bands on raw Total Hours (not a rate, not net of
 // current-month progress; deliberately simple per explicit request).
 function pmWorkloadStatus(totalHours: number): { label: string; bg: string } {
   if (totalHours < 100) return { label: 'Available', bg: '#22c55e' };
-  if (totalHours < 250) return { label: 'Partially Available', bg: '#f59e0b' };
-  if (totalHours < 350) return { label: 'Partially Occupied', bg: '#f59e0b' };
+  if (totalHours < 180) return { label: 'Partially Available', bg: '#f59e0b' };
+  if (totalHours < 230) return { label: 'Partially Occupied', bg: '#f59e0b' };
   if (totalHours < PM_BANDWIDTH_CAPACITY) return { label: 'Occupied', bg: '#f97316' };
   return { label: 'Overload', bg: '#dc2626' };
 }
@@ -776,7 +776,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   );
 
   // Overview's Available Hours has to be summed per-PM, not derived from the
-  // combined Total Hours — the 450h capacity is a per-PM ceiling, so running
+  // combined Total Hours — the 300h capacity is a per-PM ceiling, so running
   // it against everyone's hours added together (e.g. 1000h+) always clamps
   // to 0. Each PM's own headroom is summed instead, same figure the PM
   // Summary cards below already show individually.
