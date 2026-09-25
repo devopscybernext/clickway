@@ -9,27 +9,34 @@ export const TOOLS_SHEET_ID = '1LKlUqf6ZTqivv3Bf8iYqDzJO7B_fLT22ZO2oB0f-nRs';
 // UserDetails spreadsheet — login credentials, kept separate from Sheet 1
 export const USER_DETAILS_SHEET_ID = '1OFJyXJ89MTi7sFH4L0or-wGtrZi3a7zRFVtFMOCItI4';
 
-// PM Sheet Bandwidth spreadsheet — one tab per PM (e.g. "Muskan"), discovered
-// dynamically at fetch time rather than hardcoded, since more PM tabs get
-// added over time. Columns: Timestamp, Email Address, Department, Year,
-// Month, Project Name, Client Name, Communication Channel, Tech, Total
-// Hours, Payment Details, Assigned, Status, Phase, Milestone, Current Month
-// Hours, Upcoming Milestones, Upsell/Cross-Sell, Project Start Date, Target
-// End Date, Payment Status, Last (Project) Follow-up Date, Comments
+// PM Sheet Bandwidth spreadsheet — every PM submits into the same single
+// tab ("CurrentMonth"), sorted by submitter Email Address, rather than the
+// old one-tab-per-PM layout. Since the tab name can no longer double as the
+// PM's identity, /api/pm-bandwidth resolves each row's owning PM from its
+// own "Email Address" cell against the UserDetails roster instead (tagged
+// as __pm — see that route for details). Columns: Timestamp, Email Address,
+// Department, Year, Month, Project Name, Client Name, Communication
+// Channel, Tech, Total Hours, Payment Details, Assigned (comma-separated
+// team member names, not the PM), Status, Phase, Milestone, Current Month
+// Hours, Risk Month Hours, Upcoming Milestones, Upsell/Cross-Sell, Project
+// Start Date, Target End Date, Payment Status, Last (Project) Follow-up
+// Date, Comments
 export const PM_BANDWIDTH_SHEET_ID = '1WBzXb7xfCtzlzeVzxYB6ZtkSCyN4FUzz1Eg9McgPbLM';
 
-// PM Sheet Bandwidth All Data — same one-tab-per-PM layout and columns as
-// PM_BANDWIDTH_SHEET_ID above, but holds prior months/years' rows instead of
-// the current month's. /api/pm-bandwidth merges both spreadsheets into one
-// dataset (tagging each row with __sheetId so edits route back to whichever
-// spreadsheet it actually came from) so PM Projects' Year/Month filters can
-// reach back into history while the current-month-pinned KPI/PM-summary
-// cards keep working unchanged (they already filter to the real current
-// month/year, which historical rows never match).
+// PM Sheet Bandwidth All Data — same single-tab ("All Data PM") layout and
+// columns as PM_BANDWIDTH_SHEET_ID above, but holds prior months/years'
+// rows instead of the current month's. /api/pm-bandwidth merges both
+// spreadsheets into one dataset (tagging each row with __sheetId so edits
+// route back to whichever spreadsheet it actually came from) so PM
+// Projects' Year/Month filters can reach back into history while the
+// current-month-pinned KPI/PM-summary cards keep working unchanged (they
+// already filter to the real current month/year, which historical rows
+// never match).
 export const PM_BANDWIDTH_ALL_DATA_SHEET_ID = '1QjLPmyVrzWpWIYoKKSsntwYAYFNGDRUyowvz9N8U25s';
 
 // "Add New Project" intake form — one Google Form per PM, matched against
-// the logged-in user's display name (same name used for the __pm tab tag).
+// the logged-in user's display name (same name /api/pm-bandwidth resolves
+// each row's __pm to via its Email Address).
 export const PM_PROJECT_FORM_URLS: Record<string, string> = {
   Kiran:  'https://forms.gle/KRGCcDvVooDnP8LE6',
   Muskan: 'https://forms.gle/hbu2jJdW3pkuWk7K6',

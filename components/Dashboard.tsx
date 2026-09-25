@@ -520,18 +520,21 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
   const handlePmBandwidthChange = async (row: SheetData, colName: string, newValue: string) => {
     const rowNum = Number(row['__row']);
-    const pmTab = String(row['__pm'] ?? '');
+    // __pm is now the row's resolved PM identity (from its Email Address,
+    // see /api/pm-bandwidth) rather than the literal tab name, so the
+    // write-back target comes from __sheetTab instead.
+    const sheetTab = String(row['__sheetTab'] ?? '');
     // Current-month and archive rows come from two different spreadsheets
     // sharing the same tab layout — __sheetId (set by /api/pm-bandwidth)
     // says which one this row actually came from, so the edit lands back
     // in the right place instead of always hitting the current sheet.
     const spreadsheetId = String(row['__sheetId'] ?? PM_BANDWIDTH_SHEET_ID);
     const colIndex = pmBandwidthHeaders.indexOf(colName);
-    if (!rowNum || !pmTab || colIndex === -1) return;
+    if (!rowNum || !sheetTab || colIndex === -1) return;
     await fetch('/api/update-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ spreadsheetId, sheetName: pmTab, row: rowNum, colIndex, value: newValue }),
+      body: JSON.stringify({ spreadsheetId, sheetName: sheetTab, row: rowNum, colIndex, value: newValue }),
     });
     setPmBandwidthData(prev => prev.map(r => r['__id'] === row['__id'] ? { ...r, [colName]: newValue } : r));
   };
