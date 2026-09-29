@@ -62,7 +62,7 @@ function statusColor(value: string): string {
 }
 const isStatusLikeCol = (h: string) => {
   const l = h.toLowerCase();
-  return l.includes('status') || l.includes('upcoming milestones') || l.includes('upsell');
+  return l.includes('status') || l.includes('upsell');
 };
 
 // Click-to-edit cell — shows a colored pill for status-like columns, plain
@@ -371,7 +371,6 @@ const STATUS_OPTIONS = [
   'Closed: Without feedback', 'Closed: Good Feedback', 'Closed: Bad Feedback', 'Move to Next Month', 'On Hold',
 ];
 const PHASE_OPTIONS = ['No Action Taken', 'Requirement Gathering', 'Design', 'Development', 'QA', 'Deployed', 'Marketing', 'Maintenance', 'Retainer', 'On Hold', 'Completed', 'Design + Dev'];
-const MILESTONES_OPTIONS = ['No Action Taken'];
 const UPSELL_OPTIONS = ['No Action Taken', 'Upsell', 'Cross-Sell'];
 const PAYMENT_STATUS_OPTIONS = ['No Action Taken', 'Pending', 'Done', 'On Hold', 'QA_Done', 'Not Started Yet', 'In Progress', 'Ongoing', 'Automated Payment'];
 const ASSIGNED_OPTIONS = ['No Action Taken', 'Akash', 'Pawan', 'Dhruv', 'Robin', 'Shubham', 'Lovepreet', 'Atul', 'Anjali', 'Dheeraj', 'Shiwangi', 'Anurag', 'Vansh', 'Manas', 'Akshay', 'Kshitij', 'Bhavya', 'Payal', 'Akanksha'];
@@ -766,7 +765,6 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
       opts[yearCol] = [...years].sort((a, b) => Number(b) - Number(a));
     }
     if (monthCol) opts[monthCol] = MONTH_NAMES;
-    if (milestonesCol) opts[milestonesCol] = withExtras(milestonesCol, MILESTONES_OPTIONS);
     if (upsellCol) opts[upsellCol] = withExtras(upsellCol, UPSELL_OPTIONS);
     if (paymentStatusCol) opts[paymentStatusCol] = withExtras(paymentStatusCol, PAYMENT_STATUS_OPTIONS);
     // Assigned holds several comma-separated names per cell (e.g. "Dhruv,
@@ -783,10 +781,10 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
       opts[assignedCol] = [...ASSIGNED_OPTIONS, ...[...individualExtras].sort()];
     }
     return opts;
-  }, [optionSourceData, departmentCol, statusCol, phaseCol, yearCol, monthCol, milestonesCol, upsellCol, paymentStatusCol, assignedCol]);
+  }, [optionSourceData, departmentCol, statusCol, phaseCol, yearCol, monthCol, upsellCol, paymentStatusCol, assignedCol]);
   const isDropdownCol = (h: string) =>
     h === departmentCol || h === yearCol || h === monthCol || h === statusCol || h === phaseCol ||
-    h === milestonesCol || h === upsellCol || h === paymentStatusCol || h === assignedCol;
+    h === upsellCol || h === paymentStatusCol || h === assignedCol;
 
   // Current Month tab is already scoped to one month server-side, so
   // Year/Month are redundant there — drop them and promote Status into the
@@ -822,11 +820,13 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const filterOptions = useMemo(() => {
     const opts: Record<string, string[]> = {};
     filterCols.forEach(({ col }) => {
-      // Status/Phase/Upcoming Milestones/Upsell/Payment Status are fixed
-      // dropdown fields — always offer the full canonical list (same one
-      // the edit cells use), not just whatever values happen to occur in
-      // the currently-faceted rows, so an unused status is still pickable.
-      if (col === statusCol || col === phaseCol || col === milestonesCol || col === upsellCol || col === paymentStatusCol) {
+      // Status/Phase/Upsell/Payment Status are fixed dropdown fields —
+      // always offer the full canonical list (same one the edit cells
+      // use), not just whatever values happen to occur in the currently-
+      // faceted rows, so an unused status is still pickable. Upcoming
+      // Milestones is free text now, so it facets like any other text
+      // column below instead.
+      if (col === statusCol || col === phaseCol || col === upsellCol || col === paymentStatusCol) {
         opts[col] = dropdownOptions[col] ?? [];
         return;
       }
@@ -849,7 +849,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
         : vals.sort();
     });
     return opts;
-  }, [data, filterCols, filters, yearCol, monthCol, statusCol, phaseCol, milestonesCol, upsellCol, paymentStatusCol, dropdownOptions, allPmNames]);
+  }, [data, filterCols, filters, yearCol, monthCol, statusCol, phaseCol, upsellCol, paymentStatusCol, dropdownOptions, allPmNames]);
 
   // Default to the current Year/Month once, when they're available as filter
   // columns — skipped on the All Data tab (defaultToCurrentMonth=false),
