@@ -103,10 +103,8 @@ export default function AdminPortal() {
           <thead>
             <tr className="border-b" style={{ background: 'var(--cn-bg-row-even)', borderColor: 'var(--cn-border)' }}>
               <th className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: 'var(--cn-text-secondary)' }}></th>
-              <th className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: 'var(--cn-text-secondary)' }}>Username</th>
               <th className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: 'var(--cn-text-secondary)' }}>Display Name</th>
               <th className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: 'var(--cn-text-secondary)' }}>Role</th>
-              <th className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: 'var(--cn-text-secondary)' }}>Email</th>
             </tr>
           </thead>
           <tbody>
@@ -171,7 +169,6 @@ function AdminUserRow({ user, editMode, roleOptions, onSave }: {
           </div>
         )}
       </td>
-      <td className="px-4 py-3 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>{user.username || '—'}</td>
       <td className="px-4 py-3 whitespace-nowrap">
         {editMode && editingName ? (
           <input
@@ -220,7 +217,6 @@ function AdminUserRow({ user, editMode, roleOptions, onSave }: {
           </span>
         )}
       </td>
-      <td className="px-4 py-3 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>{user.email || '—'}</td>
     </tr>
   );
 }
