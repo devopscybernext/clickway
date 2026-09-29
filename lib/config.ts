@@ -34,15 +34,10 @@ export const PM_BANDWIDTH_SHEET_ID = '1WBzXb7xfCtzlzeVzxYB6ZtkSCyN4FUzz1Eg9McgPb
 // never match).
 export const PM_BANDWIDTH_ALL_DATA_SHEET_ID = '1QjLPmyVrzWpWIYoKKSsntwYAYFNGDRUyowvz9N8U25s';
 
-// "Add New Project" intake form — one Google Form per PM, matched against
-// the logged-in user's display name (same name /api/pm-bandwidth resolves
-// each row's __pm to via its Email Address).
-export const PM_PROJECT_FORM_URLS: Record<string, string> = {
-  Kiran:  'https://forms.gle/KRGCcDvVooDnP8LE6',
-  Muskan: 'https://forms.gle/hbu2jJdW3pkuWk7K6',
-  Moon:   'https://forms.gle/Bwru5hhor9rCY6fK6',
-  Yash:   'https://forms.gle/mey4kAfqDwcDqRvb7',
-};
+// "Add New Project" intake form — a single shared Google Form every PM
+// uses (the old one-form-per-PM setup was retired; those forms are now
+// trashed/closed).
+export const PM_PROJECT_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSfPmN8478aHnHljROGhnmgwg5PoEcCozIWi0jHir5Lyp99xKQ/viewform';
 
 // Tab names inside the Sheet 1 spreadsheet. The original "Bandwidth
 // Allocation" tab was renamed to "Current Month Tasks" and a new "All Web

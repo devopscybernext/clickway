@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SheetData } from '@/lib/googleSheets';
-import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, PM_BANDWIDTH_ALL_DATA_SHEET_ID, PM_PROJECT_FORM_URLS, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, MARKETING_ASSIGNED_PERSONS, WEB_TEAM, TAB_BANDWIDTH, LEAVE_SHEET_ID, TAB_LEAVE, RANGE_LEAVE, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
+import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, PM_BANDWIDTH_ALL_DATA_SHEET_ID, PM_PROJECT_FORM_URL, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, MARKETING_ASSIGNED_PERSONS, WEB_TEAM, TAB_BANDWIDTH, LEAVE_SHEET_ID, TAB_LEAVE, RANGE_LEAVE, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
 
 import { AuthUser, SheetId, Team, NavLeaf, getFirstNavLeaf, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam } from '@/lib/auth';
 import Sidebar from './Sidebar';
@@ -584,10 +584,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const isLeaveStatus       = selectedSheet === '2';
   const isTools             = selectedSheet === '14';
 
-  // "Add New Project" form — only PMs with a configured intake form get the button
-  const myProjectFormEntry = Object.entries(PM_PROJECT_FORM_URLS)
-    .find(([name]) => name.trim().toLowerCase() === user.displayName.trim().toLowerCase());
-  const myProjectFormUrl = myProjectFormEntry?.[1];
+  // "Add New Project" form — single shared form, only shown to PM-tier users
+  const myProjectFormUrl = isPmTier ? PM_PROJECT_FORM_URL : undefined;
 
   // ── Team roster filtering (Web/Marketing split for Team Bandwidth & Tasks Overview) ──
   const filterByRoster = (rows: SheetData[], rowHeaders: string[], roster: string[]) => {
@@ -1068,7 +1066,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 </div>
                 <iframe
                   key={myProjectFormUrl}
-                  src={myProjectFormUrl}
+                  src={`${myProjectFormUrl}?embedded=true`}
                   className="flex-1 w-full"
                   style={{ border: 'none', borderRadius: '0 0 8px 8px' }}
                 >

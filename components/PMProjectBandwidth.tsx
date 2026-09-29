@@ -442,6 +442,100 @@ function SelectCell({ value, colored, editable, options, onSave }: {
   );
 }
 
+// Multi-select checkbox dropdown — for "Assigned", which (unlike every
+// other dropdown-ish column here) holds several comma-separated names at
+// once, e.g. "Dhruv, Robin, Shubham", matching the sheet's own multi-select
+// chip column. A plain single-value <select> would silently drop every
+// name but the one picked, so this stores/writes back the full
+// comma-joined list instead.
+function MultiSelectCell({ value, editable, options, onSave }: {
+  value: string; editable: boolean; options: string[]; onSave: (v: string) => Promise<void>;
+}) {
+  const parseSelected = (v: string) => v.split(',').map(s => s.trim()).filter(Boolean);
+  const [selected, setSelected] = useState<string[]>(() => parseSelected(value));
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { if (!saving) setSelected(parseSelected(value)); }, [value, saving]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  if (!editable) {
+    return <span className="whitespace-nowrap" style={{ color: 'var(--cn-text-secondary)' }}>{value || '—'}</span>;
+  }
+
+  const commit = async (next: string[]) => {
+    const prev = selected;
+    setSelected(next);
+    setSaving(true);
+    setSaved(false);
+    try {
+      await onSave(next.join(', '));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      setSelected(prev);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggle = (opt: string) => {
+    commit(selected.includes(opt) ? selected.filter(v => v !== opt) : [...selected, opt]);
+  };
+
+  const btnLabel = selected.length === 0 ? 'No Action Taken' : selected.join(', ');
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button
+        onClick={() => setOpen(o => !o)}
+        disabled={saving}
+        className="flex items-center gap-1.5 text-xs font-medium rounded-full pl-2.5 pr-2.5 py-1 border cursor-pointer disabled:opacity-60 transition-colors max-w-[220px]"
+        style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', borderColor: 'var(--cn-border)' }}
+      >
+        <span className="truncate">{btnLabel}</span>
+        <ChevronDown className={`w-3 h-3 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+        {saving && <span className="w-3 h-3 border border-t-transparent rounded-full animate-spin shrink-0" style={{ borderColor: 'var(--cn-accent)' }} />}
+        {saved && <span className="text-xs shrink-0" style={{ color: '#22c55e' }}>✓</span>}
+      </button>
+      {open && (
+        <div
+          className="absolute top-full left-0 mt-1 w-52 border rounded-lg z-50 max-h-64 overflow-y-auto"
+          style={{ background: 'var(--cn-bg-dropdown)', borderColor: 'var(--cn-border)', boxShadow: '0 8px 24px rgba(0,0,0,0.25)' }}
+        >
+          {selected.length > 0 && (
+            <button
+              onClick={() => commit([])}
+              className="w-full text-left px-3 py-1.5 text-[11px] font-semibold border-b"
+              style={{ color: 'var(--cn-text-muted)', borderColor: 'var(--cn-border)' }}
+            >
+              Clear
+            </button>
+          )}
+          {options.filter(o => o.toLowerCase() !== 'no action taken').map(opt => (
+            <label key={opt} className="flex items-center gap-2 px-3 py-1.5 cursor-pointer text-xs"
+              style={{ color: 'var(--cn-text-primary)' }}
+              onMouseEnter={e => ((e.currentTarget as HTMLLabelElement).style.background = 'var(--cn-bg-input)')}
+              onMouseLeave={e => ((e.currentTarget as HTMLLabelElement).style.background = '')}
+            >
+              <input type="checkbox" checked={selected.includes(opt)} onChange={() => toggle(opt)} className="cursor-pointer" />
+              <span className="truncate">{opt}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Month filter — same look/behavior as the shared MultiSelect, but the
 // option list is visually split into Upcoming/Current/Previous relative to
 // today's real calendar month (kept local to this file rather than
@@ -672,7 +766,19 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     if (milestonesCol) opts[milestonesCol] = withExtras(milestonesCol, MILESTONES_OPTIONS);
     if (upsellCol) opts[upsellCol] = withExtras(upsellCol, UPSELL_OPTIONS);
     if (paymentStatusCol) opts[paymentStatusCol] = withExtras(paymentStatusCol, PAYMENT_STATUS_OPTIONS);
-    if (assignedCol) opts[assignedCol] = withExtras(assignedCol, ASSIGNED_OPTIONS);
+    // Assigned holds several comma-separated names per cell (e.g. "Dhruv,
+    // Robin, Shubham") — split before unioning, otherwise withExtras would
+    // add each whole multi-name cell as if it were one option.
+    if (assignedCol) {
+      const individualExtras = new Set<string>();
+      optionSourceData.forEach(r => {
+        String(r[assignedCol] ?? '').split(',').forEach(s => {
+          const name = s.trim();
+          if (name && !ASSIGNED_OPTIONS.includes(name)) individualExtras.add(name);
+        });
+      });
+      opts[assignedCol] = [...ASSIGNED_OPTIONS, ...[...individualExtras].sort()];
+    }
     return opts;
   }, [optionSourceData, departmentCol, statusCol, phaseCol, yearCol, monthCol, milestonesCol, upsellCol, paymentStatusCol, assignedCol]);
   const isDropdownCol = (h: string) =>
@@ -1151,6 +1257,13 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                       <td key={h} className={`px-4 py-2 ${isDropdownCol(h) || isStatusLikeCol(h) || isDateCol(h) || isDurationCol(h) ? 'whitespace-nowrap' : 'break-words min-w-[120px] max-w-xs'}`}>
                         {isUrl && val && !isEditable ? (
                           <a href={val} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: 'var(--cn-accent)' }}>{val}</a>
+                        ) : h === assignedCol ? (
+                          <MultiSelectCell
+                            value={val}
+                            editable={isEditable && !!onCellChange}
+                            options={dropdownOptions[h] ?? []}
+                            onSave={async v => { if (onCellChange) await onCellChange(row, h, v); }}
+                          />
                         ) : isDropdownCol(h) ? (
                           <SelectCell
                             value={val}
