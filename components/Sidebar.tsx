@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CalendarOff, Menu, X, ChevronDown, Globe, Megaphone, Briefcase, Wrench } from 'lucide-react';
+import { CalendarOff, Menu, X, ChevronDown, Globe, Megaphone, Briefcase, Wrench, ShieldCheck } from 'lucide-react';
 import { AuthUser, SheetId, Team, NavLeaf, isNavParent, getNavItems, getSheetLabel } from '@/lib/auth';
 import { memberPhoto } from '@/lib/memberColors';
 
@@ -26,6 +26,7 @@ const PARENT_ICONS: Record<string, React.ReactNode> = {
 };
 const LEAF_ICONS: Partial<Record<SheetId, React.ReactNode>> = {
   '2': <CalendarOff className="w-4 h-4 shrink-0" />,
+  '15': <ShieldCheck className="w-4 h-4 shrink-0" />,
 };
 
 const ROLE_LABELS: Record<string, string> = {

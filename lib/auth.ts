@@ -1,4 +1,4 @@
-export type SheetId = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | '11' | '12' | '14';
+export type SheetId = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | '11' | '12' | '14' | '15';
 
 // New role taxonomy (2026 rollout) — kept alongside legacy role slugs so
 // accounts that haven't been migrated in the UserDetails sheet keep working
@@ -161,6 +161,10 @@ const TOOLS_CHILDREN: NavLeaf[] = [
   { id: '14', subTab: 'ai', label: 'AI Tools' },
 ];
 const LEAVE_STATUS: NavLeaf = { id: '2' };
+// User Details (Username/Role/Display Name/Email) editor — HM/Admin/Mod
+// (and their legacy aliases) only, never PM-tier/team-admin/individual
+// roles, since it can change anyone's access level.
+const ADMIN_PORTAL: NavLeaf = { id: '15' };
 
 // HM / Admin / Mod — full access, both teams in full
 const ADMIN_NAV: NavItem[] = [
@@ -169,6 +173,7 @@ const ADMIN_NAV: NavItem[] = [
   { label: 'PM Projects', children: PM_PROJECTS_ADMIN },
   LEAVE_STATUS,
   { label: 'Tools', children: TOOLS_CHILDREN },
+  ADMIN_PORTAL,
 ];
 // PMWebAdmin / PMMarketingAdmin — full access everywhere except Tasks
 // Assigned, which stays pinned to their own team (see old
@@ -258,6 +263,7 @@ export const SHEET_LABELS: Record<SheetId, string> = {
   '11': 'PM Projects',
   '12': 'Team Bandwidth',
   '14': 'Tools',
+  '15': 'Admin Portal',
 };
 
 export function getSheetLabel(id: SheetId, role: Role): string {

@@ -17,6 +17,7 @@ import AITools from './AITools';
 import Leaderboard, { calcLeaderboard, PersonStats } from './Leaderboard';
 import PMProjectBandwidth from './PMProjectBandwidth';
 import LeaveStatus from './LeaveStatus';
+import AdminPortal from './AdminPortal';
 import { AlertCircle, Sparkles, ChevronUp, ChevronDown, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 const REFRESH_INTERVAL    = 300_000;       // 5 min — core data (tasks, availability)
@@ -583,6 +584,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const isTeamBandwidth     = selectedSheet === '12';
   const isLeaveStatus       = selectedSheet === '2';
   const isTools             = selectedSheet === '14';
+  const isAdminPortal       = selectedSheet === '15';
 
   // "Add New Project" form — single shared form, only shown to PM-tier users
   const myProjectFormUrl = isPmTier ? PM_PROJECT_FORM_URL : undefined;
@@ -997,6 +999,16 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   </>
                 )}
               </div>
+            </section>
+          )}
+
+          {/* ── Admin Portal: User Details (HM/Admin/Mod only) ── */}
+          {isAdminPortal && (
+            <section
+              className="cn-card rounded-lg border transition-colors"
+              style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
+            >
+              <AdminPortal />
             </section>
           )}
 
