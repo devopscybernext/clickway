@@ -105,7 +105,10 @@ function EditableCell({ value, colored, editable, onSave }: {
       {value || 'No Action Taken'}
     </span>
   ) : (
-    <span className="whitespace-nowrap" style={{ color: 'var(--cn-text-secondary)' }}>{value || '—'}</span>
+    // Free-text fields (Comments, Client Name, etc.) need to wrap within
+    // the cell's own max-w-xs — nowrap here was forcing the whole row
+    // wider instead, pushing long text outside the table.
+    <span className="break-words" style={{ color: 'var(--cn-text-secondary)' }}>{value || '—'}</span>
   );
 
   if (!editable) return badge;
@@ -361,7 +364,7 @@ const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'Ju
 // options — unioned with whatever's already in the data as a safety net
 // for values outside the current list (older entries, list not updated yet, etc.)
 const DEPARTMENT_OPTIONS = ['Web', 'Marketing'];
-const YEAR_OPTIONS = ['2026', '2025'];
+const YEAR_OPTIONS = ['2027', '2026', '2025'];
 const STATUS_OPTIONS = [
   'No Action Taken', 'Yet to Start', 'In Progress', 'Initial setup', 'On Going', 'Paused by client',
   'Paused by Cybernext', 'Escalated', 'Completed', 'Submitted - waiting for feedback',
