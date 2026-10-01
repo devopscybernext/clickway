@@ -524,16 +524,21 @@ function PreviousWinners({ bandwidthData, bandwidthHeaders, leaderboardData }: P
   if (!tsCol || !personCol) return null;
 
   const now = new Date();
-  // Build last 4 complete months
-  const months = Array.from({ length: 4 }, (_, i) => {
-    const d    = new Date(now.getFullYear(), now.getMonth() - (i + 1), 1);
+  // Every complete month from April 2026 (when this tracking started) up
+  // to — but not including — the current month, oldest first, so the grid
+  // reads left-to-right/top-to-bottom as a timeline starting at April
+  // instead of a rolling "last 4 months" window.
+  const LEADERBOARD_START = new Date(2026, 3, 1);
+  const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const months: { label: string; start: Date; end: Date }[] = [];
+  for (let d = new Date(LEADERBOARD_START); d < thisMonth; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
     const next = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-    return {
+    months.push({
       label: d.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }),
       start: d,
-      end:   next,
-    };
-  });
+      end: next,
+    });
+  }
 
   const monthResults = months.map(m => {
     const bwSlice = bandwidthData.filter(r => {
@@ -556,7 +561,7 @@ function PreviousWinners({ bandwidthData, bandwidthHeaders, leaderboardData }: P
         <span className="text-xl">📅</span>
         <div>
           <h3 className="font-bold text-sm" style={{ color: 'var(--cn-text-primary)' }}>Top Performer So Far</h3>
-          <p className="text-xs" style={{ color: 'var(--cn-text-muted)' }}>Best performer each month since June 2026</p>
+          <p className="text-xs" style={{ color: 'var(--cn-text-muted)' }}>Best performer each month since April 2026</p>
         </div>
       </div>
 
