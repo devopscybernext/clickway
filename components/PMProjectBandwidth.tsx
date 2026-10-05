@@ -55,7 +55,7 @@ const STATUS_KEYWORD_COLORS: [string, string][] = [
   ['pending', '#f59e0b'],
   ['urgent', '#dc2626'],
 ];
-function statusColor(value: string): string {
+export function statusColor(value: string): string {
   const lower = value.trim().toLowerCase();
   if (!lower) return '#6b7280';
   return STATUS_KEYWORD_COLORS.find(([kw]) => lower.includes(kw))?.[1] ?? '#6b7280';

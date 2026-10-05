@@ -150,6 +150,7 @@ const MARKETING_TASKS_OVERVIEW_ONLY: NavLeaf[] = [{ id: '9', team: 'marketing', 
 const PM_PROJECTS_ADMIN: NavLeaf[] = [
   { id: '11', subTab: 'current', label: 'Current Month' },
   { id: '11', subTab: 'archive', label: 'Previous Months' },
+  { id: '11', subTab: 'closed', label: 'Closed Project' },
 ];
 const PM_PROJECTS_FULL: NavLeaf[] = [
   ...PM_PROJECTS_ADMIN,

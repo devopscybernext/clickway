@@ -16,6 +16,7 @@ import HolidayCalendar from './HolidayCalendar';
 import AITools from './AITools';
 import Leaderboard, { calcLeaderboard, PersonStats } from './Leaderboard';
 import PMProjectBandwidth from './PMProjectBandwidth';
+import ClosedProjects from './ClosedProjects';
 import LeaveStatus from './LeaveStatus';
 import AdminPortal from './AdminPortal';
 import { AlertCircle, Sparkles, ChevronUp, ChevronDown, AlertTriangle, CheckCircle2 } from 'lucide-react';
@@ -298,7 +299,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [analysisSubTab, setAnalysisSubTab] = useState<'resources' | 'pm'>('resources');
   const [toolsSubTab, setToolsSubTab] = useState<'clock' | 'holiday' | 'ai'>('clock');
-  const [pmBandwidthSubTab, setPmBandwidthSubTab] = useState<'current' | 'archive' | 'mine'>('current');
+  const [pmBandwidthSubTab, setPmBandwidthSubTab] = useState<'current' | 'archive' | 'mine' | 'closed'>('current');
   const [showAddProjectForm, setShowAddProjectForm] = useState(false);
   const [teamBandwidthSubTab, setTeamBandwidthSubTab] = useState<Team>(lockedTeamBandwidthTeam ?? 'web');
   const [analyticsSubDept, setAnalyticsSubDept] = useState<SubDept>('all');
@@ -569,7 +570,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const handleSheetChange = (leaf: NavLeaf) => {
     setSelectedSheet(leaf.id);
     if (leaf.team) { setNavTeam(leaf.team); setAnalyticsSubDept('all'); }
-    if (leaf.id === '11' && leaf.subTab) setPmBandwidthSubTab(leaf.subTab as 'current' | 'archive' | 'mine');
+    if (leaf.id === '11' && leaf.subTab) setPmBandwidthSubTab(leaf.subTab as 'current' | 'archive' | 'mine' | 'closed');
     if (leaf.id === '14' && leaf.subTab) setToolsSubTab(leaf.subTab as 'clock' | 'holiday' | 'ai');
     setSearchTerm('');
     // tableKey intentionally NOT incremented here so filters persist across tab switches
@@ -1024,7 +1025,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               className="cn-card rounded-lg border transition-colors"
               style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
             >
-              {myProjectFormUrl && (
+              {myProjectFormUrl && effectivePmBandwidthSubTab !== 'closed' && (
                 <div className="flex items-center justify-end gap-3 px-4 sm:px-6 pt-4 sm:pt-5 pb-0">
                   <button
                     onClick={() => setShowAddProjectForm(true)}
@@ -1036,6 +1037,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 </div>
               )}
               <div className="p-3 sm:p-6">
+                {effectivePmBandwidthSubTab === 'closed' ? (
+                  <ClosedProjects data={pmBandwidthData} headers={pmBandwidthHeaders} />
+                ) : (
                 <PMProjectBandwidth
                   key={effectivePmBandwidthSubTab}
                   data={
@@ -1056,6 +1060,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   hidePmFilter={effectivePmBandwidthSubTab === 'mine'}
                   hidePmSummary={effectivePmBandwidthSubTab === 'archive'}
                 />
+                )}
               </div>
             </section>
           )}
