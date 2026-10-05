@@ -1,5 +1,6 @@
 'use client';
 
+import { createPortal } from 'react-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronLeft, ChevronRight, Pencil, SlidersHorizontal } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
@@ -771,13 +772,13 @@ function PmRowEditModal({ row, fields, kindOf, optionsFor, pendingHoursOf, onSav
     }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)' }}>
       <div
         role="dialog"
         aria-modal="true"
         className="rounded-lg w-full flex flex-col"
-        style={{ background: 'var(--cn-bg-card)', maxWidth: 720, maxHeight: '90vh', border: '1px solid var(--cn-border)' }}
+        style={{ background: 'var(--cn-bg-card)', maxWidth: 1280, height: '94vh', border: '1px solid var(--cn-border)' }}
       >
         <div className="flex items-center justify-between gap-3 px-5 py-3 border-b" style={{ borderColor: 'var(--cn-border)' }}>
           <div className="min-w-0">
@@ -797,11 +798,11 @@ function PmRowEditModal({ row, fields, kindOf, optionsFor, pendingHoursOf, onSav
           </button>
         </div>
 
-        <div className="overflow-y-auto px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+        <div className="overflow-y-auto px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-4 content-start flex-1">
           {fields.map(h => {
             const wide = ['assigned', 'textarea'].includes(kindOf(h));
             return (
-              <div key={h} className={`flex flex-col gap-1 ${wide ? 'sm:col-span-2' : ''}`}>
+              <div key={h} className={`flex flex-col gap-1 ${wide ? 'sm:col-span-2 lg:col-span-3' : ''}`}>
                 <label className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>
                   {h}
                   {draft[h] !== original[h] && <span className="ml-1.5 normal-case" style={{ color: 'var(--cn-accent)' }}>edited</span>}
@@ -839,7 +840,8 @@ function PmRowEditModal({ row, fields, kindOf, optionsFor, pendingHoursOf, onSav
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

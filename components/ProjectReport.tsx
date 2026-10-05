@@ -1,5 +1,6 @@
 'use client';
 
+import { createPortal } from 'react-dom';
 import { useEffect, useState } from 'react';
 import { Copy, Check, Pencil, X } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
@@ -93,7 +94,7 @@ function ReportEditModal({ row, cols, onSave, onCancel }: {
     border: `1px solid ${bad ? '#ef4444' : 'var(--cn-border)'}`,
   });
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)' }}>
       <div role="dialog" aria-modal="true" className="rounded-lg w-full flex flex-col"
         style={{ background: 'var(--cn-bg-card)', maxWidth: 720, maxHeight: '90vh', border: '1px solid var(--cn-border)' }}>
@@ -164,7 +165,8 @@ function ReportEditModal({ row, cols, onSave, onCancel }: {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
