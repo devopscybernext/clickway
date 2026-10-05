@@ -933,9 +933,8 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   // Timestamp/Email stay usable for sorting & filtering but aren't shown as table columns
   const allCols = headers.filter(h => h !== timestampCol && h !== emailCol);
   // The report-style columns (Project Progress Update, Upsell, Escalation, ...)
-  // are kept out of the table and the Columns picker entirely; they're only
-  // edited through the My Projects popup and the Generate Report view, both of
-  // which use allCols.
+  // are kept out of the table, the Columns picker and the My Projects edit
+  // popup; they're only filled in through the Generate Report view.
   const tableCols = allCols.filter(h => !ALWAYS_DEFAULT_HIDDEN_COLS.includes(h.trim().toLowerCase()));
 
   // Show Data always starts at Low, except My Projects (lockShowDataFull)
@@ -1628,7 +1627,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
         <PmRowEditModal
           key={String(popupRow['__id'] ?? '')}
           row={popupRow}
-          fields={allCols}
+          fields={tableCols}
           kindOf={h =>
             h === assignedCol ? 'assigned'
             : isDropdownCol(h) ? 'select'
