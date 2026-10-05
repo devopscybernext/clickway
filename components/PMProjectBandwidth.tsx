@@ -238,6 +238,13 @@ const LONG_TEXT_COLS = [
   'client feedback', 'resource feedback', 'problems - next month needs',
 ];
 
+// Unchecked by default in the Columns picker on Current Month, Previous
+// Months and My Projects alike (lowercase header names).
+const ALWAYS_DEFAULT_HIDDEN_COLS = [
+  'project progress update', 'upsell', 'escalation', 'client feedback',
+  'resource feedback', 'problems - next month needs',
+];
+
 // Columns left unchecked by default in My Projects (lowercase header names).
 const MY_PROJECTS_DEFAULT_HIDDEN_COLS = [
   'department', 'year', 'month', 'client name', 'communication channel', 'tech',
@@ -951,9 +958,12 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     // My Projects (lockShowDataFull) opens with these unchecked in the
     // Columns picker to keep the table compact — still one click away to
     // re-enable. Other tabs' Full level keeps every column.
-    full: lockShowDataFull
-      ? tableCols.filter(h => !MY_PROJECTS_DEFAULT_HIDDEN_COLS.includes(h.trim().toLowerCase()))
-      : tableCols,
+    // The newer report-style columns are hidden by default on every tab
+    // (still in the Columns picker, and editable in the My Projects popup).
+    full: tableCols.filter(h => {
+      const k = h.trim().toLowerCase();
+      return !ALWAYS_DEFAULT_HIDDEN_COLS.includes(k) && !(lockShowDataFull && MY_PROJECTS_DEFAULT_HIDDEN_COLS.includes(k));
+    }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [projectCol, clientCol, totalHoursCol, currentMonthHoursCol, statusCol, departmentCol, paymentStatusCol, followupDateCol, tableCols, lockShowDataFull]);
 
