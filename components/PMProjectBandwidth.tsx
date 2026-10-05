@@ -211,6 +211,8 @@ function parseDurationDecimal(val: unknown): number {
   return isNaN(n) ? 0 : n;
 }
 
+const PAID_PAYMENT_STATUSES = ['done', 'automated payment', 'direct billing'];
+
 // Shared by the overall KPI cards and each per-PM summary card — same
 // formulas, just scoped to a different row set.
 function computeStatsFor(
@@ -222,13 +224,13 @@ function computeStatsFor(
 ) {
   const { totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol } = cols;
   const totalHours = totalHoursCol ? rowsFiltered.reduce((s, r) => s + parseDurationDecimal(r[totalHoursCol]), 0) : 0;
-  // Only rows whose Payment Status is exactly "Done" count toward Current
-  // Month Hours — QA_Done/On Hold/Automated Payment/etc don't count, even
-  // though they're distinct real statuses (falls back to summing every row
-  // if there's no Payment Status column to check against).
+  // Only rows whose Payment Status is Done, Automated Payment, or Direct
+  // Billing count toward Current Month Hours (so they also come off Pending
+  // Hours) — QA_Done/On Hold/Pending/etc don't (falls back to summing every
+  // row if there's no Payment Status column to check against).
   const currentMonthHoursRaw = currentMonthHoursCol
     ? rowsFiltered.reduce((s, r) => {
-        if (paymentStatusCol && String(r[paymentStatusCol] ?? '').trim().toLowerCase() !== 'done') return s;
+        if (paymentStatusCol && !PAID_PAYMENT_STATUSES.includes(String(r[paymentStatusCol] ?? '').trim().toLowerCase())) return s;
         return s + parseDurationDecimal(r[currentMonthHoursCol]);
       }, 0)
     : 0;
@@ -358,7 +360,7 @@ const STATUS_OPTIONS = [
 ];
 const PHASE_OPTIONS = ['No Action Taken', 'Requirement Gathering', 'Design', 'Development', 'QA', 'Deployed', 'Marketing', 'Maintenance', 'Retainer', 'On Hold', 'Completed', 'Design + Dev'];
 const UPSELL_OPTIONS = ['No Action Taken', 'Upsell', 'Cross-Sell'];
-const PAYMENT_STATUS_OPTIONS = ['No Action Taken', 'Pending', 'Done', 'On Hold', 'QA_Done', 'Not Started Yet', 'In Progress', 'Ongoing', 'Automated Payment'];
+const PAYMENT_STATUS_OPTIONS = ['No Action Taken', 'Pending', 'Done', 'On Hold', 'QA_Done', 'Not Started Yet', 'In Progress', 'Ongoing', 'Automated Payment', 'Direct Billing'];
 const ASSIGNED_OPTIONS = ['No Action Taken', 'Akash', 'Pawan', 'Dhruv', 'Robin', 'Shubham', 'Lovepreet', 'Atul', 'Anjali', 'Dheeraj', 'Shiwangi', 'Anurag', 'Vansh', 'Manas', 'Akshay', 'Kshitij', 'Bhavya', 'Payal', 'Akanksha'];
 
 const CHEVRON_WHITE = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`;
@@ -871,10 +873,41 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   // out of the box this still reads as a current-month snapshot; picking a
   // different Year/Month/PM/etc. now updates these cards to match.
   const statsCols = { totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol };
-  const stats = useMemo(
-    () => computeStatsFor(filtered, statsCols),
+
+  // Hour totals (Total/Bandwidth/Current/Pending) come straight from the
+  // hour columns for whoever/whatever is in scope (PM/Project/Client/Year/
+  // Month) — they deliberately ignore the attribute filters (Status/Phase/
+  // Upcoming Milestones/Upsell/Payment Status), so picking e.g. a Status
+  // doesn't change someone's Total Hours. Count-style cards (Follow-up Due,
+  // Ongoing) still follow every filter, since those are about the rows
+  // shown.
+  const attributeFilterCols = [statusCol, phaseCol, milestonesCol, upsellCol, paymentStatusCol];
+  const scopedRows = useMemo(() => {
+    let rows = data;
+    filterCols.forEach(({ col }) => {
+      if (attributeFilterCols.includes(col)) return;
+      const selected = filters[col] ?? [];
+      if (selected.length > 0) rows = rows.filter(r => selected.includes(String(r[col] ?? '').trim()));
+    });
+    return rows;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data, filtered, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol]
+  }, [data, filters, filterCols, statusCol, phaseCol, milestonesCol, upsellCol, paymentStatusCol]);
+  const withScopedHours = (rowsFiltered: SheetData[], rowsScoped: SheetData[]) => {
+    const counts = computeStatsFor(rowsFiltered, statsCols);
+    const hours = computeStatsFor(rowsScoped, statsCols);
+    return {
+      ...counts,
+      totalHours: hours.totalHours,
+      availableHours: hours.availableHours,
+      currentMonthHours: hours.currentMonthHours,
+      riskMonthHours: hours.riskMonthHours,
+      pendingHours: hours.pendingHours,
+    };
+  };
+  const stats = useMemo(
+    () => withScopedHours(filtered, scopedRows),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [data, filtered, scopedRows, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol]
   );
 
   // Overview's Available Hours has to be summed per-PM, not derived from the
@@ -885,16 +918,16 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const availableHoursTotal = useMemo(() => {
     if (!totalHoursCol) return 0;
     if (!showPmCol) {
-      const total = filtered.reduce((s, r) => s + parseDurationDecimal(r[totalHoursCol]), 0);
+      const total = scopedRows.reduce((s, r) => s + parseDurationDecimal(r[totalHoursCol]), 0);
       return Math.max(0, PM_BANDWIDTH_CAPACITY - total);
     }
     const totalsByPm = new Map<string, number>();
-    filtered.forEach(r => {
+    scopedRows.forEach(r => {
       const pm = String(r['__pm'] ?? '').trim();
       totalsByPm.set(pm, (totalsByPm.get(pm) ?? 0) + parseDurationDecimal(r[totalHoursCol]));
     });
     return [...totalsByPm.values()].reduce((sum, total) => sum + Math.max(0, PM_BANDWIDTH_CAPACITY - total), 0);
-  }, [filtered, totalHoursCol, showPmCol]);
+  }, [scopedRows, totalHoursCol, showPmCol]);
 
   // Per-PM summary cards — only meaningful when this view spans more than
   // one PM (the All Projects tab; My Projects is always a single PM
@@ -920,13 +953,13 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     const names = [...new Set(hasActiveFilter ? fromFiltered : [...fromFiltered, ...allPmNames])].sort();
     return names.map(name => ({
       name,
-      ...computeStatsFor(
+      ...withScopedHours(
         filtered.filter(r => String(r['__pm'] ?? '').trim() === name),
-        statsCols
+        scopedRows.filter(r => String(r['__pm'] ?? '').trim() === name)
       ),
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, filtered, showPmCol, hasActiveFilter, allPmNames, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol]);
+  }, [data, filtered, scopedRows, showPmCol, hasActiveFilter, allPmNames, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol]);
 
   const fmtHours = (n: number) => `${formatHoursClock(n)}h`;
 
