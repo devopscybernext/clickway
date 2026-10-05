@@ -194,14 +194,32 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
   const copyTable = async () => {
     const header = cols.map(c => c.label);
     const body = data.map(r => cols.map(c => cellValue(r, c)));
-    const tsv = [header, ...body]
-      .map(line => line.map(v => (/[\t\n"]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)).join('\t'))
-      .join('\n');
-    const cell = 'border:1px solid #999;padding:6px 8px;vertical-align:top;';
-    const html =
-      `<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px">` +
-      `<thead><tr>${header.map(h => `<th style="${cell}background:#f1f1f1;text-align:left">${escapeHtml(h)}</th>`).join('')}</tr></thead>` +
-      `<tbody>${body.map(line => `<tr>${line.map(v => `<td style="${cell}">${escapeHtml(v)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    // Same look as the Resource / Tasks Bucket Copy table (FilteredDataTable,
+    // SpecificCharts): orange header row, a # column, zebra-striped rows.
+    // Inline styles so it survives pasting into Gmail / Outlook / Docs.
+    const html = `
+<table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;color:#111;">
+  <thead>
+    <tr style="background-color:#FE4A23;color:#ffffff;">
+      <th style="border:1px solid #555;padding:8px 12px;text-align:left;white-space:nowrap;">#</th>
+      ${header.map(h => `<th style="border:1px solid #555;padding:8px 12px;text-align:left;white-space:nowrap;">${escapeHtml(h)}</th>`).join('')}
+    </tr>
+  </thead>
+  <tbody>
+    ${body.map((line, i) => `
+    <tr style="background-color:${i % 2 === 0 ? '#ffffff' : '#fafafa'};">
+      <td style="border:1px solid #ddd;padding:6px 12px;color:#888;">${i + 1}</td>
+      ${line.map(v => `<td style="border:1px solid #ddd;padding:6px 12px;">${escapeHtml(v)}</td>`).join('')}
+    </tr>`).join('')}
+  </tbody>
+</table>`;
+    // Plain-text fallback (tab-separated); values quoted when they hold
+    // tabs / newlines / quotes so Sheets and Excel keep each cell intact.
+    const quote = (v: string) => (/[\t\n"]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+    const tsv = [
+      ['#', ...header].join('\t'),
+      ...body.map((line, i) => [String(i + 1), ...line.map(quote)].join('\t')),
+    ].join('\n');
     try {
       await navigator.clipboard.write([
         new ClipboardItem({
