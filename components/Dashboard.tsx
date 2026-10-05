@@ -539,6 +539,12 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ spreadsheetId, sheetName: sheetTab, row: rowNum, colIndex, value: newValue }),
+    }).then(res => {
+      // Throwing lets callers (inline cells revert, the My Projects edit
+      // popup stays open with an error) react to a failed write instead of
+      // silently showing a value that never reached the sheet.
+      if (!res.ok) throw new Error('Save failed');
+      return res;
     });
     setPmBandwidthData(prev => prev.map(r => r['__id'] === row['__id'] ? { ...r, [colName]: newValue } : r));
   };

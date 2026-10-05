@@ -636,6 +636,196 @@ function MonthMultiSelect({ options, selected, onChange }: {
   );
 }
 
+type PopupFieldKind = 'assigned' | 'select' | 'date' | 'duration' | 'textarea' | 'text';
+
+// My Projects' per-row edit popup — shows every field of one project in a
+// single form, edits are held as a local draft, and nothing reaches the
+// sheet until Save (only the fields that actually changed are written);
+// Cancel / X / Esc throw the draft away.
+function PmRowEditModal({ row, fields, kindOf, optionsFor, pendingHoursOf, onSave, onCancel }: {
+  row: SheetData;
+  fields: string[];
+  kindOf: (h: string) => PopupFieldKind;
+  optionsFor: (h: string) => string[];
+  pendingHoursOf: (draft: Record<string, string>) => string | null;
+  onSave: (changes: Record<string, string>) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const original = useMemo(() => {
+    const o: Record<string, string> = {};
+    fields.forEach(h => { o[h] = String(row[h] ?? ''); });
+    return o;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [draft, setDraft] = useState<Record<string, string>>(original);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !saving) onCancel(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [saving, onCancel]);
+
+  const set = (h: string, v: string) => setDraft(d => ({ ...d, [h]: v }));
+  const changed = fields.filter(h => draft[h] !== original[h]);
+
+  const handleSave = async () => {
+    if (!changed.length) { onCancel(); return; }
+    setSaving(true);
+    setError('');
+    try {
+      const changes: Record<string, string> = {};
+      changed.forEach(h => { changes[h] = draft[h]; });
+      await onSave(changes);
+    } catch {
+      setError('Could not save — nothing was lost, please try again.');
+      setSaving(false);
+    }
+  };
+
+  const inputStyle = { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' };
+  const inputCls = 'w-full text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#FE4A23] disabled:opacity-60';
+  const pending = pendingHoursOf(draft);
+
+  const renderField = (h: string) => {
+    const v = draft[h];
+    switch (kindOf(h)) {
+      case 'assigned': {
+        const selected = v.split(',').map(s => s.trim()).filter(Boolean);
+        const opts = [...new Set([...optionsFor(h).filter(o => o.toLowerCase() !== 'no action taken'), ...selected])];
+        return (
+          <div className="flex flex-wrap gap-1.5">
+            {opts.map(o => {
+              const on = selected.includes(o);
+              return (
+                <button
+                  key={o}
+                  type="button"
+                  disabled={saving}
+                  onClick={() => set(h, (on ? selected.filter(s => s !== o) : [...selected, o]).join(', '))}
+                  className="px-2.5 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors disabled:opacity-60"
+                  style={on
+                    ? { background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }
+                    : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}
+                >
+                  {o}
+                </button>
+              );
+            })}
+          </div>
+        );
+      }
+      case 'select': {
+        const opts = optionsFor(h);
+        const all = v && !opts.includes(v) ? [v, ...opts] : opts;
+        return (
+          <select value={v} onChange={e => set(h, e.target.value)} disabled={saving} className={`${inputCls} cursor-pointer`} style={inputStyle}>
+            {!v && <option value="">—</option>}
+            {all.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+        );
+      }
+      case 'date':
+        return (
+          <input type="date" value={toInputDate(v)} disabled={saving}
+            onChange={e => set(h, fromInputDate(e.target.value))} className={inputCls} style={inputStyle} />
+        );
+      case 'duration': {
+        const { h: hh, m: mm } = toHMLiteral(v);
+        const sel = 'text-sm rounded-lg px-2 py-2 focus:outline-none disabled:opacity-60 cursor-pointer';
+        return (
+          <div className="flex items-center gap-1.5">
+            <select value={hh} disabled={saving} onChange={e => set(h, formatHHMM(Number(e.target.value), mm))} className={sel} style={inputStyle}>
+              {PM_HOUR_OPTIONS.map(o => <option key={o} value={o}>{String(o).padStart(2, '0')}</option>)}
+            </select>
+            <span style={{ color: 'var(--cn-text-muted)' }}>h</span>
+            <select value={mm} disabled={saving} onChange={e => set(h, formatHHMM(hh, Number(e.target.value)))} className={sel} style={inputStyle}>
+              {DURATION_MINUTE_OPTIONS.map(o => <option key={o} value={o}>{String(o).padStart(2, '0')}</option>)}
+            </select>
+            <span style={{ color: 'var(--cn-text-muted)' }}>m</span>
+          </div>
+        );
+      }
+      case 'textarea':
+        return <textarea value={v} rows={3} disabled={saving} onChange={e => set(h, e.target.value)} className={`${inputCls} resize-y`} style={inputStyle} />;
+      default:
+        return <input type="text" value={v} disabled={saving} onChange={e => set(h, e.target.value)} className={inputCls} style={inputStyle} />;
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)' }}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="rounded-lg w-full flex flex-col"
+        style={{ background: 'var(--cn-bg-card)', maxWidth: 720, maxHeight: '90vh', border: '1px solid var(--cn-border)' }}
+      >
+        <div className="flex items-center justify-between gap-3 px-5 py-3 border-b" style={{ borderColor: 'var(--cn-border)' }}>
+          <div className="min-w-0">
+            <h2 className="font-semibold text-base truncate" style={{ color: 'var(--cn-text-primary)' }}>Edit Project</h2>
+            <p className="text-xs truncate" style={{ color: 'var(--cn-text-muted)' }}>
+              {original[fields.find(f => f.toLowerCase().includes('project name')) ?? ''] || 'Untitled project'}
+            </p>
+          </div>
+          <button
+            onClick={onCancel}
+            disabled={saving}
+            title="Close"
+            className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors hover:opacity-80 shrink-0 disabled:opacity-50"
+            style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+          {fields.map(h => {
+            const wide = ['assigned', 'textarea'].includes(kindOf(h));
+            return (
+              <div key={h} className={`flex flex-col gap-1 ${wide ? 'sm:col-span-2' : ''}`}>
+                <label className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>
+                  {h}
+                  {draft[h] !== original[h] && <span className="ml-1.5 normal-case" style={{ color: 'var(--cn-accent)' }}>edited</span>}
+                </label>
+                {renderField(h)}
+              </div>
+            );
+          })}
+          {pending !== null && (
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>Pending Hours (calculated)</label>
+              <div className="text-sm px-3 py-2" style={{ color: 'var(--cn-text-secondary)' }}>{pending}</div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t" style={{ borderColor: 'var(--cn-border)' }}>
+          {error && <span className="text-xs mr-auto" style={{ color: '#ef4444' }}>{error}</span>}
+          <button
+            onClick={onCancel}
+            disabled={saving}
+            className="px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all disabled:opacity-50"
+            style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all disabled:opacity-60"
+            style={{ background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }}
+          >
+            {saving && <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface Props {
   data: SheetData[];
   headers: string[];
@@ -675,7 +865,12 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const optionSourceData = allData ?? data;
   // Cells only become editable after clicking "Edit", same pattern as Tasks Assigned
   const [editMode, setEditMode] = useState(false);
-  const isEditable = canEdit && editMode;
+  // My Projects (lockShowDataFull) edits one project at a time through a
+  // popup instead of making every cell inline-editable — "Edit" there just
+  // reveals a per-row edit button (see popupRow below).
+  const popupEditing = lockShowDataFull && canEdit && editMode;
+  const isEditable = canEdit && editMode && !lockShowDataFull;
+  const [popupRow, setPopupRow] = useState<SheetData | null>(null);
   const [page, setPage] = useState(1);
   const [sortCol, setSortCol] = useState('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -1250,6 +1445,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
         <table className="w-full text-xs text-left">
           <thead>
             <tr style={{ background: 'var(--cn-bg-input)', borderColor: 'var(--cn-border)' }} className="border-b">
+              {popupEditing && <th className="px-2 py-2 w-10" aria-label="Edit row" />}
               <th style={{ color: 'var(--cn-text-muted)' }} className="px-4 py-2 font-semibold uppercase tracking-wide text-[10px] w-12">#</th>
               {showPmCol && (
                 <th style={{ color: 'var(--cn-text-muted)' }} className="px-4 py-2 font-semibold uppercase tracking-wide text-[10px] min-w-[100px]">PM</th>
@@ -1281,7 +1477,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
           <tbody>
             {pageData.length === 0 ? (
               <tr>
-                <td colSpan={visibleHeaders.length + (showPmCol ? 2 : 1) + (showPendingCol ? 1 : 0)} style={{ color: 'var(--cn-text-muted)' }} className="text-center py-12">
+                <td colSpan={visibleHeaders.length + (showPmCol ? 2 : 1) + (showPendingCol ? 1 : 0) + (popupEditing ? 1 : 0)} style={{ color: 'var(--cn-text-muted)' }} className="text-center py-12">
                   No records found
                 </td>
               </tr>
@@ -1290,8 +1486,21 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                 <tr
                   key={String(row['__id'] ?? i)}
                   style={{ backgroundColor: i % 2 === 0 ? 'var(--cn-bg-row-even)' : 'var(--cn-bg-row-odd)', borderColor: 'var(--cn-border-light)' }}
-                  className="border-b transition-colors hover:bg-[var(--cn-bg-hover)]"
+                  className={`border-b transition-colors hover:bg-[var(--cn-bg-hover)] ${popupEditing ? 'cursor-pointer' : ''}`}
+                  onClick={popupEditing ? () => setPopupRow(row) : undefined}
                 >
+                  {popupEditing && (
+                    <td className="px-2 py-2">
+                      <button
+                        onClick={e => { e.stopPropagation(); setPopupRow(row); }}
+                        title="Edit this project"
+                        className="w-7 h-7 rounded-lg inline-flex items-center justify-center cursor-pointer transition-colors hover:opacity-80"
+                        style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-accent)', border: '1px solid var(--cn-border)' }}
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  )}
                   <td style={{ color: 'var(--cn-text-faint)' }} className="px-4 py-2 tabular-nums">
                     {(currentPage - 1) * PAGE_SIZE + i + 1}
                   </td>
@@ -1306,7 +1515,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                     return (
                       <td key={h} className={`px-4 py-2 ${isDropdownCol(h) || isStatusLikeCol(h) || isDateCol(h) || isDurationCol(h) ? 'whitespace-nowrap' : 'break-words min-w-[120px] max-w-xs'}`}>
                         {isUrl && val && !isEditable ? (
-                          <a href={val} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: 'var(--cn-accent)' }}>{val}</a>
+                          <a href={val} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="hover:underline" style={{ color: 'var(--cn-accent)' }}>{val}</a>
                         ) : h === assignedCol ? (
                           <MultiSelectCell
                             value={val}
@@ -1389,6 +1598,38 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
           </button>
         </div>
       </div>
+
+      {popupRow && onCellChange && (
+        <PmRowEditModal
+          key={String(popupRow['__id'] ?? '')}
+          row={popupRow}
+          fields={tableCols}
+          kindOf={h =>
+            h === assignedCol ? 'assigned'
+            : isDropdownCol(h) ? 'select'
+            : isDateCol(h) ? 'date'
+            : isDurationCol(h) ? 'duration'
+            : (h === commentsCol || h === milestonesCol || h.toLowerCase() === 'payment details') ? 'textarea'
+            : 'text'}
+          optionsFor={h => dropdownOptions[h] ?? []}
+          pendingHoursOf={draft =>
+            totalHoursCol && currentMonthHoursCol
+              ? fmtHours(
+                  parseDurationDecimal(draft[totalHoursCol]) -
+                  (countsAsCurrent(draft as SheetData, statusCol, paymentStatusCol) ? parseDurationDecimal(draft[currentMonthHoursCol]) : 0)
+                )
+              : null}
+          onSave={async changes => {
+            // One write per changed column, in order — a failure throws and
+            // leaves the popup open (earlier columns already saved stay saved).
+            for (const [col, val] of Object.entries(changes)) {
+              await onCellChange(popupRow, col, val);
+            }
+            setPopupRow(null);
+          }}
+          onCancel={() => setPopupRow(null)}
+        />
+      )}
     </div>
   );
 }
