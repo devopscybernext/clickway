@@ -62,7 +62,9 @@ export function statusColor(value: string): string {
 }
 const isStatusLikeCol = (h: string) => {
   const l = h.toLowerCase();
-  return l.includes('status') || l.includes('upsell');
+  // "Upsell/Cross-Sell" is the dropdown; the newer plain "Upsell" column is
+  // free text and must not get a coloured status pill.
+  return l.includes('status') || l.includes('cross-sell');
 };
 
 // Click-to-edit cell — shows a colored pill for status-like columns, plain
@@ -138,7 +140,9 @@ function fromInputDate(iso: string): string {
   const [, y, mo, d] = m;
   return `${Number(mo)}/${Number(d)}/${y}`;
 }
-const isDateCol = (h: string) => h.toLowerCase().includes('date');
+// Whole-word match — a bare substring test also caught "Project Progress
+// Up-DATE", which is free text, not a calendar date.
+const isDateCol = (h: string) => /\bdate\b/i.test(h);
 
 // Calendar date cell — click to edit, opens the browser's native date picker
 // instead of a free-text field.
@@ -227,6 +231,12 @@ const SETTLED_STATUSES = [
   'closed: good feedback', 'closed: bad feedback', 'move to next month', 'on hold',
 ];
 const PAID_PAYMENT_STATUSES = ['done', 'automated payment', 'direct billing'];
+
+// Free-text columns that get a multi-line box in the My Projects edit popup.
+const LONG_TEXT_COLS = [
+  'payment details', 'project progress update', 'upsell', 'escalation',
+  'client feedback', 'resource feedback', 'problems - next month needs',
+];
 
 // Columns left unchecked by default in My Projects (lowercase header names).
 const MY_PROJECTS_DEFAULT_HIDDEN_COLS = [
@@ -902,7 +912,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const statusCol = headers.find(h => h.toLowerCase() === 'status');
   const phaseCol = headers.find(h => h.toLowerCase() === 'phase');
   const milestonesCol = headers.find(h => h.toLowerCase().includes('upcoming milestones'));
-  const upsellCol = headers.find(h => h.toLowerCase().includes('upsell'));
+  const upsellCol = headers.find(h => h.toLowerCase().includes('cross-sell'));
   const paymentStatusCol = headers.find(h => h.toLowerCase().includes('payment status'));
   const assignedCol = headers.find(h => h.toLowerCase() === 'assigned');
   const totalHoursCol = headers.find(h => h.toLowerCase() === 'total hours');
@@ -1609,7 +1619,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
             : isDropdownCol(h) ? 'select'
             : isDateCol(h) ? 'date'
             : isDurationCol(h) ? 'duration'
-            : (h === commentsCol || h === milestonesCol || h.toLowerCase() === 'payment details') ? 'textarea'
+            : (h === commentsCol || h === milestonesCol || LONG_TEXT_COLS.includes(h.toLowerCase())) ? 'textarea'
             : 'text'}
           optionsFor={h => dropdownOptions[h] ?? []}
           pendingHoursOf={draft =>

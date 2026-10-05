@@ -42,7 +42,10 @@ export async function GET(req: NextRequest) {
     for (const { sheetId, tag } of SOURCES) {
       const tabs = await fetchSheetTabNames(sheetId);
       const results = await Promise.all(
-        tabs.map(tab => fetchSheetData(sheetId, `'${tab}'!A1:Z10000`))
+        // A:AZ rather than A:Z — the sheets grew past column Z (Project
+        // Progress Update, Upsell, Escalation, Client/Resource Feedback,
+        // Problems - Next Month Needs) and a Z-capped range silently drops them.
+        tabs.map(tab => fetchSheetData(sheetId, `'${tab}'!A1:AZ10000`))
       );
       tabs.forEach((tab, i) => {
         const { data: tabData, headers: tabHeaders } = results[i];
