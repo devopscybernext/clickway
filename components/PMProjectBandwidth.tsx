@@ -227,6 +227,13 @@ const SETTLED_STATUSES = [
   'closed: good feedback', 'closed: bad feedback', 'move to next month', 'on hold',
 ];
 const PAID_PAYMENT_STATUSES = ['done', 'automated payment', 'direct billing'];
+
+// Columns left unchecked by default in My Projects (lowercase header names).
+const MY_PROJECTS_DEFAULT_HIDDEN_COLS = [
+  'department', 'year', 'month', 'client name', 'communication channel', 'tech',
+  'assigned', 'milestone', 'risk month hours', 'upcoming milestones',
+  'project start date', 'target end date',
+];
 function countsAsCurrent(row: SheetData, statusCol?: string, paymentStatusCol?: string): boolean {
   if (statusCol && !SETTLED_STATUSES.includes(String(row[statusCol] ?? '').trim().toLowerCase())) return false;
   if (paymentStatusCol && !PAID_PAYMENT_STATUSES.includes(String(row[paymentStatusCol] ?? '').trim().toLowerCase())) return false;
@@ -736,9 +743,14 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
       departmentCol, projectCol, clientCol, totalHoursCol,
       statusCol, currentMonthHoursCol, paymentStatusCol, followupDateCol,
     ].filter((c): c is string => !!c),
-    full: tableCols,
+    // My Projects (lockShowDataFull) opens with these unchecked in the
+    // Columns picker to keep the table compact — still one click away to
+    // re-enable. Other tabs' Full level keeps every column.
+    full: lockShowDataFull
+      ? tableCols.filter(h => !MY_PROJECTS_DEFAULT_HIDDEN_COLS.includes(h.trim().toLowerCase()))
+      : tableCols,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [projectCol, clientCol, totalHoursCol, currentMonthHoursCol, statusCol, departmentCol, paymentStatusCol, followupDateCol, tableCols]);
+  }), [projectCol, clientCol, totalHoursCol, currentMonthHoursCol, statusCol, departmentCol, paymentStatusCol, followupDateCol, tableCols, lockShowDataFull]);
 
   // Re-applies whenever the level changes (button click or the per-tab
   // default above) — manual Columns picker edits in between still work,
