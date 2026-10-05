@@ -11,8 +11,8 @@ const PAGE_SIZE = 50;
 const FOLLOWUP_DUE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days since last follow-up counts as due
 
 // Synthetic table column — Pending Hours isn't a raw sheet column (it's
-// Total Hours minus Current Month Hours, computed same as the Overview/PM
-// Summary figure), so it's rendered as an extra always-read-only column
+// Total Hours minus Current Month Hours (only for settled Statuses — see
+// SETTLED_STATUSES — computed same as the Overview/PM Summary figure), so it's rendered as an extra always-read-only column
 // rather than a real header, the same way the PM column already is.
 const PENDING_HOURS_COL = '__pendingHours';
 
@@ -211,7 +211,16 @@ function parseDurationDecimal(val: unknown): number {
   return isNaN(n) ? 0 : n;
 }
 
-const PAID_PAYMENT_STATUSES = ['done', 'automated payment', 'direct billing'];
+// A project's Current Month Hours only count (and so only come off Pending
+// Hours) once its Status has moved past active work — completed, paused,
+// escalated, closed, handed back for feedback, or rolled to next month. Any
+// other Status (On Going, In Progress, Yet to Start, Initial setup, No
+// Action Taken, or blank) means the work is still live and counts nothing.
+const SETTLED_STATUSES = [
+  'completed', 'paused by client', 'paused by cybernext', 'escalated',
+  'submitted - waiting for feedback', 'closed: without feedback',
+  'closed: good feedback', 'closed: bad feedback', 'move to next month', 'on hold',
+];
 
 // Shared by the overall KPI cards and each per-PM summary card — same
 // formulas, just scoped to a different row set.
@@ -222,15 +231,14 @@ function computeStatsFor(
     paymentStatusCol?: string; followupDateCol?: string; statusCol?: string;
   }
 ) {
-  const { totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol } = cols;
+  const { totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, followupDateCol, statusCol } = cols;
   const totalHours = totalHoursCol ? rowsFiltered.reduce((s, r) => s + parseDurationDecimal(r[totalHoursCol]), 0) : 0;
-  // Only rows whose Payment Status is Done, Automated Payment, or Direct
-  // Billing count toward Current Month Hours (so they also come off Pending
-  // Hours) — QA_Done/On Hold/Pending/etc don't (falls back to summing every
-  // row if there's no Payment Status column to check against).
+  // Only rows with a settled Status (see SETTLED_STATUSES) count toward
+  // Current Month Hours; falls back to summing every row if there's no
+  // Status column to check against.
   const currentMonthHoursRaw = currentMonthHoursCol
     ? rowsFiltered.reduce((s, r) => {
-        if (paymentStatusCol && !PAID_PAYMENT_STATUSES.includes(String(r[paymentStatusCol] ?? '').trim().toLowerCase())) return s;
+        if (statusCol && !SETTLED_STATUSES.includes(String(r[statusCol] ?? '').trim().toLowerCase())) return s;
         return s + parseDurationDecimal(r[currentMonthHoursCol]);
       }, 0)
     : 0;
@@ -1318,7 +1326,12 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                   {showPendingCol && (
                     <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-primary)' }}>
                       {totalHoursCol && currentMonthHoursCol
-                        ? fmtHours(parseDurationDecimal(row[totalHoursCol]) - parseDurationDecimal(row[currentMonthHoursCol]))
+                        ? fmtHours(
+                            parseDurationDecimal(row[totalHoursCol]) -
+                            (statusCol && !SETTLED_STATUSES.includes(String(row[statusCol] ?? '').trim().toLowerCase())
+                              ? 0
+                              : parseDurationDecimal(row[currentMonthHoursCol]))
+                          )
                         : '—'}
                     </td>
                   )}
