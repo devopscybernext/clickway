@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { X, CalendarDays, ArrowRight } from 'lucide-react';
+import { X, Check, ArrowRight } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { memberPhoto, memberColor } from '@/lib/memberColors';
 import { MultiSelect } from './FilteredDataTable';
@@ -143,12 +143,13 @@ export default function ClosedProjects({ data, headers }: Props) {
             <button
               key={s}
               onClick={() => toggleStatus(s)}
+              aria-pressed={on}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold cursor-pointer transition-all"
               style={on
                 ? { background: color, color: '#fff', border: `1px solid ${color}` }
                 : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-secondary)', border: '1px solid var(--cn-border)' }}
             >
-              <span className="w-2 h-2 rounded-full" style={{ background: on ? '#fff' : color }} />
+              {on ? <Check className="w-3.5 h-3.5" strokeWidth={3} /> : <span className="w-2 h-2 rounded-full" style={{ background: color }} />}
               {s}
               <span className="opacity-70">{statusCounts[s.toLowerCase()] ?? 0}</span>
             </button>
@@ -210,79 +211,56 @@ export default function ClosedProjects({ data, headers }: Props) {
             return (
               <article
                 key={id}
-                className="rounded-xl p-4 flex flex-col gap-3.5 min-w-0 transition-shadow hover:shadow-lg"
-                style={{ background: 'var(--cn-bg-row-even)', border: '1px solid var(--cn-border)', borderTop: `3px solid ${color}` }}
+                className="rounded-3xl p-6 flex flex-col gap-5 min-w-0 transition-shadow hover:shadow-lg"
+                style={{ background: 'var(--cn-bg-row-even)', border: '1px solid var(--cn-border)' }}
               >
-                {/* Who & what */}
-                <header className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3 className="text-base font-semibold leading-snug break-words" style={{ color: 'var(--cn-text-primary)' }}>
-                      {get(r, projectCol) || 'Untitled project'}
-                    </h3>
-                    {pm && (
-                      <div className="mt-1.5 flex items-center gap-1.5 text-xs" style={{ color: 'var(--cn-text-muted)' }}>
-                        <Avatar name={pm} size={20} />
-                        <span>Managed by <span className="font-medium" style={{ color: 'var(--cn-text-secondary)' }}>{pm}</span></span>
-                      </div>
-                    )}
+                <div className="flex flex-col gap-3">
+                  {/* When */}
+                  <div className="text-sm font-semibold" style={{ color: 'var(--cn-text-primary)' }}>
+                    {start || end ? <>{start || '—'} → {end || 'no end date'}</> : <span style={{ color: 'var(--cn-text-faint)' }}>No dates set</span>}
                   </div>
-                  <span className="shrink-0 inline-flex items-center whitespace-nowrap px-2.5 py-1 rounded-full text-[11px] font-semibold" style={{ background: color, color: '#fff' }}>
-                    {status}
-                  </span>
-                </header>
 
-                {/* When */}
-                <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--cn-text-secondary)' }}>
-                  <CalendarDays className="w-4 h-4 shrink-0" style={{ color: 'var(--cn-text-faint)' }} />
-                  {start || end ? (
-                    <span>{start || '—'} <span style={{ color: 'var(--cn-text-faint)' }}>→</span> {end || 'no end date'}</span>
-                  ) : (
-                    <span style={{ color: 'var(--cn-text-faint)' }}>No dates set</span>
+                  {/* What */}
+                  <h3 className="text-2xl font-bold leading-tight break-words" style={{ color: 'var(--cn-text-primary)' }}>
+                    {get(r, projectCol) || 'Untitled project'}
+                  </h3>
+
+                  {/* Who */}
+                  {(pm || assigned.length > 0) && (
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                      {pm && (
+                        <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--cn-text-muted)' }}>
+                          <Avatar name={pm} size={28} />
+                          <span>Managed by <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{pm}</span></span>
+                        </div>
+                      )}
+                      {assigned.length > 0 && (
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="flex -space-x-2">
+                            {assigned.slice(0, 5).map(n => <Avatar key={n} name={n} size={28} />)}
+                            {assigned.length > 5 && (
+                              <span className="w-7 h-7 rounded-full inline-flex items-center justify-center text-[10px] font-semibold ring-2 ring-[var(--cn-bg-row-even)]"
+                                style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-secondary)' }}>+{assigned.length - 5}</span>
+                            )}
+                          </div>
+                          <span className="text-xs truncate" style={{ color: 'var(--cn-text-muted)' }}>{assigned.join(', ')}</span>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
 
-                {/* Phase + payment, only what exists */}
-                {(phase || payment) && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    {phase && (
-                      <span className="px-2.5 py-1 rounded-full text-xs" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-secondary)', border: '1px solid var(--cn-border)' }}>
-                        {phase}
-                      </span>
-                    )}
-                    {payment && (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
-                        style={{ background: `${statusColor(payment)}22`, color: statusColor(payment), border: `1px solid ${statusColor(payment)}55` }}>
-                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: statusColor(payment) }} />
-                        {payment}
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                {/* Team */}
-                {assigned.length > 0 && (
-                  <div className="flex items-center gap-2.5">
-                    <div className="flex -space-x-2">
-                      {assigned.slice(0, 5).map(n => <Avatar key={n} name={n} size={28} />)}
-                      {assigned.length > 5 && (
-                        <span className="w-7 h-7 rounded-full inline-flex items-center justify-center text-[10px] font-semibold ring-2 ring-[var(--cn-bg-row-even)]"
-                          style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-secondary)' }}>+{assigned.length - 5}</span>
-                      )}
-                    </div>
-                    <span className="text-xs truncate" style={{ color: 'var(--cn-text-muted)' }}>{assigned.join(', ')}</span>
-                  </div>
-                )}
-
                 {/* Note */}
                 {comments && (
-                  <div className="rounded-lg px-3 py-2 text-xs" style={{ background: 'var(--cn-bg-input)', borderLeft: `3px solid ${color}` }}>
-                    <p className={`whitespace-pre-wrap break-words ${isLong && !isOpen ? 'line-clamp-2' : ''}`} style={{ color: 'var(--cn-text-secondary)' }}>
+                  <div>
+                    <h4 className="text-base font-semibold" style={{ color: 'var(--cn-text-primary)' }}>Comments</h4>
+                    <p className={`mt-1.5 text-base leading-snug whitespace-pre-wrap break-words ${isLong && !isOpen ? 'line-clamp-3' : ''}`} style={{ color: 'var(--cn-text-secondary)' }}>
                       {comments}
                     </p>
                     {isLong && (
                       <button
                         onClick={() => setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; })}
-                        className="mt-1 font-semibold cursor-pointer hover:opacity-80"
+                        className="mt-1 text-sm font-semibold cursor-pointer hover:opacity-80"
                         style={{ color: 'var(--cn-accent)' }}
                       >
                         {isOpen ? 'Show less' : 'Read more'}
@@ -290,6 +268,23 @@ export default function ClosedProjects({ data, headers }: Props) {
                     )}
                   </div>
                 )}
+
+                {/* Status / phase / payment — pushed to the bottom so cards in a row line up */}
+                <div className="mt-auto pt-4 flex flex-wrap items-center gap-2" style={{ borderTop: '1px solid var(--cn-border)' }}>
+                  <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)' }}>
+                    <span className="w-2 h-2 rounded-full" style={{ background: color }} />
+                    {status}
+                  </span>
+                  {phase && (
+                    <span className="px-3.5 py-1.5 rounded-full text-xs font-semibold" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)' }}>{phase}</span>
+                  )}
+                  {payment && (
+                    <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)' }}>
+                      <span className="w-2 h-2 rounded-full" style={{ background: statusColor(payment) }} />
+                      {payment}
+                    </span>
+                  )}
+                </div>
               </article>
             );
           })}
