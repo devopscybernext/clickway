@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
-import { Copy, Check, AlertCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Copy, Check, Pencil, X } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { parseHHMM, formatHHMM } from './SpecificCharts';
 
 // Report columns, in display order. `editable: false` ones come straight
-// from the sheet and are shown as plain text; the rest are filled in by the
-// PM right here and written back to the same sheet.
+// from the sheet; the rest are filled in through the row popup and written
+// back to the same sheet. Every editable one is mandatory.
 const REPORT_COLUMNS: { header: string; label: string; editable: boolean; hours?: boolean }[] = [
   { header: 'project name', label: 'Project Name', editable: false },
   { header: 'assigned', label: 'Assigned', editable: false },
@@ -22,6 +22,8 @@ const REPORT_COLUMNS: { header: string; label: string; editable: boolean; hours?
   { header: 'comments', label: 'Comments', editable: true },
 ];
 
+type ReportCol = (typeof REPORT_COLUMNS)[number] & { sheetCol: string };
+
 // Same HH.MM literal handling as the main PM table: "30" is 30h 0m, and
 // "12.50" is 12h 50m (never 12.5 hours).
 function displayHours(raw: string): string {
@@ -35,6 +37,137 @@ function displayHours(raw: string): string {
 const escapeHtml = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/\n/g, '<br>');
 
+const cellValue = (row: SheetData, c: ReportCol) => {
+  const raw = String(row[c.sheetCol] ?? '');
+  return c.hours ? displayHours(raw) : raw;
+};
+
+// One project's report popup — the four reference fields are shown but
+// locked, the seven report fields are editable and all required. Nothing is
+// written until Save, and Save is refused while any required field is blank.
+function ReportEditModal({ row, cols, onSave, onCancel }: {
+  row: SheetData;
+  cols: ReportCol[];
+  onSave: (changes: Record<string, string>) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const editable = cols.filter(c => c.editable);
+  const projectCol = cols.find(c => c.header === 'project name');
+  const [draft, setDraft] = useState<Record<string, string>>(() => {
+    const d: Record<string, string> = {};
+    editable.forEach(c => { d[c.sheetCol] = String(row[c.sheetCol] ?? ''); });
+    return d;
+  });
+  const [tried, setTried] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !saving) onCancel(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [saving, onCancel]);
+
+  const missing = editable.filter(c => !draft[c.sheetCol].trim());
+
+  const handleSave = async () => {
+    setTried(true);
+    if (missing.length) return;
+    const changes: Record<string, string> = {};
+    editable.forEach(c => {
+      const next = draft[c.sheetCol].trim();
+      if (next !== String(row[c.sheetCol] ?? '')) changes[c.sheetCol] = next;
+    });
+    setSaving(true);
+    setError('');
+    try {
+      await onSave(changes);
+    } catch {
+      setError('Could not save — nothing was lost, please try again.');
+      setSaving(false);
+    }
+  };
+
+  const inputStyle = (bad: boolean) => ({
+    background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)',
+    border: `1px solid ${bad ? '#ef4444' : 'var(--cn-border)'}`,
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)' }}>
+      <div role="dialog" aria-modal="true" className="rounded-lg w-full flex flex-col"
+        style={{ background: 'var(--cn-bg-card)', maxWidth: 720, maxHeight: '90vh', border: '1px solid var(--cn-border)' }}>
+        <div className="flex items-center justify-between gap-3 px-5 py-3 border-b" style={{ borderColor: 'var(--cn-border)' }}>
+          <div className="min-w-0">
+            <h2 className="font-semibold text-base truncate" style={{ color: 'var(--cn-text-primary)' }}>Project Report</h2>
+            <p className="text-xs truncate" style={{ color: 'var(--cn-text-muted)' }}>
+              {(projectCol && cellValue(row, projectCol)) || 'Untitled project'}
+            </p>
+          </div>
+          <button onClick={onCancel} disabled={saving} title="Close"
+            className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors hover:opacity-80 shrink-0 disabled:opacity-50"
+            style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto px-5 py-4 space-y-4">
+          {/* Reference, locked */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 rounded-lg p-3" style={{ background: 'var(--cn-bg-input)' }}>
+            {cols.filter(c => !c.editable).map(c => (
+              <div key={c.header} className="min-w-0">
+                <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>{c.label}</div>
+                <div className="text-sm mt-0.5 break-words" style={{ color: 'var(--cn-text-primary)' }}>{cellValue(row, c) || '—'}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Editable, all required */}
+          {editable.map(c => {
+            const bad = tried && !draft[c.sheetCol].trim();
+            return (
+              <div key={c.header} className="flex flex-col gap-1">
+                <label className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>
+                  {c.label} <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <textarea
+                  value={draft[c.sheetCol]}
+                  rows={3}
+                  disabled={saving}
+                  onChange={e => setDraft(d => ({ ...d, [c.sheetCol]: e.target.value }))}
+                  className="w-full text-sm rounded-lg px-3 py-2 resize-y focus:outline-none focus:ring-1 focus:ring-[#FE4A23] disabled:opacity-60"
+                  style={inputStyle(bad)}
+                />
+                {bad && <span className="text-xs" style={{ color: '#ef4444' }}>This field is required.</span>}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t" style={{ borderColor: 'var(--cn-border)' }}>
+          {tried && missing.length > 0 && !error && (
+            <span className="text-xs mr-auto" style={{ color: '#ef4444' }}>
+              {missing.length} required field{missing.length === 1 ? '' : 's'} left.
+            </span>
+          )}
+          {error && <span className="text-xs mr-auto" style={{ color: '#ef4444' }}>{error}</span>}
+          <button onClick={onCancel} disabled={saving}
+            className="px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all disabled:opacity-50"
+            style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>
+            Cancel
+          </button>
+          <button onClick={handleSave} disabled={saving}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all disabled:opacity-60"
+            style={{ background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }}>
+            {saving && <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface Props {
   // The signed-in PM's own rows from the Current Month sheet.
   data: SheetData[];
@@ -42,52 +175,23 @@ interface Props {
   onCellChange: (row: SheetData, colName: string, value: string) => Promise<void>;
 }
 
-// My Projects → Generate Report. A trimmed-down table of the PM's current
-// month projects where the report fields are editable inline, plus a Copy
-// button that puts the whole table (every column) on the clipboard as both
-// a real table (for Docs / Gmail / Slack / Word) and tab-separated text
-// (for Sheets / Excel / plain editors).
+// My Projects → Generate Report. A read-only table of the PM's current month
+// projects (same look as All Projects); "Edit" reveals a pencil on each row
+// which opens a popup to fill that project's report fields. "Copy table"
+// puts every column on the clipboard as both a real table (for Docs / Gmail /
+// Slack / Word) and tab-separated text (for Sheets / Excel / plain editors).
 export default function ProjectReport({ data, headers, onCellChange }: Props) {
-  const cols = REPORT_COLUMNS
+  const cols: ReportCol[] = REPORT_COLUMNS
     .map(c => ({ ...c, sheetCol: headers.find(h => h.trim().toLowerCase() === c.header) }))
-    .filter((c): c is typeof c & { sheetCol: string } => !!c.sheetCol);
+    .filter((c): c is ReportCol => !!c.sheetCol);
 
-  // Unsaved text lives here (keyed row|column) so Copy always picks up what
-  // is on screen — even if the PM clicks Copy while still typing in a box.
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [status, setStatus] = useState<Record<string, 'saving' | 'saved' | 'error'>>({});
+  const [editMode, setEditMode] = useState(false);
+  const [popupRow, setPopupRow] = useState<SheetData | null>(null);
   const [copied, setCopied] = useState<'ok' | 'fail' | null>(null);
-
-  const keyOf = (row: SheetData, sheetCol: string) => `${row['__id']}|${sheetCol}`;
-  const valueOf = (row: SheetData, c: { sheetCol: string; hours?: boolean }) => {
-    const k = keyOf(row, c.sheetCol);
-    if (k in drafts) return drafts[k];
-    const raw = String(row[c.sheetCol] ?? '');
-    return c.hours ? displayHours(raw) : raw;
-  };
-
-  const save = async (row: SheetData, sheetCol: string) => {
-    const k = keyOf(row, sheetCol);
-    if (!(k in drafts)) return;
-    const next = drafts[k];
-    if (next === String(row[sheetCol] ?? '')) {
-      setDrafts(d => { const n = { ...d }; delete n[k]; return n; });
-      return;
-    }
-    setStatus(s => ({ ...s, [k]: 'saving' }));
-    try {
-      await onCellChange(row, sheetCol, next);
-      setDrafts(d => { const n = { ...d }; delete n[k]; return n; });
-      setStatus(s => ({ ...s, [k]: 'saved' }));
-      setTimeout(() => setStatus(s => { if (s[k] !== 'saved') return s; const n = { ...s }; delete n[k]; return n; }), 2000);
-    } catch {
-      setStatus(s => ({ ...s, [k]: 'error' })); // draft stays so nothing typed is lost
-    }
-  };
 
   const copyTable = async () => {
     const header = cols.map(c => c.label);
-    const body = data.map(r => cols.map(c => valueOf(r, c)));
+    const body = data.map(r => cols.map(c => cellValue(r, c)));
     const tsv = [header, ...body]
       .map(line => line.map(v => (/[\t\n"]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)).join('\t'))
       .join('\n');
@@ -110,37 +214,46 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
     setTimeout(() => setCopied(null), 2500);
   };
 
-  const hasUnsaved = Object.keys(drafts).length > 0;
-
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm" style={{ color: 'var(--cn-text-muted)' }}>
           <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{data.length}</span> project{data.length === 1 ? '' : 's'} this month
-          {' · '}type in the boxes — each one saves when you click away.
         </p>
-        <button
-          onClick={copyTable}
-          disabled={data.length === 0}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          style={copied === 'ok'
-            ? { background: '#16a34a', color: '#fff', border: '1px solid #16a34a' }
-            : { background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }}
-        >
-          {copied === 'ok' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-          {copied === 'ok' ? 'Copied!' : copied === 'fail' ? 'Copy failed' : 'Copy table'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setEditMode(m => !m)}
+            title={editMode ? 'Stop editing' : 'Edit'}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg cursor-pointer transition-all text-xs font-semibold"
+            style={editMode
+              ? { background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }
+              : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            {editMode ? 'Done Editing' : 'Edit'}
+          </button>
+          <button
+            onClick={copyTable}
+            disabled={data.length === 0}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            style={copied === 'ok'
+              ? { background: '#16a34a', color: '#fff', border: '1px solid #16a34a' }
+              : { background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }}
+          >
+            {copied === 'ok' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+            {copied === 'ok' ? 'Copied!' : copied === 'fail' ? 'Copy failed' : 'Copy table'}
+          </button>
+        </div>
       </div>
-      {hasUnsaved && (
-        <p className="text-xs" style={{ color: 'var(--cn-text-faint)' }}>Unsaved changes are included when you copy.</p>
-      )}
 
       <div className="overflow-x-auto rounded-md border" style={{ borderColor: 'var(--cn-border)' }}>
         <table className="w-full text-xs text-left">
           <thead>
             <tr className="border-b" style={{ background: 'var(--cn-bg-input)', borderColor: 'var(--cn-border)' }}>
+              {editMode && <th className="px-2 py-2 w-10" aria-label="Edit row" />}
+              <th className="px-4 py-2 font-semibold uppercase tracking-wide text-[10px] w-12" style={{ color: 'var(--cn-text-muted)' }}>#</th>
               {cols.map(c => (
-                <th key={c.header} className="px-3 py-2 font-semibold uppercase tracking-wide text-[10px] whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
+                <th key={c.header} className="px-4 py-2 font-semibold uppercase tracking-wide text-[10px] min-w-[120px]" style={{ color: 'var(--cn-text-muted)' }}>
                   {c.label}
                 </th>
               ))}
@@ -149,56 +262,56 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
           <tbody>
             {data.length === 0 ? (
               <tr>
-                <td colSpan={cols.length} className="text-center py-12" style={{ color: 'var(--cn-text-muted)' }}>
+                <td colSpan={cols.length + 1 + (editMode ? 1 : 0)} className="text-center py-12" style={{ color: 'var(--cn-text-muted)' }}>
                   No projects this month yet.
                 </td>
               </tr>
             ) : data.map((row, i) => (
               <tr
                 key={String(row['__id'])}
-                className="border-b align-top"
+                className={`border-b transition-colors hover:bg-[var(--cn-bg-hover)] ${editMode ? 'cursor-pointer' : ''}`}
                 style={{ backgroundColor: i % 2 === 0 ? 'var(--cn-bg-row-even)' : 'var(--cn-bg-row-odd)', borderColor: 'var(--cn-border-light)' }}
+                onClick={editMode ? () => setPopupRow(row) : undefined}
               >
-                {cols.map(c => {
-                  if (!c.editable) {
-                    return (
-                      <td key={c.header} className={`px-3 py-2 ${c.hours ? 'whitespace-nowrap' : 'min-w-[120px]'}`} style={{ color: 'var(--cn-text-secondary)' }}>
-                        <span className={c.header === 'project name' ? 'font-semibold' : ''} style={c.header === 'project name' ? { color: 'var(--cn-text-primary)' } : undefined}>
-                          {valueOf(row, c) || '—'}
-                        </span>
-                      </td>
-                    );
-                  }
-                  const k = keyOf(row, c.sheetCol);
-                  const st = status[k];
-                  return (
-                    <td key={c.header} className="px-2 py-2 min-w-[210px]">
-                      <textarea
-                        value={valueOf(row, c)}
-                        rows={2}
-                        aria-label={`${c.label} — ${String(row[headers.find(h => h.toLowerCase().includes('project name')) ?? ''] ?? '')}`}
-                        onChange={e => { setDrafts(d => ({ ...d, [k]: e.target.value })); if (st === 'error') setStatus(s => { const n = { ...s }; delete n[k]; return n; }); }}
-                        onBlur={() => save(row, c.sheetCol)}
-                        className="w-full text-xs rounded-md px-2 py-1.5 resize-y field-sizing-content focus:outline-none focus:ring-1 focus:ring-[#FE4A23]"
-                        style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: `1px solid ${st === 'error' ? '#ef4444' : 'var(--cn-border)'}` }}
-                      />
-                      <div className="h-4 text-[10px] mt-0.5 px-1">
-                        {st === 'saving' && <span style={{ color: 'var(--cn-text-muted)' }}>saving…</span>}
-                        {st === 'saved' && <span style={{ color: '#22c55e' }}>✓ saved</span>}
-                        {st === 'error' && (
-                          <button onClick={() => save(row, c.sheetCol)} className="inline-flex items-center gap-1 cursor-pointer" style={{ color: '#ef4444' }}>
-                            <AlertCircle className="w-3 h-3" /> not saved — retry
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  );
-                })}
+                {editMode && (
+                  <td className="px-2 py-2">
+                    <button
+                      onClick={e => { e.stopPropagation(); setPopupRow(row); }}
+                      title="Edit this project's report"
+                      className="w-7 h-7 rounded-lg inline-flex items-center justify-center cursor-pointer transition-colors hover:opacity-80"
+                      style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-accent)', border: '1px solid var(--cn-border)' }}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  </td>
+                )}
+                <td className="px-4 py-2 tabular-nums align-top" style={{ color: 'var(--cn-text-faint)' }}>{i + 1}</td>
+                {cols.map(c => (
+                  <td key={c.header} className={`px-4 py-2 align-top ${c.hours ? 'whitespace-nowrap' : 'break-words min-w-[120px] max-w-xs whitespace-pre-wrap'}`}
+                    style={{ color: 'var(--cn-text-secondary)' }}>
+                    {cellValue(row, c) || '—'}
+                  </td>
+                ))}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {popupRow && (
+        <ReportEditModal
+          key={String(popupRow['__id'])}
+          row={popupRow}
+          cols={cols}
+          onSave={async changes => {
+            // One write per changed column; a failure throws and keeps the
+            // popup open (columns already written stay written).
+            for (const [col, val] of Object.entries(changes)) await onCellChange(popupRow, col, val);
+            setPopupRow(null);
+          }}
+          onCancel={() => setPopupRow(null)}
+        />
+      )}
     </div>
   );
 }
