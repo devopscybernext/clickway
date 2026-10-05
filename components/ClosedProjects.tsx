@@ -194,7 +194,7 @@ export default function ClosedProjects({ data, headers }: Props) {
           No closed projects match these filters.
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {rows.map(r => {
             const id = String(r['__id']);
             const status = get(r, statusCol);
