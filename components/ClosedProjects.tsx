@@ -1,8 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { X, CalendarDays, User } from 'lucide-react';
+import { X, CalendarDays, ArrowRight } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
+import { memberPhoto, memberColor } from '@/lib/memberColors';
 import { MultiSelect } from './FilteredDataTable';
 import { statusColor } from './PMProjectBandwidth';
 
@@ -23,6 +24,27 @@ function parseSheetDate(raw: string): number | null {
 function parseInputDate(iso: string): number | null {
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime() : null;
+}
+
+// "9/30/2026" -> "Sep 30, 2026"
+function friendlyDate(raw: string): string {
+  const ms = parseSheetDate(raw);
+  return ms === null ? '' : new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// Round headshot when we have one, otherwise a colored initial.
+function Avatar({ name, size = 24 }: { name: string; size?: number }) {
+  const photo = memberPhoto(name);
+  const style = { width: size, height: size, fontSize: size * 0.45 };
+  return photo ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={photo} alt={name} title={name} style={style} className="rounded-full object-cover shrink-0 ring-2 ring-[var(--cn-bg-row-even)]" />
+  ) : (
+    <span title={name} style={{ ...style, background: memberColor(name) }}
+      className="rounded-full inline-flex items-center justify-center text-white font-bold shrink-0 ring-2 ring-[var(--cn-bg-row-even)]">
+      {name.trim().charAt(0).toUpperCase() || '?'}
+    </span>
+  );
 }
 
 interface Props {
@@ -57,16 +79,20 @@ export default function ClosedProjects({ data, headers }: Props) {
 
   const closedRows = useMemo(
     () => data.filter(r => statusCol && CLOSED_STATUS_KEYS.includes(get(r, statusCol).toLowerCase())),
-     
     [data, statusCol]
   );
 
   // Option lists come from the closed rows only, so every choice is
   // guaranteed to match at least one card.
   const unique = (vals: string[]) => [...new Set(vals.filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  const projectOptions = useMemo(() => unique(closedRows.map(r => get(r, projectCol))), [closedRows, projectCol]);  
-  const pmOptions = useMemo(() => unique(closedRows.map(r => get(r, '__pm'))), [closedRows]);  
-  const paymentOptions = useMemo(() => unique(closedRows.map(r => get(r, paymentCol))), [closedRows, paymentCol]);  
+  const projectOptions = useMemo(() => unique(closedRows.map(r => get(r, projectCol))), [closedRows, projectCol]);
+  const pmOptions = useMemo(() => unique(closedRows.map(r => get(r, '__pm'))), [closedRows]);
+  const paymentOptions = useMemo(() => unique(closedRows.map(r => get(r, paymentCol))), [closedRows, paymentCol]);
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    closedRows.forEach(r => { const k = get(r, statusCol).toLowerCase(); counts[k] = (counts[k] ?? 0) + 1; });
+    return counts;
+  }, [closedRows, statusCol]);
 
   const fromMs = parseInputDate(from);
   const toMs = parseInputDate(to);
@@ -87,28 +113,60 @@ export default function ClosedProjects({ data, headers }: Props) {
     });
     // Latest Target End Date first; rows without one sink to the bottom.
     return filtered.sort((a, b) => (parseSheetDate(get(b, endCol)) ?? -Infinity) - (parseSheetDate(get(a, endCol)) ?? -Infinity));
-     
   }, [closedRows, statusSel, projectSel, pmSel, paymentSel, fromMs, toMs, statusCol, projectCol, paymentCol, endCol]);
 
   const activeFilterCount =
     [statusSel, projectSel, pmSel, paymentSel].filter(s => s.length > 0).length + (from || to ? 1 : 0);
   const clearAll = () => { setStatusSel([]); setProjectSel([]); setPmSel([]); setPaymentSel([]); setFrom(''); setTo(''); };
+  const toggleStatus = (s: string) =>
+    setStatusSel(prev => (prev.includes(s) ? prev.filter(v => v !== s) : [...prev, s]));
 
   const dateInputStyle = { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', borderColor: 'var(--cn-border)' };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      {/* Status — one tap each, none selected = everything */}
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => setStatusSel([])}
+          className="px-3.5 py-1.5 rounded-full text-xs font-semibold cursor-pointer transition-all"
+          style={statusSel.length === 0
+            ? { background: 'var(--cn-text-primary)', color: 'var(--cn-bg-card)' }
+            : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-secondary)', border: '1px solid var(--cn-border)' }}
+        >
+          All <span className="opacity-70 ml-1">{closedRows.length}</span>
+        </button>
+        {CLOSED_STATUS_OPTIONS.map(s => {
+          const on = statusSel.includes(s);
+          const color = statusColor(s);
+          return (
+            <button
+              key={s}
+              onClick={() => toggleStatus(s)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold cursor-pointer transition-all"
+              style={on
+                ? { background: color, color: '#fff', border: `1px solid ${color}` }
+                : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-secondary)', border: '1px solid var(--cn-border)' }}
+            >
+              <span className="w-2 h-2 rounded-full" style={{ background: on ? '#fff' : color }} />
+              {s}
+              <span className="opacity-70">{statusCounts[s.toLowerCase()] ?? 0}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Narrow it down */}
       <div className="flex flex-wrap items-end gap-3">
-        <MultiSelect label="Status" options={CLOSED_STATUS_OPTIONS} selected={statusSel} onChange={setStatusSel} />
-        <MultiSelect label="Project Name" options={projectOptions} selected={projectSel} onChange={setProjectSel} />
+        <MultiSelect label="Project" options={projectOptions} selected={projectSel} onChange={setProjectSel} />
         <MultiSelect label="PM" options={pmOptions} selected={pmSel} onChange={setPmSel} />
-        <MultiSelect label="Payment Status" options={paymentOptions} selected={paymentSel} onChange={setPaymentSel} />
+        <MultiSelect label="Payment" options={paymentOptions} selected={paymentSel} onChange={setPaymentSel} />
         <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium" style={{ color: 'var(--cn-text-muted)' }}>Target End Date</span>
+          <span className="text-xs font-medium" style={{ color: 'var(--cn-text-muted)' }}>Target end date</span>
           <div className="flex items-center gap-1.5">
             <input type="date" value={from} max={to || undefined} onChange={e => setFrom(e.target.value)} aria-label="Target end date from"
               className="text-sm rounded-lg px-2.5 py-2 border focus:outline-none focus:ring-1 focus:ring-[#FE4A23]" style={dateInputStyle} />
-            <span className="text-xs" style={{ color: 'var(--cn-text-muted)' }}>to</span>
+            <ArrowRight className="w-3.5 h-3.5" style={{ color: 'var(--cn-text-muted)' }} />
             <input type="date" value={to} min={from || undefined} onChange={e => setTo(e.target.value)} aria-label="Target end date to"
               className="text-sm rounded-lg px-2.5 py-2 border focus:outline-none focus:ring-1 focus:ring-[#FE4A23]" style={dateInputStyle} />
           </div>
@@ -121,105 +179,122 @@ export default function ClosedProjects({ data, headers }: Props) {
             style={{ background: 'var(--cn-bg-input)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }}
           >
             <X className="w-3.5 h-3.5" />
-            Clear all ({activeFilterCount})
+            Clear filters
           </button>
         )}
       </div>
 
       <p className="text-sm" style={{ color: 'var(--cn-text-muted)' }}>
-        <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{rows.length}</span> of {closedRows.length} closed projects
-        {activeFilterCount > 0 && <span style={{ color: 'var(--cn-accent)' }}> (filtered)</span>}
+        Showing <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{rows.length}</span> of {closedRows.length} closed projects
       </p>
 
       {rows.length === 0 ? (
-        <div className="text-center py-12 text-sm" style={{ color: 'var(--cn-text-muted)' }}>No closed projects found</div>
+        <div className="text-center py-16 text-sm" style={{ color: 'var(--cn-text-muted)' }}>
+          No closed projects match these filters.
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {rows.map(r => {
             const id = String(r['__id']);
             const status = get(r, statusCol);
+            const color = statusColor(status);
             const payment = get(r, paymentCol);
+            const phase = get(r, phaseCol);
+            const pm = get(r, '__pm');
             const comments = get(r, commentsCol);
-            const assigned = get(r, assignedCol).split(',').map(s => s.trim()).filter(Boolean);
-            const isLong = comments.length > 140;
+            const start = friendlyDate(get(r, startCol));
+            const end = friendlyDate(get(r, endCol));
+            const assigned = get(r, assignedCol).split(',').map(s => s.trim()).filter(n => n && n.toLowerCase() !== 'no action taken');
+            const isLong = comments.length > 110;
             const isOpen = expanded.has(id);
             return (
-              <div
+              <article
                 key={id}
-                className="rounded-lg border p-4 flex flex-col gap-3 min-w-0"
-                style={{ background: 'var(--cn-bg-row-even)', borderColor: 'var(--cn-border)' }}
+                className="rounded-xl p-4 flex flex-col gap-3.5 min-w-0 transition-shadow hover:shadow-lg"
+                style={{ background: 'var(--cn-bg-row-even)', border: '1px solid var(--cn-border)', borderTop: `3px solid ${color}` }}
               >
-                <div className="flex items-start justify-between gap-3">
+                {/* Who & what */}
+                <header className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <h3 className="font-semibold text-sm break-words" style={{ color: 'var(--cn-text-primary)' }}>
+                    <h3 className="text-base font-semibold leading-snug break-words" style={{ color: 'var(--cn-text-primary)' }}>
                       {get(r, projectCol) || 'Untitled project'}
                     </h3>
-                    <p className="text-xs mt-0.5 inline-flex items-center gap-1" style={{ color: 'var(--cn-text-muted)' }}>
-                      <User className="w-3 h-3" />{get(r, '__pm') || '—'}
-                    </p>
+                    {pm && (
+                      <div className="mt-1.5 flex items-center gap-1.5 text-xs" style={{ color: 'var(--cn-text-muted)' }}>
+                        <Avatar name={pm} size={20} />
+                        <span>Managed by <span className="font-medium" style={{ color: 'var(--cn-text-secondary)' }}>{pm}</span></span>
+                      </div>
+                    )}
                   </div>
-                  <span className="shrink-0 inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: statusColor(status), color: '#fff' }}>
+                  <span className="shrink-0 inline-flex items-center whitespace-nowrap px-2.5 py-1 rounded-full text-[11px] font-semibold" style={{ background: color, color: '#fff' }}>
                     {status}
                   </span>
-                </div>
+                </header>
 
-                <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
-                  <Field label="Phase" value={get(r, phaseCol)} />
-                  <div className="min-w-0">
-                    <dt className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>Payment Status</dt>
-                    <dd className="mt-0.5">
-                      {payment
-                        ? <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: statusColor(payment), color: '#fff' }}>{payment}</span>
-                        : <span style={{ color: 'var(--cn-text-secondary)' }}>—</span>}
-                    </dd>
-                  </div>
-                  <Field label="Project Start Date" value={get(r, startCol)} icon />
-                  <Field label="Target End Date" value={get(r, endCol)} icon />
-                </dl>
-
-                <div className="text-xs">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>Assigned</div>
-                  {assigned.length ? (
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {assigned.map(n => (
-                        <span key={n} className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>{n}</span>
-                      ))}
-                    </div>
-                  ) : <div className="mt-0.5" style={{ color: 'var(--cn-text-secondary)' }}>—</div>}
-                </div>
-
-                <div className="text-xs">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>Comments</div>
-                  <p className={`mt-0.5 whitespace-pre-wrap break-words ${isLong && !isOpen ? 'line-clamp-3' : ''}`} style={{ color: 'var(--cn-text-secondary)' }}>
-                    {comments || '—'}
-                  </p>
-                  {isLong && (
-                    <button
-                      onClick={() => setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; })}
-                      className="mt-1 text-[11px] font-semibold cursor-pointer hover:opacity-80"
-                      style={{ color: 'var(--cn-accent)' }}
-                    >
-                      {isOpen ? 'Show less' : 'Show more'}
-                    </button>
+                {/* When */}
+                <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--cn-text-secondary)' }}>
+                  <CalendarDays className="w-4 h-4 shrink-0" style={{ color: 'var(--cn-text-faint)' }} />
+                  {start || end ? (
+                    <span>{start || '—'} <span style={{ color: 'var(--cn-text-faint)' }}>→</span> {end || 'no end date'}</span>
+                  ) : (
+                    <span style={{ color: 'var(--cn-text-faint)' }}>No dates set</span>
                   )}
                 </div>
-              </div>
+
+                {/* Phase + payment, only what exists */}
+                {(phase || payment) && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {phase && (
+                      <span className="px-2.5 py-1 rounded-full text-xs" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-secondary)', border: '1px solid var(--cn-border)' }}>
+                        {phase}
+                      </span>
+                    )}
+                    {payment && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
+                        style={{ background: `${statusColor(payment)}22`, color: statusColor(payment), border: `1px solid ${statusColor(payment)}55` }}>
+                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: statusColor(payment) }} />
+                        {payment}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Team */}
+                {assigned.length > 0 && (
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex -space-x-2">
+                      {assigned.slice(0, 5).map(n => <Avatar key={n} name={n} size={28} />)}
+                      {assigned.length > 5 && (
+                        <span className="w-7 h-7 rounded-full inline-flex items-center justify-center text-[10px] font-semibold ring-2 ring-[var(--cn-bg-row-even)]"
+                          style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-secondary)' }}>+{assigned.length - 5}</span>
+                      )}
+                    </div>
+                    <span className="text-xs truncate" style={{ color: 'var(--cn-text-muted)' }}>{assigned.join(', ')}</span>
+                  </div>
+                )}
+
+                {/* Note */}
+                {comments && (
+                  <div className="rounded-lg px-3 py-2 text-xs" style={{ background: 'var(--cn-bg-input)', borderLeft: `3px solid ${color}` }}>
+                    <p className={`whitespace-pre-wrap break-words ${isLong && !isOpen ? 'line-clamp-2' : ''}`} style={{ color: 'var(--cn-text-secondary)' }}>
+                      {comments}
+                    </p>
+                    {isLong && (
+                      <button
+                        onClick={() => setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; })}
+                        className="mt-1 font-semibold cursor-pointer hover:opacity-80"
+                        style={{ color: 'var(--cn-accent)' }}
+                      >
+                        {isOpen ? 'Show less' : 'Read more'}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </article>
             );
           })}
         </div>
       )}
-    </div>
-  );
-}
-
-function Field({ label, value, icon = false }: { label: string; value: string; icon?: boolean }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>{label}</dt>
-      <dd className="mt-0.5 inline-flex items-center gap-1 break-words" style={{ color: 'var(--cn-text-secondary)' }}>
-        {icon && <CalendarDays className="w-3 h-3 shrink-0" style={{ color: 'var(--cn-text-faint)' }} />}
-        {value || '—'}
-      </dd>
     </div>
   );
 }
