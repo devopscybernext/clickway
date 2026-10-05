@@ -212,11 +212,9 @@ function parseDurationDecimal(val: unknown): number {
 }
 
 // Shared by the overall KPI cards and each per-PM summary card — same
-// formulas, just scoped to a different row set. `rowsAll` (unfiltered) is
-// used only for Yet To Start, which is deliberately filter-independent.
+// formulas, just scoped to a different row set.
 function computeStatsFor(
   rowsFiltered: SheetData[],
-  rowsAll: SheetData[],
   cols: {
     totalHoursCol?: string; currentMonthHoursCol?: string; riskMonthHoursCol?: string;
     paymentStatusCol?: string; followupDateCol?: string; statusCol?: string;
@@ -248,15 +246,11 @@ function computeStatsFor(
         return t === 0 || (Date.now() - t) > FOLLOWUP_DUE_MS;
       }).length
     : 0;
-  // Yet To Start is intentionally sourced from the full unfiltered rows, not
-  // the filtered set — it's a right-now flag ("has a PM started this yet?"),
-  // not scoped to whichever Month/Year/etc filters happen to be active.
-  const yetToStart = statusCol ? rowsAll.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'yet to start').length : 0;
   const ongoing = statusCol ? rowsFiltered.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'in progress').length : 0;
   // Same bandwidth-formula ceiling as the workload badge (pmWorkloadStatus)
   // below — how much headroom is left before Total Hours tips into Overload.
   const availableHours = Math.max(0, PM_BANDWIDTH_CAPACITY - totalHours);
-  return { totalHours, availableHours, currentMonthHours, riskMonthHours, pendingHours, followupDue, yetToStart, ongoing };
+  return { totalHours, availableHours, currentMonthHours, riskMonthHours, pendingHours, followupDue, ongoing };
 }
 type PmStatKey = keyof ReturnType<typeof computeStatsFor>;
 
@@ -275,7 +269,6 @@ const PM_CARD_METRIC_DEFS: { key: PmStatKey; label: string; color: string; isHou
   { key: 'currentMonthHours', label: 'Current', color: '#0891b2', isHours: true },
   { key: 'pendingHours', label: 'Pending', color: '#d97706', isHours: true },
   { key: 'followupDue', label: 'Follow-up Due', color: '#7c3aed', isHours: false },
-  { key: 'yetToStart', label: 'Project Yet To Start', color: '#dc2626', isHours: false },
   { key: 'ongoing', label: 'Project Ongoing', color: '#16a34a', isHours: false },
 ];
 // Medium/Full are identical between Overview and PM Summary; Low differs —
@@ -876,12 +869,10 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   // Month/Status/.../search) affects them too. Year/Month default to the
   // real current month/year on first load (see defaultsApplied above), so
   // out of the box this still reads as a current-month snapshot; picking a
-  // different Year/Month/PM/etc. now updates these cards to match. Yet To
-  // Start is the one exception — it deliberately ignores every filter, see
-  // computeStatsFor.
+  // different Year/Month/PM/etc. now updates these cards to match.
   const statsCols = { totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol };
   const stats = useMemo(
-    () => computeStatsFor(filtered, data, statsCols),
+    () => computeStatsFor(filtered, statsCols),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [data, filtered, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol]
   );
@@ -931,7 +922,6 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
       name,
       ...computeStatsFor(
         filtered.filter(r => String(r['__pm'] ?? '').trim() === name),
-        data.filter(r => String(r['__pm'] ?? '').trim() === name),
         statsCols
       ),
     }));
@@ -1007,7 +997,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     ? 'grid-cols-2 sm:grid-cols-4'
     : showDataLevel === 'medium'
       ? 'grid-cols-2 sm:grid-cols-4'
-      : 'grid-cols-2 sm:grid-cols-4 lg:grid-cols-7';
+      : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-6';
 
   return (
     <div className="space-y-4">
@@ -1120,7 +1110,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
               const activeMetrics = PM_CARD_METRIC_DEFS.filter(d => pmCardFields.includes(d.label));
               // Two-per-row at every level — gives each label enough width to
               // avoid truncation (grid-cols-3+ was cutting off longer labels
-              // like "Bandwidth"/"Project Yet To Start").
+              // like "Bandwidth"/"Follow-up Due").
               const metricsGridCols = 'grid-cols-2';
               const workload = pmWorkloadStatus(pm.totalHours);
               return (
