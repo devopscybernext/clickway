@@ -1627,7 +1627,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
         <PmRowEditModal
           key={String(popupRow['__id'] ?? '')}
           row={popupRow}
-          fields={tableCols}
+          fields={tableCols.filter(h => h !== yearCol && h !== monthCol)}
           kindOf={h =>
             h === assignedCol ? 'assigned'
             : isDropdownCol(h) ? 'select'
