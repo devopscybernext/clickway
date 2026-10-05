@@ -193,7 +193,7 @@ function DateCell({ value, editable, onSave }: {
   );
 }
 
-// Total Hours / Current Month Hours / Risk Month Hours — HH.MM dropdown
+// Total Hours / AC Hours / Current Month Hours / Risk Month Hours — HH.MM dropdown
 // entry, same "." notation as Time Logged/Time Estimation (MM is literal
 // minutes 00-59, never a decimal fraction: "12.50" means 12h50m, not
 // 12.5h). Project-level totals routinely exceed 12h, so the hour dropdown
@@ -240,12 +240,6 @@ function computeStatsFor(
   // cascades off this adjusted figure, not the raw one.
   const currentMonthHours = currentMonthHoursRaw - riskMonthHours;
   const pendingHours = totalHours - currentMonthHours;
-  const paymentPendingHours = (paymentStatusCol && currentMonthHoursCol)
-    ? rowsFiltered.reduce((s, r) => {
-        const isPending = String(r[paymentStatusCol] ?? '').trim().toLowerCase() === 'pending';
-        return isPending ? s + parseDurationDecimal(r[currentMonthHoursCol]) : s;
-      }, 0)
-    : 0;
   const followupDue = followupDateCol
     ? rowsFiltered.filter(r => {
         const raw = String(r[followupDateCol] ?? '').trim();
@@ -258,11 +252,11 @@ function computeStatsFor(
   // the filtered set — it's a right-now flag ("has a PM started this yet?"),
   // not scoped to whichever Month/Year/etc filters happen to be active.
   const yetToStart = statusCol ? rowsAll.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'yet to start').length : 0;
-  const ongoing = statusCol ? rowsFiltered.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'on going').length : 0;
+  const ongoing = statusCol ? rowsFiltered.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'in progress').length : 0;
   // Same bandwidth-formula ceiling as the workload badge (pmWorkloadStatus)
   // below — how much headroom is left before Total Hours tips into Overload.
   const availableHours = Math.max(0, PM_BANDWIDTH_CAPACITY - totalHours);
-  return { totalHours, availableHours, currentMonthHours, riskMonthHours, pendingHours, paymentPendingHours, followupDue, yetToStart, ongoing };
+  return { totalHours, availableHours, currentMonthHours, riskMonthHours, pendingHours, followupDue, yetToStart, ongoing };
 }
 type PmStatKey = keyof ReturnType<typeof computeStatsFor>;
 
@@ -280,7 +274,6 @@ const PM_CARD_METRIC_DEFS: { key: PmStatKey; label: string; color: string; isHou
   { key: 'availableHours', label: AVAILABLE_LABEL, color: '#22c55e', isHours: true },
   { key: 'currentMonthHours', label: 'Current', color: '#0891b2', isHours: true },
   { key: 'pendingHours', label: 'Pending', color: '#d97706', isHours: true },
-  { key: 'paymentPendingHours', label: 'Pay Pending', color: '#dc2626', isHours: true },
   { key: 'followupDue', label: 'Follow-up Due', color: '#7c3aed', isHours: false },
   { key: 'yetToStart', label: 'Project Yet To Start', color: '#dc2626', isHours: false },
   { key: 'ongoing', label: 'Project Ongoing', color: '#16a34a', isHours: false },
@@ -290,7 +283,7 @@ const PM_CARD_METRIC_DEFS: { key: PmStatKey; label: string; color: string; isHou
 // company-wide snapshot, while PM Summary's Low is deliberately bare (2
 // fields) since it repeats per PM card.
 const LEVEL_FIELDS_SHARED: Record<'medium' | 'full', string[]> = {
-  medium: ['Total', AVAILABLE_LABEL, 'Current', 'Pending', 'Pay Pending'],
+  medium: ['Total', AVAILABLE_LABEL, 'Current', 'Pending'],
   full: PM_CARD_METRIC_DEFS.map(d => d.label),
 };
 const LEVEL_FIELDS_OVERVIEW: Record<'low' | 'medium' | 'full', string[]> = {
@@ -703,7 +696,8 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const followupDateCol = headers.find(h => h.toLowerCase().includes('follow-up date') || h.toLowerCase().includes('followup date'));
   const commentsCol = headers.find(h => h.toLowerCase().includes('comment'));
   const showPmCol = data.some(r => r['__pm']);
-  const isDurationCol = (h: string) => h === totalHoursCol || h === currentMonthHoursCol || h === riskMonthHoursCol;
+  const acHoursCol = headers.find(h => h.toLowerCase() === 'ac hours');
+  const isDurationCol = (h: string) => h === totalHoursCol || h === acHoursCol || h === currentMonthHoursCol || h === riskMonthHoursCol;
   // Timestamp/Email stay usable for sorting & filtering but aren't shown as table columns
   const tableCols = headers.filter(h => h !== timestampCol && h !== emailCol);
 
@@ -960,7 +954,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
         return timestampCol ? parseTimestamp(String(b[timestampCol] ?? '')) - parseTimestamp(String(a[timestampCol] ?? '')) : 0;
       });
     }
-    if (sortCol === totalHoursCol || sortCol === currentMonthHoursCol || sortCol === riskMonthHoursCol) {
+    if (sortCol === totalHoursCol || sortCol === acHoursCol || sortCol === currentMonthHoursCol || sortCol === riskMonthHoursCol) {
       return [...filtered].sort((a, b) => {
         const av = parseDurationDecimal(a[sortCol]);
         const bv = parseDurationDecimal(b[sortCol]);
@@ -973,7 +967,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
       if (typeof av === 'number' && typeof bv === 'number') return sortDir === 'asc' ? av - bv : bv - av;
       return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
     });
-  }, [filtered, sortCol, sortDir, yearCol, monthCol, timestampCol, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol]);
+  }, [filtered, sortCol, sortDir, yearCol, monthCol, timestampCol, totalHoursCol, acHoursCol, currentMonthHoursCol, riskMonthHoursCol]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -1012,8 +1006,8 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const statGridCols = showDataLevel === 'low'
     ? 'grid-cols-2 sm:grid-cols-4'
     : showDataLevel === 'medium'
-      ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'
-      : 'grid-cols-2 sm:grid-cols-4 lg:grid-cols-8';
+      ? 'grid-cols-2 sm:grid-cols-4'
+      : 'grid-cols-2 sm:grid-cols-4 lg:grid-cols-7';
 
   return (
     <div className="space-y-4">
@@ -1125,8 +1119,8 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
               const initials = pm.name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
               const activeMetrics = PM_CARD_METRIC_DEFS.filter(d => pmCardFields.includes(d.label));
               // Two-per-row at every level — gives each label enough width to
-              // avoid truncation (grid-cols-3+ was cutting off "Available"/
-              // "Pay Pending"), and Full's 8 fields divide evenly into it.
+              // avoid truncation (grid-cols-3+ was cutting off longer labels
+              // like "Bandwidth"/"Project Yet To Start").
               const metricsGridCols = 'grid-cols-2';
               const workload = pmWorkloadStatus(pm.totalHours);
               return (
