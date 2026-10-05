@@ -931,7 +931,12 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const acHoursCol = headers.find(h => h.toLowerCase() === 'ac hours');
   const isDurationCol = (h: string) => h === totalHoursCol || h === acHoursCol || h === currentMonthHoursCol || h === riskMonthHoursCol;
   // Timestamp/Email stay usable for sorting & filtering but aren't shown as table columns
-  const tableCols = headers.filter(h => h !== timestampCol && h !== emailCol);
+  const allCols = headers.filter(h => h !== timestampCol && h !== emailCol);
+  // The report-style columns (Project Progress Update, Upsell, Escalation, ...)
+  // are kept out of the table and the Columns picker entirely; they're only
+  // edited through the My Projects popup and the Generate Report view, both of
+  // which use allCols.
+  const tableCols = allCols.filter(h => !ALWAYS_DEFAULT_HIDDEN_COLS.includes(h.trim().toLowerCase()));
 
   // Show Data always starts at Low, except My Projects (lockShowDataFull)
   // which always shows Full and has no toggle to change it. Dashboard.tsx
@@ -1623,7 +1628,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
         <PmRowEditModal
           key={String(popupRow['__id'] ?? '')}
           row={popupRow}
-          fields={tableCols}
+          fields={allCols}
           kindOf={h =>
             h === assignedCol ? 'assigned'
             : isDropdownCol(h) ? 'select'

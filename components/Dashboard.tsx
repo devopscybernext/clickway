@@ -17,6 +17,7 @@ import AITools from './AITools';
 import Leaderboard, { calcLeaderboard, PersonStats } from './Leaderboard';
 import PMProjectBandwidth from './PMProjectBandwidth';
 import ClosedProjects from './ClosedProjects';
+import ProjectReport from './ProjectReport';
 import LeaveStatus from './LeaveStatus';
 import AdminPortal from './AdminPortal';
 import { AlertCircle, Sparkles, ChevronUp, ChevronDown, AlertTriangle, CheckCircle2 } from 'lucide-react';
@@ -301,6 +302,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [toolsSubTab, setToolsSubTab] = useState<'clock' | 'holiday' | 'ai'>('clock');
   const [pmBandwidthSubTab, setPmBandwidthSubTab] = useState<'current' | 'archive' | 'mine' | 'closed'>('current');
   const [showAddProjectForm, setShowAddProjectForm] = useState(false);
+  // My Projects has two views: the full table, and the report-filling table.
+  const [myProjectsView, setMyProjectsView] = useState<'all' | 'report'>('all');
   const [teamBandwidthSubTab, setTeamBandwidthSubTab] = useState<Team>(lockedTeamBandwidthTeam ?? 'web');
   const [analyticsSubDept, setAnalyticsSubDept] = useState<SubDept>('all');
   const [analysisDateFilter, setAnalysisDateFilter] = useState<'all' | 'daily' | 'weekly' | 'monthly'>('all');
@@ -1037,8 +1040,32 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 </div>
               )}
               <div className="p-3 sm:p-6">
+                {effectivePmBandwidthSubTab === 'mine' && (
+                  <div className="inline-flex rounded-lg border overflow-hidden mb-4" style={{ borderColor: 'var(--cn-border)' }}>
+                    {([['all', 'All Projects'], ['report', 'Generate Report']] as const).map(([v, label]) => (
+                      <button
+                        key={v}
+                        onClick={() => setMyProjectsView(v)}
+                        className="px-4 py-2 text-sm font-semibold cursor-pointer transition-all"
+                        style={myProjectsView === v
+                          ? { background: 'var(--cn-accent)', color: '#fff' }
+                          : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)' }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {effectivePmBandwidthSubTab === 'closed' ? (
                   <ClosedProjects data={pmBandwidthData} headers={pmBandwidthHeaders} />
+                ) : effectivePmBandwidthSubTab === 'mine' && myProjectsView === 'report' ? (
+                  <ProjectReport
+                    data={pmBandwidthData.filter(r =>
+                      r['__sheetId'] === PM_BANDWIDTH_SHEET_ID &&
+                      String(r['__pm'] ?? '').trim().toLowerCase() === user.displayName.trim().toLowerCase())}
+                    headers={pmBandwidthHeaders}
+                    onCellChange={handlePmBandwidthChange}
+                  />
                 ) : (
                 <PMProjectBandwidth
                   key={effectivePmBandwidthSubTab}
