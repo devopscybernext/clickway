@@ -235,7 +235,7 @@ const PAID_PAYMENT_STATUSES = ['done', 'automated payment', 'direct billing'];
 
 // Free-text columns that get a multi-line box in the My Projects edit popup.
 const LONG_TEXT_COLS = [
-  'payment details', 'week1', 'week2', 'week3', 'week4', 'week5', 'monthly',
+  'payment details', 'week1', 'week2', 'week3', 'week4', 'week5', 'monthly', 'checklist',
   'project progress update', 'upsell', 'escalation',
   'client feedback', 'resource feedback', 'problems - next month needs',
 ];
@@ -246,7 +246,7 @@ const LONG_TEXT_COLS = [
 // the older single-purpose report column names are kept in case a sheet
 // still has them.
 const ALWAYS_DEFAULT_HIDDEN_COLS = [
-  'week1', 'week2', 'week3', 'week4', 'week5', 'monthly',
+  'week1', 'week2', 'week3', 'week4', 'week5', 'monthly', 'checklist',
   'project progress update', 'upsell', 'escalation', 'client feedback',
   'resource feedback', 'problems - next month needs',
 ];
@@ -1555,6 +1555,15 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                       <td key={h} className={`px-4 py-2 ${isDropdownCol(h) || isStatusLikeCol(h) || isDateCol(h) || isDurationCol(h) ? 'whitespace-nowrap' : 'break-words min-w-[120px] max-w-xs'}`}>
                         {isUrl && val && !isEditable ? (
                           <a href={val} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="hover:underline" style={{ color: 'var(--cn-accent)' }}>{val}</a>
+                        ) : h.trim().toLowerCase() === 'checklist' ? (
+                          // Multi-select in the sheet ("A, B") — shown as chips
+                          // (read-only here; it's filled in via Generate Report).
+                          <div className="flex flex-wrap gap-1 max-w-xs">
+                            {val.split(',').map(s => s.trim()).filter(Boolean).map(v => (
+                              <span key={v} className="px-2 py-0.5 rounded-full text-[11px] whitespace-normal" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>{v}</span>
+                            ))}
+                            {!val.trim() && <span style={{ color: 'var(--cn-text-secondary)' }}>—</span>}
+                          </div>
                         ) : h === assignedCol ? (
                           <MultiSelectCell
                             value={val}

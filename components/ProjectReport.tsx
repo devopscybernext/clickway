@@ -9,12 +9,13 @@ import { parseHHMM, formatHHMM } from './SpecificCharts';
 // Report columns, in display order. `editable: false` ones come straight
 // from the sheet; the rest are filled in through the row popup and written
 // back to the same sheet. Every editable one is mandatory.
-const REPORT_COLUMNS: { header: string; label: string; editable: boolean; hours?: boolean }[] = [
+const REPORT_COLUMNS: { header: string; label: string; editable: boolean; hours?: boolean; multi?: boolean }[] = [
   { header: 'project name', label: 'Project Name', editable: false },
   { header: 'assigned', label: 'Assigned', editable: false },
   { header: 'total hours', label: 'Total Hours', editable: false, hours: true },
   { header: 'current month hours', label: 'Current Hours', editable: false, hours: true },
   { header: 'ac hours', label: 'AC Hours', editable: false, hours: true },
+  { header: 'checklist', label: 'Checklist', editable: true, multi: true },
   { header: 'week1', label: 'Week1', editable: true },
   { header: 'week2', label: 'Week2', editable: true },
   { header: 'week3', label: 'Week3', editable: true },
@@ -25,6 +26,23 @@ const REPORT_COLUMNS: { header: string; label: string; editable: boolean; hours?
 ];
 
 type ReportCol = (typeof REPORT_COLUMNS)[number] & { sheetCol: string };
+
+// The Checklist column is a multi-select dropdown in the sheet — the cell
+// holds the chosen items comma-joined ("A, B"). These are the sheet's own
+// dropdown options (anything else already in the data is added on top).
+const NO_ACTION = 'No Action Taken';
+const CHECKLIST_OPTIONS = [
+  NO_ACTION,
+  'Concerned Project Milestones Released on Upwork',
+  'Project Closed if Applicable on Upwork with a Feedback',
+  'Timesheets Filled for Billing - Weekly - Upwork',
+  'Weekly Report Sent',
+  'Follow Up with Clients Before a Weekend if Required to Optimize Pipeline',
+  'Informed About a Public Holiday Coming Up',
+  'Tasks and Projects Closed on Active Collab Where Required',
+  'Hours/Timesheets Sent Ahead for Direct Billed Clients',
+];
+const parseMulti = (v: string) => v.split(',').map(s => s.trim()).filter(Boolean);
 
 // Same HH.MM literal handling as the main PM table: "30" is 30h 0m, and
 // "12.50" is 12h 50m (never 12.5 hours).
@@ -47,9 +65,10 @@ const cellValue = (row: SheetData, c: ReportCol) => {
 // One project's report popup — the four reference fields are shown but
 // locked, the seven report fields are editable and all required. Nothing is
 // written until Save, and Save is refused while any required field is blank.
-function ReportEditModal({ row, cols, onSave, onCancel }: {
+function ReportEditModal({ row, cols, checklistOptions, onSave, onCancel }: {
   row: SheetData;
   cols: ReportCol[];
+  checklistOptions: string[];
   onSave: (changes: Record<string, string>) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -132,14 +151,38 @@ function ReportEditModal({ row, cols, onSave, onCancel }: {
                 <label className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>
                   {c.label} <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <textarea
-                  value={draft[c.sheetCol]}
-                  rows={3}
-                  disabled={saving}
-                  onChange={e => setDraft(d => ({ ...d, [c.sheetCol]: e.target.value }))}
-                  className="w-full text-sm rounded-lg px-3 py-2 resize-y focus:outline-none focus:ring-1 focus:ring-[#FE4A23] disabled:opacity-60"
-                  style={inputStyle(bad)}
-                />
+                {c.multi ? (
+                  <div className="rounded-lg p-1.5 grid grid-cols-1 md:grid-cols-2 gap-x-2" style={inputStyle(bad)}>
+                    {checklistOptions.map(opt => {
+                      const selected = parseMulti(draft[c.sheetCol]);
+                      const on = selected.includes(opt);
+                      // "No Action Taken" is exclusive: picking a real item
+                      // clears it, picking it clears the real items.
+                      const toggle = () => {
+                        const next = opt === NO_ACTION
+                          ? (on ? [] : [NO_ACTION])
+                          : (on ? selected.filter(v => v !== opt) : [...selected.filter(v => v !== NO_ACTION), opt]);
+                        setDraft(d => ({ ...d, [c.sheetCol]: next.join(', ') }));
+                      };
+                      return (
+                        <label key={opt} className="flex items-start gap-2 px-2 py-1.5 rounded-md cursor-pointer text-sm hover:bg-[var(--cn-bg-hover)]"
+                          style={{ color: 'var(--cn-text-primary)' }}>
+                          <input type="checkbox" checked={on} disabled={saving} onChange={toggle} className="mt-0.5 accent-[#FE4A23] cursor-pointer shrink-0" />
+                          <span className="break-words">{opt}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <textarea
+                    value={draft[c.sheetCol]}
+                    rows={3}
+                    disabled={saving}
+                    onChange={e => setDraft(d => ({ ...d, [c.sheetCol]: e.target.value }))}
+                    className="w-full text-sm rounded-lg px-3 py-2 resize-y focus:outline-none focus:ring-1 focus:ring-[#FE4A23] disabled:opacity-60"
+                    style={inputStyle(bad)}
+                  />
+                )}
                 {bad && <span className="text-xs" style={{ color: '#ef4444' }}>This field is required.</span>}
               </div>
             );
@@ -188,6 +231,7 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
     .map(c => ({ ...c, sheetCol: headers.find(h => h.trim().toLowerCase() === c.header) }))
     .filter((c): c is ReportCol => !!c.sheetCol);
 
+  const checklistCol = cols.find(c => c.multi)?.sheetCol ?? '';
   const [editMode, setEditMode] = useState(false);
   const [popupRow, setPopupRow] = useState<SheetData | null>(null);
   const [copied, setCopied] = useState<'ok' | 'fail' | null>(null);
@@ -310,7 +354,15 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
                 {cols.map(c => (
                   <td key={c.header} className={`px-4 py-2 align-top ${c.hours ? 'whitespace-nowrap' : 'break-words min-w-[120px] max-w-xs whitespace-pre-wrap'}`}
                     style={{ color: 'var(--cn-text-secondary)' }}>
-                    {cellValue(row, c) || '—'}
+                    {c.multi ? (
+                      <div className="flex flex-wrap gap-1">
+                        {parseMulti(cellValue(row, c)).map(v => (
+                          <span key={v} className="px-2 py-0.5 rounded-full text-[11px] whitespace-normal"
+                            style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>{v}</span>
+                        ))}
+                        {!cellValue(row, c).trim() && '—'}
+                      </div>
+                    ) : (cellValue(row, c) || '—')}
                   </td>
                 ))}
               </tr>
@@ -324,6 +376,7 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
           key={String(popupRow['__id'])}
           row={popupRow}
           cols={cols}
+          checklistOptions={[...new Set([...CHECKLIST_OPTIONS, ...data.flatMap(r => parseMulti(String(r[checklistCol] ?? '')))])]}
           onSave={async changes => {
             // One write per changed column; a failure throws and keeps the
             // popup open (columns already written stay written).
