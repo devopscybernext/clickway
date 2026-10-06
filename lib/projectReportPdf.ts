@@ -18,7 +18,7 @@ export interface ReportPdfProject {
 // jsPDF's built-in fonts only cover Latin-1 — map common typographic
 // characters to plain equivalents and anything else unsupported to "?" so the
 // PDF never shows garbled glyphs.
-export function clean(input: string): string {
+function clean(input: string): string {
   return input
     .replace(/[‘’‚]/g, "'")
     .replace(/[“”„]/g, '"')

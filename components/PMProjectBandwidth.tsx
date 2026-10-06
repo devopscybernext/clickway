@@ -2,14 +2,14 @@
 
 import { createPortal } from 'react-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronLeft, ChevronRight, Pencil, Eye, SlidersHorizontal, Download, FileSpreadsheet, FileText } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronLeft, ChevronRight, Pencil, Eye, SlidersHorizontal, FileSpreadsheet } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { MultiSelect } from './FilteredDataTable';
 import { parseHHMM, formatHHMM, hhmmToDecimalHours, DURATION_MINUTE_OPTIONS, formatHoursClock } from './SpecificCharts';
 import { memberPhoto, memberColor } from '@/lib/memberColors';
 import ClampedText from './ClampedText';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
-import { downloadTableXlsx, downloadTablePdf, type TableExport } from '@/lib/tableExport';
+import { downloadTableXlsx, type TableExport } from '@/lib/tableExport';
 
 const PAGE_SIZE = 50;
 const FOLLOWUP_DUE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days since last follow-up counts as due
@@ -1133,16 +1133,8 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   // popup with the whole project. My Projects keeps its own edit popup.
   const viewEnabled = !lockShowDataFull;
   const [viewRow, setViewRow] = useState<SheetData | null>(null);
-  const [reportMenuOpen, setReportMenuOpen] = useState(false);
-  const [reportBusy, setReportBusy] = useState<'xlsx' | 'pdf' | null>(null);
+  const [reportBusy, setReportBusy] = useState(false);
   const [reportError, setReportError] = useState(false);
-  const reportMenuRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!reportMenuOpen) return;
-    const onDown = (e: MouseEvent) => { if (reportMenuRef.current && !reportMenuRef.current.contains(e.target as Node)) setReportMenuOpen(false); };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [reportMenuOpen]);
   const [page, setPage] = useState(1);
   const [sortCol, setSortCol] = useState('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -1524,7 +1516,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   // Download Report — the table as it is right now: every row left after the
   // filters (not just the current page), and the columns currently shown, in
   // the same order and with the same display formatting.
-  const buildExport = (ext: 'xlsx' | 'pdf'): TableExport => {
+  const buildExport = (): TableExport => {
     const isLongCol = (h: string) => {
       const k = h.trim().toLowerCase();
       return h === commentsCol || h === milestonesCol || k === 'checklist' || LONG_TEXT_COLS.includes(k);
@@ -1547,30 +1539,24 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
             : '']
         : []),
     ]);
-    const subtitle = Object.entries(filters)
-      .filter(([, vals]) => vals.length > 0)
-      .map(([col, vals]) => `${filterCols.find(f => f.col === col)?.label ?? col}: ${vals.join(', ')}`)
-      .join('  ·  ');
     return {
       title: 'Previous Months',
-      subtitle,
       columns,
       rows,
-      fileName: `Previous-Months-${new Date().toISOString().slice(0, 10)}.${ext}`,
+      fileName: `Previous-Months-${new Date().toISOString().slice(0, 10)}.xlsx`,
       colorFor: (_ci, v) => (v ? statusColor(v) : null),
     };
   };
-  const downloadReport = async (kind: 'xlsx' | 'pdf') => {
-    setReportMenuOpen(false);
+  const downloadReport = async () => {
     setReportError(false);
-    setReportBusy(kind);
+    setReportBusy(true);
     try {
-      await (kind === 'xlsx' ? downloadTableXlsx(buildExport('xlsx')) : downloadTablePdf(buildExport('pdf')));
+      await downloadTableXlsx(buildExport());
     } catch {
       setReportError(true);
       setTimeout(() => setReportError(false), 3500);
     } finally {
-      setReportBusy(null);
+      setReportBusy(false);
     }
   };
 
@@ -1775,44 +1761,22 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
           </button>
           )}
           {allowReportDownload && (
-            <div ref={reportMenuRef} className="relative">
-              <button
-                onClick={() => setReportMenuOpen(o => !o)}
-                disabled={sorted.length === 0 || reportBusy !== null}
-                title={sorted.length === 0 ? 'No rows to download' : 'Download the rows shown in the table'}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg cursor-pointer transition-all text-xs font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
-                style={reportError
-                  ? { background: '#dc2626', color: '#fff', border: '1px solid #dc2626' }
-                  : { background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }}
-              >
-                {reportBusy
-                  ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  : <Download className="w-3.5 h-3.5" />}
-                {reportBusy ? 'Preparing…' : reportError ? 'Download failed' : 'Download Report'}
-                {!reportBusy && <ChevronDown className={`w-3.5 h-3.5 transition-transform ${reportMenuOpen ? 'rotate-180' : ''}`} />}
-              </button>
-              {reportMenuOpen && (
-                <div
-                  className="absolute right-0 top-full mt-1 w-64 border rounded-lg z-50 overflow-hidden"
-                  style={{ background: 'var(--cn-bg-dropdown)', borderColor: 'var(--cn-border)', boxShadow: '0 8px 24px rgba(0,0,0,0.25)' }}
-                >
-                  <p className="px-3 py-2 text-[11px] border-b" style={{ color: 'var(--cn-text-muted)', borderColor: 'var(--cn-border)' }}>
-                    {sorted.length} row{sorted.length === 1 ? '' : 's'} · {visibleHeaders.length + (showPmCol ? 1 : 0) + (showPendingCol ? 1 : 0)} columns — exactly as filtered and shown
-                  </p>
-                  {([['xlsx', 'Excel (.xlsx)', FileSpreadsheet], ['pdf', 'PDF', FileText]] as const).map(([kind, label, Icon]) => (
-                    <button
-                      key={kind}
-                      onClick={() => downloadReport(kind)}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left cursor-pointer hover:bg-[var(--cn-bg-input)] transition-colors"
-                      style={{ color: 'var(--cn-text-primary)' }}
-                    >
-                      <Icon className="w-4 h-4" style={{ color: 'var(--cn-accent)' }} />
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <button
+              onClick={downloadReport}
+              disabled={sorted.length === 0 || reportBusy}
+              title={sorted.length === 0
+                ? 'No rows to download'
+                : `Download the ${sorted.length} row${sorted.length === 1 ? '' : 's'} shown (after filters) as an Excel file`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg cursor-pointer transition-all text-xs font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+              style={reportError
+                ? { background: '#dc2626', color: '#fff', border: '1px solid #dc2626' }
+                : { background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }}
+            >
+              {reportBusy
+                ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                : <FileSpreadsheet className="w-3.5 h-3.5" />}
+              {reportBusy ? 'Preparing…' : reportError ? 'Download failed' : 'Download Report'}
+            </button>
           )}
         </div>
       </div>
