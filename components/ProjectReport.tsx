@@ -234,6 +234,15 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
   const copyTable = async () => {
     const header = cols.map(c => c.label);
     const body = data.map(r => cols.map(c => cellValue(r, c)));
+    // Checklist is copied as a list — bullet items, one per line — instead of
+    // one long comma-run. Real <ul> in the HTML, "• item" lines in plain text.
+    const listHtml = (v: string) => {
+      const items = parseMulti(v);
+      return items.length
+        ? `<ul style="margin:0;padding-left:18px;">${items.map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul>`
+        : '';
+    };
+    const listText = (v: string) => parseMulti(v).map(i => `• ${i}`).join('\n');
     // Same look as the Resource / Tasks Bucket Copy table (FilteredDataTable,
     // SpecificCharts): orange header row, a # column, zebra-striped rows.
     // Inline styles so it survives pasting into Gmail / Outlook / Docs.
@@ -249,7 +258,7 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
     ${body.map((line, i) => `
     <tr style="background-color:${i % 2 === 0 ? '#ffffff' : '#fafafa'};">
       <td style="border:1px solid #ddd;padding:6px 12px;color:#888;">${i + 1}</td>
-      ${line.map(v => `<td style="border:1px solid #ddd;padding:6px 12px;">${escapeHtml(v)}</td>`).join('')}
+      ${line.map((v, ci) => `<td style="border:1px solid #ddd;padding:6px 12px;">${cols[ci].multi ? listHtml(v) : escapeHtml(v)}</td>`).join('')}
     </tr>`).join('')}
   </tbody>
 </table>`;
@@ -258,7 +267,7 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
     const quote = (v: string) => (/[\t\n"]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
     const tsv = [
       ['#', ...header].join('\t'),
-      ...body.map((line, i) => [String(i + 1), ...line.map(quote)].join('\t')),
+      ...body.map((line, i) => [String(i + 1), ...line.map((v, ci) => quote(cols[ci].multi ? listText(v) : v))].join('\t')),
     ].join('\n');
     try {
       await navigator.clipboard.write([
