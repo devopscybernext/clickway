@@ -55,6 +55,21 @@ function displayHours(raw: string): string {
   return isNaN(h) ? v : formatHHMM(h, 0);
 }
 
+// Rows whose Status is one of these get a red border in the table, so the
+// ones needing attention stand out: Paused by Client / Cybernext, Escalated,
+// On Hold, and any Closed: ... outcome.
+const isFlaggedStatus = (status: string) => {
+  const v = status.trim().toLowerCase();
+  return v === 'paused by client' || v === 'paused by cybernext' || v === 'escalated' || v === 'on hold' || v.startsWith('closed');
+};
+const RED_EDGE = '2px solid #ef4444';
+// Border pieces for one cell of a flagged row (collapsed borders: top and
+// bottom on every cell, left on the first, right on the last).
+const redEdge = (flagged: boolean, first: boolean, last: boolean): React.CSSProperties =>
+  flagged
+    ? { borderTop: RED_EDGE, borderBottom: RED_EDGE, ...(first ? { borderLeft: RED_EDGE } : {}), ...(last ? { borderRight: RED_EDGE } : {}) }
+    : {};
+
 const escapeHtml = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/\n/g, '<br>');
 
@@ -227,6 +242,8 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
     .filter((c): c is ReportCol => !!c.sheetCol);
 
   const checklistCol = cols.find(c => c.multi)?.sheetCol ?? '';
+  const statusCol = headers.find(h => h.trim().toLowerCase() === 'status');
+  const flaggedCount = statusCol ? data.filter(r => isFlaggedStatus(String(r[statusCol] ?? ''))).length : 0;
   const [editMode, setEditMode] = useState(false);
   const [popupRow, setPopupRow] = useState<SheetData | null>(null);
   const [copied, setCopied] = useState<'ok' | 'fail' | null>(null);
@@ -288,6 +305,12 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm" style={{ color: 'var(--cn-text-muted)' }}>
           <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{data.length}</span> project{data.length === 1 ? '' : 's'} this month
+          {flaggedCount > 0 && (
+            <span className="ml-3 inline-flex items-center gap-1.5 text-xs">
+              <span className="inline-block w-3 h-3 rounded-sm" style={{ border: RED_EDGE }} />
+              {flaggedCount} paused / escalated / closed / on hold
+            </span>
+          )}
         </p>
         <div className="flex items-center gap-2">
           <button
@@ -335,7 +358,9 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
                   No projects this month yet.
                 </td>
               </tr>
-            ) : data.map((row, i) => (
+            ) : data.map((row, i) => {
+              const flagged = !!statusCol && isFlaggedStatus(String(row[statusCol] ?? ''));
+              return (
               <tr
                 key={String(row['__id'])}
                 className={`border-b transition-colors hover:bg-[var(--cn-bg-hover)] ${editMode ? 'cursor-pointer' : ''}`}
@@ -343,7 +368,7 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
                 onClick={editMode ? () => setPopupRow(row) : undefined}
               >
                 {editMode && (
-                  <td className="px-2 py-2">
+                  <td className="px-2 py-2" style={redEdge(flagged, true, false)}>
                     <button
                       onClick={e => { e.stopPropagation(); setPopupRow(row); }}
                       title="Edit this project's report"
@@ -354,15 +379,16 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
                     </button>
                   </td>
                 )}
-                <td className="px-4 py-2 tabular-nums align-top" style={{ color: 'var(--cn-text-faint)' }}>{i + 1}</td>
-                {cols.map(c => (
+                <td className="px-4 py-2 tabular-nums align-top" style={{ color: 'var(--cn-text-faint)', ...redEdge(flagged, !editMode, false) }}>{i + 1}</td>
+                {cols.map((c, ci) => (
                   <td key={c.header} className={`px-4 py-2 align-top ${c.hours ? 'whitespace-nowrap' : c.multi ? 'break-words min-w-[260px] max-w-sm' : c.editable ? 'break-words min-w-[240px] max-w-xs whitespace-pre-wrap' : 'break-words min-w-[120px] max-w-xs whitespace-pre-wrap'}`}
-                    style={{ color: 'var(--cn-text-secondary)' }}>
+                    style={{ color: 'var(--cn-text-secondary)', ...redEdge(flagged, false, ci === cols.length - 1) }}>
                     {c.hours ? (cellValue(row, c) || '—') : <ClampedText text={c.multi ? parseMulti(cellValue(row, c)).join(', ') : cellValue(row, c)} limit={30} />}
                   </td>
                 ))}
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
