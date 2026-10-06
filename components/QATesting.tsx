@@ -3,6 +3,7 @@
 import { useEffect, useState, ChangeEvent, useCallback } from 'react';
 import { Copy, Check, Search, X, Trash2 } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
+import { totalTimeRow, totalRowHtml, totalRowText } from '@/lib/copyTotals';
 import { memberColor, memberPhoto } from '@/lib/memberColors';
 
 // Matches the QATesting sheet's actual data-validation lists (Column E "Today's Bucket Set" / Column F "Status")
@@ -198,6 +199,7 @@ export default function QATesting({ data, headers, onCellChange, canEdit = true 
       r[projectCol] ?? '', r[taskCol] ?? '', r[urlCol] ?? '',
       timeLoggedCol ? r[timeLoggedCol] ?? '' : '', statusCol ? r[statusCol] ?? '' : '',
     ]);
+    const total = totalTimeRow(COPY_COLS, rowsToCopy);
     const html = `
 <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;color:#111;">
   <thead>
@@ -211,12 +213,13 @@ export default function QATesting({ data, headers, onCellChange, canEdit = true 
     <tr style="background-color:${i % 2 === 0 ? '#ffffff' : '#fafafa'};">
       <td style="border:1px solid #ddd;padding:6px 12px;color:#888;">${i + 1}</td>
       ${r.map(v => `<td style="border:1px solid #ddd;padding:6px 12px;">${v ?? ''}</td>`).join('')}
-    </tr>`).join('')}
+    </tr>`).join('')}${totalRowHtml(total)}
   </tbody>
 </table>`;
     const text = [
       ['#', ...COPY_COLS].join('\t'),
       ...rowsToCopy.map((r, i) => [i + 1, ...r].join('\t')),
+      ...(total ? [totalRowText(total)] : []),
     ].join('\n');
     try {
       await navigator.clipboard.write([

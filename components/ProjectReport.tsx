@@ -6,6 +6,7 @@ import { Copy, FileDown, Check, Pencil, X } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { parseHHMM, formatHHMM } from './SpecificCharts';
 import ClampedText from './ClampedText';
+import { totalTimeRow, totalRowHtml, totalRowText } from '@/lib/copyTotals';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { statusColor } from './PMProjectBandwidth';
 import { downloadProjectReportPdf, type ReportPdfProject } from '@/lib/projectReportPdf';
@@ -349,6 +350,8 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
     // Same look as the Resource / Tasks Bucket Copy table (FilteredDataTable,
     // SpecificCharts): orange header row, a # column, zebra-striped rows.
     // Inline styles so it survives pasting into Gmail / Outlook / Docs.
+    // Bottom "Total Time" row: sums Total / Current / AC Hours across projects.
+    const total = totalTimeRow(header, body);
     const html = `
 <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;color:#111;">
   <thead>
@@ -362,7 +365,7 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
     <tr style="background-color:${flags[i] ? '#fef2f2' : i % 2 === 0 ? '#ffffff' : '#fafafa'};">
       <td style="border:1px solid #ddd;padding:6px 12px;color:#888;white-space:nowrap;">${flags[i] ? '<span style="color:#ef4444;font-size:15px;">●</span> ' : ''}${i + 1}</td>
       ${line.map((v, ci) => `<td style="border:1px solid #ddd;padding:6px 12px;">${cols[ci].multi ? listHtml(v) : escapeHtml(v)}</td>`).join('')}
-    </tr>`).join('')}
+    </tr>`).join('')}${totalRowHtml(total)}
   </tbody>
 </table>${anyFlagged ? `<p style="font-family:Arial,sans-serif;font-size:12px;color:#555;margin:6px 0 0;"><span style="color:#ef4444;">●</span> ${LEGEND}</p>` : ''}`;
     // Plain-text fallback (tab-separated); values quoted when they hold
@@ -371,6 +374,7 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
     const tsv = [
       ['#', ...header].join('\t'),
       ...body.map((line, i) => [`${flags[i] ? '● ' : ''}${i + 1}`, ...line.map((v, ci) => quote(cols[ci].multi ? listText(v) : v))].join('\t')),
+      ...(total ? [totalRowText(total)] : []),
       ...(anyFlagged ? ['', `● = ${LEGEND}`] : []),
     ].join('\n');
     try {

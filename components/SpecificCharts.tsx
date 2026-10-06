@@ -7,6 +7,7 @@ import {
 } from 'recharts';
 import { CheckCircle2, PauseCircle, LayoutGrid, Send, CalendarCheck, CalendarClock, UserCheck, ChevronDown, ChevronUp, AlertTriangle, ThumbsUp, RefreshCw, BadgeCheck, Copy, Check, Search, X, Pencil } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
+import { totalTimeRow, totalRowHtml, totalRowText } from '@/lib/copyTotals';
 import { memberColor, MONTHLY_BLOCK_MARKETING_NAMES } from '@/lib/memberColors';
 import { MARKETING_STATUS_OPTIONS, MARKETING_ASSIGNED_PERSONS, WEB_TEAM } from '@/lib/config';
 
@@ -795,6 +796,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
     const rowsToCopy = showMarketingCols
       ? copyableTasks.map(t => [t.project, t.task, t.timeEst, t.totalHoursVal, t.timeLogged, t.actionTakenToday, t.performanceSignal, t.blocker, t.nextSteps, t.status])
       : copyableTasks.map(t => [t.project, t.task, t.taskUrl, t.timeEst, t.timeLogged, t.status]);
+    const total = totalTimeRow(COPY_COLS, rowsToCopy);
     const html = `
 <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;color:#111;">
   <thead>
@@ -808,12 +810,13 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
     <tr style="background-color:${i % 2 === 0 ? '#ffffff' : '#fafafa'};">
       <td style="border:1px solid #ddd;padding:6px 12px;color:#888;">${i + 1}</td>
       ${r.map(v => `<td style="border:1px solid #ddd;padding:6px 12px;">${v ?? ''}</td>`).join('')}
-    </tr>`).join('')}
+    </tr>`).join('')}${totalRowHtml(total)}
   </tbody>
 </table>`;
     const text = [
       ['#', ...COPY_COLS].join('\t'),
       ...rowsToCopy.map((r, i) => [i + 1, ...r].join('\t')),
+      ...(total ? [totalRowText(total)] : []),
     ].join('\n');
     try {
       await navigator.clipboard.write([
@@ -1338,6 +1341,7 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
       : showMarketingCols
         ? flatTasks.map(t => [t.person, t.project, t.task, t.timeEst, t.totalHoursVal, t.timeLogged, t.actionTakenToday, t.performanceSignal, t.blocker, t.nextSteps, t.status])
         : flatTasks.map(t => [t.person, t.project, t.task, t.taskUrl, t.timeEst, t.timeLogged, t.status]);
+    const total = totalTimeRow(COPY_COLS, rowsToCopy);
     const html = `
 <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;color:#111;">
   <thead>
@@ -1351,12 +1355,13 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
     <tr style="background-color:${i % 2 === 0 ? '#ffffff' : '#fafafa'};">
       <td style="border:1px solid #ddd;padding:6px 12px;color:#888;">${i + 1}</td>
       ${r.map(v => `<td style="border:1px solid #ddd;padding:6px 12px;">${v ?? ''}</td>`).join('')}
-    </tr>`).join('')}
+    </tr>`).join('')}${totalRowHtml(total)}
   </tbody>
 </table>`;
     const text = [
       ['#', ...COPY_COLS].join('\t'),
       ...rowsToCopy.map((r, i) => [i + 1, ...r].join('\t')),
+      ...(total ? [totalRowText(total)] : []),
     ].join('\n');
     try {
       await navigator.clipboard.write([

@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronDown as ChevDown, ChevronLeft, ChevronRight, Copy, Check, Pencil } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
+import { totalTimeRow, totalRowHtml, totalRowText } from '@/lib/copyTotals';
 import { STATUS_COLORS, formatHHMM, toHM, DURATION_HOUR_OPTIONS, DURATION_MINUTE_OPTIONS } from './SpecificCharts';
 
 const PAGE_SIZE = 30;
@@ -964,6 +965,9 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
     const cols = copyCols;
     const rows = sorted; // all filtered rows, not just current page
 
+    // Bottom "Total Time" row: sums every time column that is being copied
+    const total = totalTimeRow(cols, rows.map(row => cols.map(h => row[h])));
+
     // HTML table with inline styles — renders properly in Gmail / Outlook
     const html = `
 <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;color:#111;">
@@ -978,7 +982,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
     <tr style="background-color:${i % 2 === 0 ? '#ffffff' : '#fafafa'};">
       <td style="border:1px solid #ddd;padding:6px 12px;color:#888;">${i + 1}</td>
       ${cols.map(h => `<td style="border:1px solid #ddd;padding:6px 12px;">${String(row[h] ?? '')}</td>`).join('')}
-    </tr>`).join('')}
+    </tr>`).join('')}${totalRowHtml(total)}
   </tbody>
 </table>`;
 
@@ -986,6 +990,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
     const text = [
       ['#', ...cols].join('\t'),
       ...rows.map((row, i) => [i + 1, ...cols.map(h => String(row[h] ?? ''))].join('\t')),
+      ...(total ? [totalRowText(total)] : []),
     ].join('\n');
 
     try {
