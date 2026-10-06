@@ -11,7 +11,7 @@ export interface ReportPdfProject {
   assigned: string;
   monthLabel: string;
   hours: { label: string; value: string }[];
-  checklist: string[];
+  checklist: string[] | null;   // null = the user left Checklist out of the PDF
   sections: { label: string; text: string }[];
 }
 
@@ -216,10 +216,11 @@ function runBody(doc: Doc, p: ReportPdfProject, fs: number, startY: number, dry:
     });
   };
 
-  // Checklist
-  heading('Checklist');
-  if (p.checklist.length) {
-    p.checklist.forEach(item => {
+  // Checklist (skipped entirely when the user left it out)
+  const checklist = p.checklist;
+  if (checklist) heading('Checklist');
+  if (checklist && checklist.length) {
+    checklist.forEach(item => {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(fs);
       const lines = doc.splitTextToSize(clean(item), CONTENT_W - 6) as string[];
@@ -238,10 +239,10 @@ function runBody(doc: Doc, p: ReportPdfProject, fs: number, startY: number, dry:
         y += lh;
       });
     });
-  } else {
+  } else if (checklist) {
     paragraph('-', true);
   }
-  y += lh * 0.6;
+  if (checklist) y += lh * 0.6;
 
   // Updates
   p.sections.forEach(s => {

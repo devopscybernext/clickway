@@ -226,6 +226,80 @@ function ReportEditModal({ row, cols, checklistOptions, onSave, onCancel }: {
   );
 }
 
+// Asks what goes into the PDF before it is generated — the project header and
+// hours are always there; each report section is the user's choice.
+function PdfOptionsDialog({ options, initial, onConfirm, onCancel }: {
+  options: { key: string; label: string }[];
+  initial: Set<string>;
+  onConfirm: (selected: Set<string>) => void;
+  onCancel: () => void;
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set(initial));
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onCancel]);
+
+  const toggle = (key: string) =>
+    setSelected(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
+  const allOn = selected.size === options.length;
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onCancel}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Choose what to include in the PDF"
+        className="rounded-xl w-full flex flex-col"
+        style={{ background: 'var(--cn-bg-card)', maxWidth: 440, maxHeight: '90vh', border: '1px solid var(--cn-border)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="px-5 pt-5 pb-3">
+          <h2 className="font-semibold text-base" style={{ color: 'var(--cn-text-primary)' }}>What should go into the PDF?</h2>
+          <p className="text-xs mt-1" style={{ color: 'var(--cn-text-muted)' }}>
+            Tick the parts to include — anything unticked is left out of every page. Project name, status and hours are always shown.
+          </p>
+        </div>
+
+        <div className="px-5 flex items-center gap-3 pb-2">
+          <button onClick={() => setSelected(new Set(options.map(o => o.key)))} className="text-xs font-semibold cursor-pointer hover:opacity-80" style={{ color: 'var(--cn-accent)' }}>Select all</button>
+          <span style={{ color: 'var(--cn-border)' }}>·</span>
+          <button onClick={() => setSelected(new Set())} className="text-xs font-semibold cursor-pointer hover:opacity-80" style={{ color: 'var(--cn-text-muted)' }}>Clear</button>
+        </div>
+
+        <div className="px-3 overflow-y-auto">
+          {options.map(o => (
+            <label key={o.key} className="flex items-center gap-3 px-2 py-2 rounded-md cursor-pointer text-sm hover:bg-[var(--cn-bg-hover)]" style={{ color: 'var(--cn-text-primary)' }}>
+              <input type="checkbox" checked={selected.has(o.key)} onChange={() => toggle(o.key)} className="accent-[#FE4A23] cursor-pointer" />
+              {o.label}
+            </label>
+          ))}
+        </div>
+
+        <div className="flex items-center justify-between gap-2 px-5 py-4 mt-1 border-t" style={{ borderColor: 'var(--cn-border)' }}>
+          <span className="text-xs" style={{ color: 'var(--cn-text-muted)' }}>{allOn ? 'Everything' : `${selected.size} of ${options.length}`} selected</span>
+          <div className="flex items-center gap-2">
+            <button onClick={onCancel}
+              className="px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all"
+              style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>
+              Cancel
+            </button>
+            <button onClick={() => onConfirm(selected)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all"
+              style={{ background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }}>
+              <FileDown className="w-4 h-4" />
+              Download PDF
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 interface Props {
   // The signed-in PM's own rows from the Current Month sheet.
   data: SheetData[];
@@ -314,7 +388,13 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
 
   // One A4 page per project, straight to the user's downloads — built from
   // the rows currently on screen (so just-saved edits are included).
-  const downloadPdf = async () => {
+  // The report sections the user can choose to include (everything editable).
+  const pdfOptions = cols.filter(c => c.editable).map(c => ({ key: c.header, label: c.label }));
+  const [pdfDialogOpen, setPdfDialogOpen] = useState(false);
+  // Remembered between downloads in this session; null = nothing chosen yet, i.e. everything on.
+  const [pdfSelection, setPdfSelection] = useState<Set<string> | null>(null);
+
+  const downloadPdf = async (include: Set<string>) => {
     if (!data.length || pdfState === 'working') return;
     setPdfState('working');
     try {
@@ -334,8 +414,8 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
           assigned,
           monthLabel: [monthCol ? String(row[monthCol] ?? '').trim() : '', yearCol ? String(row[yearCol] ?? '').trim() : ''].filter(Boolean).join(' '),
           hours: cols.filter(c => c.hours).map(c => ({ label: c.label, value: cellValue(row, c) })),
-          checklist: parseMulti(colValue(row, 'checklist')),
-          sections: cols.filter(c => c.editable && !c.multi).map(c => ({ label: c.label, text: cellValue(row, c) })),
+          checklist: include.has('checklist') ? parseMulti(colValue(row, 'checklist')) : null,
+          sections: cols.filter(c => c.editable && !c.multi && include.has(c.header)).map(c => ({ label: c.label, text: cellValue(row, c) })),
         };
       });
       const stamp = new Date().toISOString().slice(0, 10);
@@ -384,7 +464,7 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
             {copied === 'ok' ? 'Copied!' : copied === 'fail' ? 'Copy failed' : 'Copy table'}
           </button>
           <button
-            onClick={downloadPdf}
+            onClick={() => setPdfDialogOpen(true)}
             disabled={data.length === 0 || pdfState === 'working'}
             title="Download one page per project as a PDF"
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all disabled:opacity-60 disabled:cursor-not-allowed"
@@ -456,6 +536,15 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
           </tbody>
         </table>
       </div>
+
+      {pdfDialogOpen && (
+        <PdfOptionsDialog
+          options={pdfOptions}
+          initial={pdfSelection ?? new Set(pdfOptions.map(o => o.key))}
+          onConfirm={selected => { setPdfSelection(selected); setPdfDialogOpen(false); downloadPdf(selected); }}
+          onCancel={() => setPdfDialogOpen(false)}
+        />
+      )}
 
       {popupRow && (
         <ReportEditModal
