@@ -235,13 +235,18 @@ const PAID_PAYMENT_STATUSES = ['done', 'automated payment', 'direct billing'];
 
 // Free-text columns that get a multi-line box in the My Projects edit popup.
 const LONG_TEXT_COLS = [
-  'payment details', 'project progress update', 'upsell', 'escalation',
+  'payment details', 'week1', 'week2', 'week3', 'week4', 'week5', 'monthly',
+  'project progress update', 'upsell', 'escalation',
   'client feedback', 'resource feedback', 'problems - next month needs',
 ];
 
 // Unchecked by default in the Columns picker on Current Month, Previous
 // Months and My Projects alike (lowercase header names).
+// Week1-Week5 are the weekly report columns (filled in via Generate Report);
+// the older single-purpose report column names are kept in case a sheet
+// still has them.
 const ALWAYS_DEFAULT_HIDDEN_COLS = [
+  'week1', 'week2', 'week3', 'week4', 'week5', 'monthly',
   'project progress update', 'upsell', 'escalation', 'client feedback',
   'resource feedback', 'problems - next month needs',
 ];
@@ -937,7 +942,10 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const acHoursCol = headers.find(h => h.toLowerCase() === 'ac hours');
   const isDurationCol = (h: string) => h === totalHoursCol || h === acHoursCol || h === currentMonthHoursCol || h === riskMonthHoursCol;
   // Timestamp/Email stay usable for sorting & filtering but aren't shown as table columns
-  const allCols = headers.filter(h => h !== timestampCol && h !== emailCol);
+  // A second column with an already-used header (e.g. a stray extra "Month"
+  // at the end of the sheet) arrives renamed "Month (2)" — see
+  // fetchSheetData's renameDuplicateHeaders — and is left out of the table.
+  const allCols = headers.filter(h => h !== timestampCol && h !== emailCol && !/ \(\d+\)$/.test(h));
   // The report-style columns (Project Progress Update, Upsell, Escalation, ...)
   // are kept out of the table, the Columns picker and the My Projects edit
   // popup; they're only filled in through the Generate Report view.

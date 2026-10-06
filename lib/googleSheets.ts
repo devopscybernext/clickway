@@ -25,11 +25,16 @@ function getAuth() {
   });
 }
 
+// renameDuplicateHeaders: rows are plain objects keyed by header text, so two
+// columns with the same header would silently overwrite each other (the later,
+// often blank, one wins). With this flag a repeat becomes "Month (2)" — column
+// positions and the headers array length stay untouched, nothing is dropped.
 export async function fetchSheetData(
   sheetId: string,
-  range: string = 'Sheet1!A1:Z10000'
+  range: string = 'Sheet1!A1:Z10000',
+  opts: { renameDuplicateHeaders?: boolean } = {}
 ): Promise<{ data: SheetData[]; headers: string[] }> {
-  const cacheKey = `${sheetId}:${range}`;
+  const cacheKey = `${sheetId}:${range}${opts.renameDuplicateHeaders ? ':dedupe' : ''}`;
   const cached = cache.get(cacheKey);
 
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
@@ -44,7 +49,15 @@ export async function fetchSheetData(
     return { data: [], headers: [] };
   }
 
-  const headers = rows[0].map((h, i) => (h ?? '').trim() || `Column ${i + 1}`);
+  let headers = rows[0].map((h, i) => (h ?? '').trim() || `Column ${i + 1}`);
+  if (opts.renameDuplicateHeaders) {
+    const seen = new Map<string, number>();
+    headers = headers.map(h => {
+      const n = (seen.get(h) ?? 0) + 1;
+      seen.set(h, n);
+      return n === 1 ? h : `${h} (${n})`;
+    });
+  }
   const data: SheetData[] = rows.slice(1).map((row) => {
     const obj: SheetData = {};
     headers.forEach((header, i) => {
