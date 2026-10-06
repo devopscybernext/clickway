@@ -8,6 +8,7 @@ import { MultiSelect } from './FilteredDataTable';
 import { parseHHMM, formatHHMM, hhmmToDecimalHours, DURATION_MINUTE_OPTIONS, formatHoursClock } from './SpecificCharts';
 import { memberPhoto, memberColor } from '@/lib/memberColors';
 import ClampedText from './ClampedText';
+import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 
 const PAGE_SIZE = 50;
 const FOLLOWUP_DUE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days since last follow-up counts as due
@@ -675,6 +676,7 @@ function PmRowEditModal({ row, fields, kindOf, optionsFor, pendingHoursOf, onSav
   onSave: (changes: Record<string, string>) => Promise<void>;
   onCancel: () => void;
 }) {
+  useBodyScrollLock();
   const original = useMemo(() => {
     const o: Record<string, string> = {};
     fields.forEach(h => { o[h] = String(row[h] ?? ''); });
@@ -804,7 +806,7 @@ function PmRowEditModal({ row, fields, kindOf, optionsFor, pendingHoursOf, onSav
           </button>
         </div>
 
-        <div className="overflow-y-auto px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-4 content-start flex-1">
+        <div className="overflow-y-auto overscroll-contain px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-4 content-start flex-1">
           {fields.map(h => {
             const wide = ['assigned', 'textarea'].includes(kindOf(h));
             return (
@@ -867,6 +869,7 @@ function PmRowViewModal({ title, statusNode, pm, assignedNode, meta, sections, l
   long: ViewField[];
   onClose: () => void;
 }) {
+  useBodyScrollLock();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
@@ -886,7 +889,7 @@ function PmRowViewModal({ title, statusNode, pm, assignedNode, meta, sections, l
         style={{ background: 'var(--cn-bg-card)', maxWidth: 1280, height: '94vh', border: '1px solid var(--cn-border)' }}
         onClick={e => e.stopPropagation()}
       >
-        <div className="overflow-y-auto flex-1 px-8 sm:px-10 pt-8 pb-4">
+        <div className="overflow-y-auto overscroll-contain flex-1 px-8 sm:px-10 pt-8 pb-4">
           {/* Header */}
           <div className="flex items-start justify-between gap-4">
             <h2 className="text-2xl sm:text-3xl font-bold leading-tight break-words min-w-0" style={{ color: 'var(--cn-text-primary)' }}>

@@ -6,6 +6,7 @@ import { Copy, FileDown, Check, Pencil, X } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { parseHHMM, formatHHMM } from './SpecificCharts';
 import ClampedText from './ClampedText';
+import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { statusColor } from './PMProjectBandwidth';
 import { downloadProjectReportPdf, type ReportPdfProject } from '@/lib/projectReportPdf';
 
@@ -90,6 +91,7 @@ function ReportEditModal({ row, cols, checklistOptions, onSave, onCancel }: {
   onSave: (changes: Record<string, string>) => Promise<void>;
   onCancel: () => void;
 }) {
+  useBodyScrollLock();
   const editable = cols.filter(c => c.editable);
   const projectCol = cols.find(c => c.header === 'project name');
   const [draft, setDraft] = useState<Record<string, string>>(() => {
@@ -145,7 +147,7 @@ function ReportEditModal({ row, cols, checklistOptions, onSave, onCancel }: {
           </button>
         </div>
 
-        <div className="overflow-y-auto px-5 py-4 space-y-4">
+        <div className="overflow-y-auto overscroll-contain px-5 py-4 space-y-4">
           {/* Reference, locked */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 rounded-lg p-3" style={{ background: 'var(--cn-bg-input)' }}>
             {cols.filter(c => !c.editable).map(c => (
@@ -234,6 +236,7 @@ function PdfOptionsDialog({ options, initial, onConfirm, onCancel }: {
   onConfirm: (selected: Set<string>) => void;
   onCancel: () => void;
 }) {
+  useBodyScrollLock();
   const [selected, setSelected] = useState<Set<string>>(new Set(initial));
 
   useEffect(() => {
@@ -269,7 +272,7 @@ function PdfOptionsDialog({ options, initial, onConfirm, onCancel }: {
           <button onClick={() => setSelected(new Set())} className="text-xs font-semibold cursor-pointer hover:opacity-80" style={{ color: 'var(--cn-text-muted)' }}>Clear</button>
         </div>
 
-        <div className="px-3 overflow-y-auto">
+        <div className="px-3 overflow-y-auto overscroll-contain">
           {options.map(o => (
             <label key={o.key} className="flex items-center gap-3 px-2 py-2 rounded-md cursor-pointer text-sm hover:bg-[var(--cn-bg-hover)]" style={{ color: 'var(--cn-text-primary)' }}>
               <input type="checkbox" checked={selected.has(o.key)} onChange={() => toggle(o.key)} className="accent-[#FE4A23] cursor-pointer" />

@@ -18,6 +18,7 @@ import Leaderboard, { calcLeaderboard, PersonStats } from './Leaderboard';
 import PMProjectBandwidth from './PMProjectBandwidth';
 import ClosedProjects from './ClosedProjects';
 import ProjectReport from './ProjectReport';
+import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import LeaveStatus from './LeaveStatus';
 import AdminPortal from './AdminPortal';
 import { AlertCircle, Sparkles, ChevronUp, ChevronDown, AlertTriangle, CheckCircle2 } from 'lucide-react';
@@ -302,6 +303,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [toolsSubTab, setToolsSubTab] = useState<'clock' | 'holiday' | 'ai'>('clock');
   const [pmBandwidthSubTab, setPmBandwidthSubTab] = useState<'current' | 'archive' | 'mine' | 'closed'>('current');
   const [showAddProjectForm, setShowAddProjectForm] = useState(false);
+  // Freeze the page behind the Add New Project popup.
+  useBodyScrollLock(showAddProjectForm);
   // My Projects has two views: the full table, and the report-filling table.
   const [myProjectsView, setMyProjectsView] = useState<'all' | 'report'>('all');
   const [teamBandwidthSubTab, setTeamBandwidthSubTab] = useState<Team>(lockedTeamBandwidthTeam ?? 'web');
