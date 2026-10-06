@@ -7,7 +7,7 @@ export interface ReportPdfProject {
   pm: string;
   status: string;
   statusColor: string;   // hex, e.g. "#16a34a"
-  flagged: boolean;      // paused / escalated / closed / on hold — gets a red frame
+  flagged: boolean;      // paused / escalated / closed / on hold — gets a red "Needs attention" indicator
   assigned: string;
   monthLabel: string;
   hours: { label: string; value: string }[];
@@ -74,14 +74,9 @@ export async function downloadProjectReportPdf(projects: ReportPdfProject[], fil
 type Doc = InstanceType<Awaited<typeof import('jspdf')>['jsPDF']>;
 
 function drawProject(doc: Doc, p: ReportPdfProject) {
-  // Brand strip + optional red frame for projects needing attention
-  doc.setFillColor(...ORANGE);
+  // Brand strip — turns red for projects needing attention
+  doc.setFillColor(...(p.flagged ? RED : ORANGE));
   doc.rect(0, 0, PAGE_W, 4, 'F');
-  if (p.flagged) {
-    doc.setDrawColor(...RED);
-    doc.setLineWidth(0.9);
-    doc.rect(6, 8, PAGE_W - 12, PAGE_H - 16);
-  }
 
   let y = 16;
 
@@ -115,6 +110,16 @@ function drawProject(doc: Doc, p: ReportPdfProject) {
     doc.setTextColor(255, 255, 255);
     doc.text(label, x + 3.5, y);
     x += w + 5;
+  }
+  // Status indicator for projects needing attention: red dot + label
+  if (p.flagged) {
+    doc.setFillColor(...RED);
+    doc.circle(x + 1.6, y - 1.3, 1.6, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(...RED);
+    doc.text('Needs attention', x + 5, y);
+    x += 5 + doc.getTextWidth('Needs attention') + 5;
   }
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9.5);

@@ -255,6 +255,11 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
   const copyTable = async () => {
     const header = cols.map(c => c.label);
     const body = data.map(r => cols.map(c => cellValue(r, c)));
+    // Rows with a Paused / Escalated / Closed / On Hold status carry a red
+    // dot (and a light red tint) so the flag survives the paste.
+    const flags = data.map(r => !!statusCol && isFlaggedStatus(String(r[statusCol] ?? '')));
+    const anyFlagged = flags.some(Boolean);
+    const LEGEND = 'Paused / Escalated / Closed / On Hold';
     // Checklist is copied as a list — bullet items, one per line — instead of
     // one long comma-run. Real <ul> in the HTML, "• item" lines in plain text.
     const listHtml = (v: string) => {
@@ -277,18 +282,19 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
   </thead>
   <tbody>
     ${body.map((line, i) => `
-    <tr style="background-color:${i % 2 === 0 ? '#ffffff' : '#fafafa'};">
-      <td style="border:1px solid #ddd;padding:6px 12px;color:#888;">${i + 1}</td>
+    <tr style="background-color:${flags[i] ? '#fef2f2' : i % 2 === 0 ? '#ffffff' : '#fafafa'};">
+      <td style="border:1px solid #ddd;padding:6px 12px;color:#888;white-space:nowrap;">${flags[i] ? '<span style="color:#ef4444;font-size:15px;">●</span> ' : ''}${i + 1}</td>
       ${line.map((v, ci) => `<td style="border:1px solid #ddd;padding:6px 12px;">${cols[ci].multi ? listHtml(v) : escapeHtml(v)}</td>`).join('')}
     </tr>`).join('')}
   </tbody>
-</table>`;
+</table>${anyFlagged ? `<p style="font-family:Arial,sans-serif;font-size:12px;color:#555;margin:6px 0 0;"><span style="color:#ef4444;">●</span> ${LEGEND}</p>` : ''}`;
     // Plain-text fallback (tab-separated); values quoted when they hold
     // tabs / newlines / quotes so Sheets and Excel keep each cell intact.
     const quote = (v: string) => (/[\t\n"]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
     const tsv = [
       ['#', ...header].join('\t'),
-      ...body.map((line, i) => [String(i + 1), ...line.map((v, ci) => quote(cols[ci].multi ? listText(v) : v))].join('\t')),
+      ...body.map((line, i) => [`${flags[i] ? '● ' : ''}${i + 1}`, ...line.map((v, ci) => quote(cols[ci].multi ? listText(v) : v))].join('\t')),
+      ...(anyFlagged ? ['', `● = ${LEGEND}`] : []),
     ].join('\n');
     try {
       await navigator.clipboard.write([
