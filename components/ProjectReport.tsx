@@ -13,6 +13,7 @@ const REPORT_COLUMNS: { header: string; label: string; editable: boolean; hours?
   { header: 'project name', label: 'Project Name', editable: false },
   { header: 'assigned', label: 'Assigned', editable: false },
   { header: 'total hours', label: 'Total Hours', editable: false, hours: true },
+  { header: 'current month hours', label: 'Current Month Hours', editable: false, hours: true },
   { header: 'ac hours', label: 'AC Hours', editable: false, hours: true },
   { header: 'project progress update', label: 'Project Progress Update', editable: true },
   { header: 'upsell', label: 'Upsell', editable: true },
@@ -114,7 +115,7 @@ function ReportEditModal({ row, cols, onSave, onCancel }: {
 
         <div className="overflow-y-auto px-5 py-4 space-y-4">
           {/* Reference, locked */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 rounded-lg p-3" style={{ background: 'var(--cn-bg-input)' }}>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 rounded-lg p-3" style={{ background: 'var(--cn-bg-input)' }}>
             {cols.filter(c => !c.editable).map(c => (
               <div key={c.header} className="min-w-0">
                 <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>{c.label}</div>
