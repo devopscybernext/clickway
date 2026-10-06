@@ -7,6 +7,7 @@ import { SheetData } from '@/lib/googleSheets';
 import { MultiSelect } from './FilteredDataTable';
 import { parseHHMM, formatHHMM, hhmmToDecimalHours, DURATION_MINUTE_OPTIONS, formatHoursClock } from './SpecificCharts';
 import { memberPhoto, memberColor } from '@/lib/memberColors';
+import ClampedText from './ClampedText';
 
 const PAGE_SIZE = 50;
 const FOLLOWUP_DUE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days since last follow-up counts as due
@@ -1556,13 +1557,10 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                         {isUrl && val && !isEditable ? (
                           <a href={val} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="hover:underline" style={{ color: 'var(--cn-accent)' }}>{val}</a>
                         ) : h.trim().toLowerCase() === 'checklist' ? (
-                          // Multi-select in the sheet ("A, B") — shown as chips
-                          // (read-only here; it's filled in via Generate Report).
-                          <div className="flex flex-wrap gap-1 max-w-xs">
-                            {val.split(',').map(s => s.trim()).filter(Boolean).map(v => (
-                              <span key={v} className="px-2 py-0.5 rounded-full text-[11px] whitespace-normal" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>{v}</span>
-                            ))}
-                            {!val.trim() && <span style={{ color: 'var(--cn-text-secondary)' }}>—</span>}
+                          // Multi-select in the sheet ("A, B") — read-only text here
+                          // (it's filled in via Generate Report), first 30 words.
+                          <div className="min-w-[260px] max-w-sm break-words" style={{ color: 'var(--cn-text-secondary)' }}>
+                            <ClampedText text={val.split(',').map(x => x.trim()).filter(Boolean).join(', ')} limit={30} />
                           </div>
                         ) : h === assignedCol ? (
                           <MultiSelectCell

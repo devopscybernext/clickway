@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { Copy, Check, Pencil, X } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { parseHHMM, formatHHMM } from './SpecificCharts';
+import ClampedText from './ClampedText';
 
 // Report columns, in display order. `editable: false` ones come straight
 // from the sheet; the rest are filled in through the row popup and written
@@ -346,17 +347,9 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
                 )}
                 <td className="px-4 py-2 tabular-nums align-top" style={{ color: 'var(--cn-text-faint)' }}>{i + 1}</td>
                 {cols.map(c => (
-                  <td key={c.header} className={`px-4 py-2 align-top ${c.hours ? 'whitespace-nowrap' : 'break-words min-w-[120px] max-w-xs whitespace-pre-wrap'}`}
+                  <td key={c.header} className={`px-4 py-2 align-top ${c.hours ? 'whitespace-nowrap' : c.multi ? 'break-words min-w-[260px] max-w-sm' : c.editable ? 'break-words min-w-[240px] max-w-xs whitespace-pre-wrap' : 'break-words min-w-[120px] max-w-xs whitespace-pre-wrap'}`}
                     style={{ color: 'var(--cn-text-secondary)' }}>
-                    {c.multi ? (
-                      <div className="flex flex-wrap gap-1">
-                        {parseMulti(cellValue(row, c)).map(v => (
-                          <span key={v} className="px-2 py-0.5 rounded-full text-[11px] whitespace-normal"
-                            style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>{v}</span>
-                        ))}
-                        {!cellValue(row, c).trim() && '—'}
-                      </div>
-                    ) : (cellValue(row, c) || '—')}
+                    {c.hours ? (cellValue(row, c) || '—') : <ClampedText text={c.multi ? parseMulti(cellValue(row, c)).join(', ') : cellValue(row, c)} limit={30} />}
                   </td>
                 ))}
               </tr>
