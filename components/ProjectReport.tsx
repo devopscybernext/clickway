@@ -4,12 +4,12 @@ import { createPortal } from 'react-dom';
 import { useEffect, useState } from 'react';
 import { Copy, FileDown, Check, Pencil, X } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
-import { parseHHMM, formatHHMM } from './SpecificCharts';
+import { parseHHMM, formatHHMM, formatHoursClock } from './SpecificCharts';
 import ClampedText from './ClampedText';
 import { totalTimeRow, totalRowHtml, totalRowText } from '@/lib/copyTotals';
 import { isFlaggedStatus } from '@/lib/statusFlags';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
-import { statusColor } from './PMProjectBandwidth';
+import { statusColor, computeStatsFor } from './PMProjectBandwidth';
 import { downloadProjectReportPdf, type ReportPdfProject } from '@/lib/projectReportPdf';
 
 // Report columns, in display order. `editable: false` ones come straight
@@ -397,7 +397,11 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
   // One A4 page per project, straight to the user's downloads — built from
   // the rows currently on screen (so just-saved edits are included).
   // The report sections the user can choose to include (everything editable).
-  const pdfOptions = cols.filter(c => c.editable).map(c => ({ key: c.header, label: c.label }));
+  // 'overview' = the opening page; the rest are the report sections.
+  const pdfOptions = [
+    { key: 'overview', label: 'Overview page — total, current & pending hours + project list' },
+    ...cols.filter(c => c.editable).map(c => ({ key: c.header, label: c.label })),
+  ];
   const [pdfDialogOpen, setPdfDialogOpen] = useState(false);
   // Remembered between downloads in this session; null = nothing chosen yet, i.e. everything on.
   const [pdfSelection, setPdfSelection] = useState<Set<string> | null>(null);
@@ -428,7 +432,33 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
       });
       const stamp = new Date().toISOString().slice(0, 10);
       const who = (projects[0]?.pm || 'My').replace(/[^\w-]+/g, '-');
-      await downloadProjectReportPdf(projects, `Project-Report-${who}-${stamp}.pdf`);
+      // Opening overview — the same figures as the PM Projects screen's
+      // Overview (computeStatsFor), plus every project with its status.
+      const hcol = (name: string) => headers.find(h => h.trim().toLowerCase() === name);
+      const summary = include.has('overview')
+        ? (() => {
+            const stats = computeStatsFor(data, {
+              totalHoursCol: hcol('total hours'),
+              currentMonthHoursCol: hcol('current month hours'),
+              riskMonthHoursCol: hcol('risk month hours'),
+              paymentStatusCol: headers.find(h => h.toLowerCase().includes('payment status')),
+              followupDateCol: undefined,
+              statusCol,
+            });
+            const fmt = (n: number) => `${formatHoursClock(n)}h`;
+            return {
+              pm: projects[0]?.pm ?? '',
+              monthLabel: projects[0]?.monthLabel ?? '',
+              stats: [
+                { label: 'Total Hours', value: fmt(stats.totalHours) },
+                { label: 'Current Hours', value: fmt(stats.currentMonthHours) },
+                { label: 'Pending Hours', value: fmt(stats.pendingHours) },
+              ],
+              projects: projects.map(pr => ({ name: pr.title, status: pr.status, statusColor: pr.statusColor, flagged: pr.flagged })),
+            };
+          })()
+        : null;
+      await downloadProjectReportPdf(projects, `Project-Report-${who}-${stamp}.pdf`, summary);
       setPdfState('done');
     } catch {
       setPdfState('fail');

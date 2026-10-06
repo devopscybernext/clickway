@@ -15,6 +15,14 @@ export interface ReportPdfProject {
   sections: { label: string; text: string }[];
 }
 
+/** The opening overview page: headline figures + every project with its status. */
+export interface ReportPdfSummary {
+  pm: string;
+  monthLabel: string;
+  stats: { label: string; value: string }[];
+  projects: { name: string; status: string; statusColor: string; flagged: boolean }[];
+}
+
 // jsPDF's built-in fonts only cover Latin-1 — map common typographic
 // characters to plain equivalents and anything else unsupported to "?" so the
 // PDF never shows garbled glyphs.
@@ -48,12 +56,14 @@ const RULE: [number, number, number] = [229, 231, 235];
 const ORANGE: [number, number, number] = [254, 74, 35];
 const RED: [number, number, number] = [239, 68, 68];
 
-export async function downloadProjectReportPdf(projects: ReportPdfProject[], fileName: string): Promise<void> {
+export async function downloadProjectReportPdf(projects: ReportPdfProject[], fileName: string, summary?: ReportPdfSummary | null): Promise<void> {
   const { jsPDF } = await import('jspdf');
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
 
+  // Optional overview first, then one page per project.
+  if (summary) drawSummary(doc, summary);
   projects.forEach((p, idx) => {
-    if (idx > 0) doc.addPage();
+    if (idx > 0 || summary) doc.addPage();
     drawProject(doc, p);
   });
 
@@ -72,6 +82,114 @@ export async function downloadProjectReportPdf(projects: ReportPdfProject[], fil
 }
 
 type Doc = InstanceType<Awaited<typeof import('jspdf')>['jsPDF']>;
+
+// The opening page: the same overview figures as the PM Projects screen
+// (Total / Current / Pending hours) and the list of every project with its
+// status. Long lists continue onto extra pages.
+function drawSummary(doc: Doc, s: ReportPdfSummary) {
+  const strip = () => { doc.setFillColor(...ORANGE); doc.rect(0, 0, PAGE_W, 4, 'F'); };
+  strip();
+
+  let y = 16;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(...ORANGE);
+  doc.text('PROJECT REPORT', MARGIN, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...MUTED);
+  if (s.monthLabel) doc.text(clean(s.monthLabel), PAGE_W - MARGIN, y, { align: 'right' });
+  y += 9;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(22);
+  doc.setTextColor(...INK);
+  doc.text('Overview', MARGIN, y);
+  y += 6.5;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9.5);
+  doc.setTextColor(...MUTED);
+  const sub = [s.pm ? `Managed by ${s.pm}` : '', `${s.projects.length} project${s.projects.length === 1 ? '' : 's'}`].filter(Boolean).join('   |   ');
+  doc.text(clean(sub), MARGIN, y);
+  y += 9;
+
+  // Stat cards in one bordered strip, like the Overview on the screen
+  if (s.stats.length) {
+    const h = 22;
+    doc.setDrawColor(...RULE);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(MARGIN, y, CONTENT_W, h, 2.5, 2.5, 'S');
+    const colW = CONTENT_W / s.stats.length;
+    s.stats.forEach((st, i) => {
+      const x = MARGIN + i * colW;
+      if (i > 0) doc.line(x, y + 3, x, y + h - 3);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(...MUTED);
+      doc.text(clean(st.label).toUpperCase(), x + 6, y + 8);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(17);
+      doc.setTextColor(...INK);
+      doc.text(clean(st.value), x + 6, y + 17);
+    });
+    y += h + 11;
+  }
+
+  // Project list
+  const header = () => {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(...MUTED);
+    doc.text('PROJECTS', MARGIN, y);
+    doc.setDrawColor(...RULE);
+    doc.line(MARGIN, y + 2.5, PAGE_W - MARGIN, y + 2.5);
+    y += 8;
+  };
+  header();
+
+  const ROW_H = 8;
+  s.projects.forEach((p, i) => {
+    if (y + ROW_H > BOTTOM_LIMIT) {
+      doc.addPage();
+      strip();
+      y = 16;
+      header();
+    }
+    if (i % 2 === 1) {
+      doc.setFillColor(249, 250, 251);
+      doc.rect(MARGIN, y - 5.2, CONTENT_W, ROW_H, 'F');
+    }
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(156, 163, 175);
+    doc.text(String(i + 1), MARGIN + 2, y);
+
+    // Name (clipped to the space left of the status pill)
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(...INK);
+    const nameW = CONTENT_W - 16 - 62;
+    const name = (doc.splitTextToSize(clean(p.name || 'Untitled project'), nameW) as string[])[0];
+    doc.text(name, MARGIN + 12, y);
+
+    // Status pill, right-aligned
+    if (p.status) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      const label = clean(p.status);
+      const w = doc.getTextWidth(label) + 6;
+      const px = PAGE_W - MARGIN - w;
+      doc.setFillColor(...hexToRgb(p.statusColor));
+      doc.roundedRect(px, y - 4.1, w, 5.6, 2.8, 2.8, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.text(label, px + 3, y);
+      if (p.flagged) {
+        doc.setFillColor(...RED);
+        doc.circle(px - 3.4, y - 1.3, 1.3, 'F');
+      }
+    }
+    y += ROW_H;
+  });
+}
 
 function drawProject(doc: Doc, p: ReportPdfProject) {
   // Brand strip — turns red for projects needing attention

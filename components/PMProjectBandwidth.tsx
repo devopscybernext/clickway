@@ -269,7 +269,7 @@ function countsAsCurrent(row: SheetData, statusCol?: string, paymentStatusCol?: 
 
 // Shared by the overall KPI cards and each per-PM summary card — same
 // formulas, just scoped to a different row set.
-function computeStatsFor(
+export function computeStatsFor(
   rowsFiltered: SheetData[],
   cols: {
     totalHoursCol?: string; currentMonthHoursCol?: string; riskMonthHoursCol?: string;
