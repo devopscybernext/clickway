@@ -10,6 +10,7 @@ import { memberPhoto, memberColor } from '@/lib/memberColors';
 import ClampedText from './ClampedText';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { downloadTableXlsx, type TableExport } from '@/lib/tableExport';
+import { isFlaggedStatus } from '@/lib/statusFlags';
 
 const PAGE_SIZE = 50;
 const FOLLOWUP_DUE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days since last follow-up counts as due
@@ -1547,6 +1548,9 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
       rows,
       fileName: `${reportName.trim().replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.xlsx`,
       colorFor: (_ci, v) => (v ? statusColor(v) : null),
+      // Red border round rows whose Status needs attention — judged on the
+      // Status column even when it isn't one of the columns being exported.
+      flagged: sorted.map(row => !!statusCol && isFlaggedStatus(String(row[statusCol] ?? ''))),
     };
   };
   const downloadReport = async () => {

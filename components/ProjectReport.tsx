@@ -7,6 +7,7 @@ import { SheetData } from '@/lib/googleSheets';
 import { parseHHMM, formatHHMM } from './SpecificCharts';
 import ClampedText from './ClampedText';
 import { totalTimeRow, totalRowHtml, totalRowText } from '@/lib/copyTotals';
+import { isFlaggedStatus } from '@/lib/statusFlags';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { statusColor } from './PMProjectBandwidth';
 import { downloadProjectReportPdf, type ReportPdfProject } from '@/lib/projectReportPdf';
@@ -62,13 +63,7 @@ function displayHours(raw: string): string {
 const escapeHtml = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/\n/g, '<br>');
 
-// Rows whose Status is one of these get a red border in the table, so the
-// ones needing attention stand out: Paused by Client / Cybernext, Escalated,
-// On Hold, and any Closed: ... outcome.
-const isFlaggedStatus = (status: string) => {
-  const v = status.trim().toLowerCase();
-  return v === 'paused by client' || v === 'paused by cybernext' || v === 'escalated' || v === 'on hold' || v.startsWith('closed');
-};
+// Rows with a flagged status (see lib/statusFlags) get a red border in the table.
 const RED_EDGE = '2px solid #ef4444';
 // Border pieces for one cell of a flagged row (collapsed borders: top and
 // bottom on every cell, left on the first, right on the last).
@@ -352,6 +347,12 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
     // Inline styles so it survives pasting into Gmail / Outlook / Docs.
     // Bottom "Total Time" row: sums Total / Current / AC Hours across projects.
     const total = totalTimeRow(header, body);
+    // Flagged rows get a red border all the way round (top/bottom on every
+    // cell, left on the first, right on the last) — declared after the base
+    // border so it wins in the paste.
+    const RED = '2px solid #ef4444';
+    const redBorder = (i: number, first: boolean, last: boolean) => !flags[i] ? '' :
+      `border-top:${RED};border-bottom:${RED};${first ? `border-left:${RED};` : ''}${last ? `border-right:${RED};` : ''}`;
     const html = `
 <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;color:#111;">
   <thead>
@@ -363,8 +364,8 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
   <tbody>
     ${body.map((line, i) => `
     <tr style="background-color:${flags[i] ? '#fef2f2' : i % 2 === 0 ? '#ffffff' : '#fafafa'};">
-      <td style="border:1px solid #ddd;padding:6px 12px;color:#888;white-space:nowrap;">${flags[i] ? '<span style="color:#ef4444;font-size:15px;">●</span> ' : ''}${i + 1}</td>
-      ${line.map((v, ci) => `<td style="border:1px solid #ddd;padding:6px 12px;">${cols[ci].multi ? listHtml(v) : escapeHtml(v)}</td>`).join('')}
+      <td style="border:1px solid #ddd;padding:6px 12px;color:#888;white-space:nowrap;${redBorder(i, true, false)}">${flags[i] ? '<span style="color:#ef4444;font-size:15px;">●</span> ' : ''}${i + 1}</td>
+      ${line.map((v, ci) => `<td style="border:1px solid #ddd;padding:6px 12px;${redBorder(i, false, ci === line.length - 1)}">${cols[ci].multi ? listHtml(v) : escapeHtml(v)}</td>`).join('')}
     </tr>`).join('')}${totalRowHtml(total)}
   </tbody>
 </table>${anyFlagged ? `<p style="font-family:Arial,sans-serif;font-size:12px;color:#555;margin:6px 0 0;"><span style="color:#ef4444;">●</span> ${LEGEND}</p>` : ''}`;
