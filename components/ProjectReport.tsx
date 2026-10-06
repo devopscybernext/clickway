@@ -2,7 +2,7 @@
 
 import { createPortal } from 'react-dom';
 import { useEffect, useState } from 'react';
-import { FileDown, Check, Pencil, X } from 'lucide-react';
+import { Copy, FileDown, Check, Pencil, X } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { parseHHMM, formatHHMM } from './SpecificCharts';
 import ClampedText from './ClampedText';
@@ -56,6 +56,9 @@ function displayHours(raw: string): string {
   const h = parseInt(v, 10);
   return isNaN(h) ? v : formatHHMM(h, 0);
 }
+
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/\n/g, '<br>');
 
 // Rows whose Status is one of these get a red border in the table, so the
 // ones needing attention stand out: Paused by Client / Cybernext, Escalated,
@@ -232,7 +235,9 @@ interface Props {
 
 // My Projects → Generate Report. A read-only table of the PM's current month
 // projects (same look as All Projects); "Edit" reveals a pencil on each row
-// which opens a popup to fill that project's report fields. "Download PDF"
+// which opens a popup to fill that project's report fields. "Copy table"
+// puts every column on the clipboard as both a real table (for Docs / Gmail /
+// Slack / Word) and tab-separated text (for Sheets / Excel); "Download PDF"
 // saves the whole report straight to the user's machine, one A4 page per
 // project.
 export default function ProjectReport({ data, headers, onCellChange }: Props) {
@@ -245,6 +250,60 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
   const flaggedCount = statusCol ? data.filter(r => isFlaggedStatus(String(r[statusCol] ?? ''))).length : 0;
   const [editMode, setEditMode] = useState(false);
   const [popupRow, setPopupRow] = useState<SheetData | null>(null);
+  const [copied, setCopied] = useState<'ok' | 'fail' | null>(null);
+
+  const copyTable = async () => {
+    const header = cols.map(c => c.label);
+    const body = data.map(r => cols.map(c => cellValue(r, c)));
+    // Checklist is copied as a list — bullet items, one per line — instead of
+    // one long comma-run. Real <ul> in the HTML, "• item" lines in plain text.
+    const listHtml = (v: string) => {
+      const items = parseMulti(v);
+      return items.length
+        ? `<ul style="margin:0;padding-left:18px;">${items.map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul>`
+        : '';
+    };
+    const listText = (v: string) => parseMulti(v).map(i => `• ${i}`).join('\n');
+    // Same look as the Resource / Tasks Bucket Copy table (FilteredDataTable,
+    // SpecificCharts): orange header row, a # column, zebra-striped rows.
+    // Inline styles so it survives pasting into Gmail / Outlook / Docs.
+    const html = `
+<table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;color:#111;">
+  <thead>
+    <tr style="background-color:#FE4A23;color:#ffffff;">
+      <th style="border:1px solid #555;padding:8px 12px;text-align:left;white-space:nowrap;">#</th>
+      ${header.map(h => `<th style="border:1px solid #555;padding:8px 12px;text-align:left;white-space:nowrap;">${escapeHtml(h)}</th>`).join('')}
+    </tr>
+  </thead>
+  <tbody>
+    ${body.map((line, i) => `
+    <tr style="background-color:${i % 2 === 0 ? '#ffffff' : '#fafafa'};">
+      <td style="border:1px solid #ddd;padding:6px 12px;color:#888;">${i + 1}</td>
+      ${line.map((v, ci) => `<td style="border:1px solid #ddd;padding:6px 12px;">${cols[ci].multi ? listHtml(v) : escapeHtml(v)}</td>`).join('')}
+    </tr>`).join('')}
+  </tbody>
+</table>`;
+    // Plain-text fallback (tab-separated); values quoted when they hold
+    // tabs / newlines / quotes so Sheets and Excel keep each cell intact.
+    const quote = (v: string) => (/[\t\n"]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+    const tsv = [
+      ['#', ...header].join('\t'),
+      ...body.map((line, i) => [String(i + 1), ...line.map((v, ci) => quote(cols[ci].multi ? listText(v) : v))].join('\t')),
+    ].join('\n');
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([tsv], { type: 'text/plain' }),
+        }),
+      ]);
+      setCopied('ok');
+    } catch {
+      try { await navigator.clipboard.writeText(tsv); setCopied('ok'); } catch { setCopied('fail'); }
+    }
+    setTimeout(() => setCopied(null), 2500);
+  };
+
   const [pdfState, setPdfState] = useState<'idle' | 'working' | 'done' | 'fail'>('idle');
 
   // One A4 page per project, straight to the user's downloads — built from
@@ -306,6 +365,17 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
           >
             <Pencil className="w-3.5 h-3.5" />
             {editMode ? 'Done Editing' : 'Edit'}
+          </button>
+          <button
+            onClick={copyTable}
+            disabled={data.length === 0}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            style={copied === 'ok'
+              ? { background: '#16a34a', color: '#fff', border: '1px solid #16a34a' }
+              : { background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }}
+          >
+            {copied === 'ok' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+            {copied === 'ok' ? 'Copied!' : copied === 'fail' ? 'Copy failed' : 'Copy table'}
           </button>
           <button
             onClick={downloadPdf}
