@@ -2,7 +2,7 @@
 
 import { createPortal } from 'react-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronLeft, ChevronRight, Pencil, SlidersHorizontal } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronLeft, ChevronRight, Pencil, Eye, SlidersHorizontal } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { MultiSelect } from './FilteredDataTable';
 import { parseHHMM, formatHHMM, hhmmToDecimalHours, DURATION_MINUTE_OPTIONS, formatHoursClock } from './SpecificCharts';
@@ -851,6 +851,81 @@ function PmRowEditModal({ row, fields, kindOf, optionsFor, pendingHoursOf, onSav
   );
 }
 
+// Read-only "full details" popup for Current Month / Previous Months — every
+// column of one project in a 3-column grid, long text shown in full.
+function PmRowViewModal({ title, subtitle, fields, renderValue, isWide, extra, onClose }: {
+  title: string;
+  subtitle: string;
+  fields: string[];
+  renderValue: (h: string) => React.ReactNode;
+  isWide: (h: string) => boolean;
+  extra?: { label: string; value: string } | null;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const label = (text: string) => (
+    <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>{text}</div>
+  );
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="rounded-lg w-full flex flex-col"
+        style={{ background: 'var(--cn-bg-card)', maxWidth: 1280, height: '94vh', border: '1px solid var(--cn-border)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-3 px-5 py-3 border-b" style={{ borderColor: 'var(--cn-border)' }}>
+          <div className="min-w-0">
+            <h2 className="font-semibold text-base truncate" style={{ color: 'var(--cn-text-primary)' }}>{title || 'Untitled project'}</h2>
+            {subtitle && <p className="text-xs truncate" style={{ color: 'var(--cn-text-muted)' }}>{subtitle}</p>}
+          </div>
+          <button
+            onClick={onClose}
+            title="Close"
+            className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors hover:opacity-80 shrink-0"
+            style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-4 content-start flex-1">
+          {fields.map(h => (
+            <div key={h} className={`flex flex-col gap-1 min-w-0 ${isWide(h) ? 'sm:col-span-2 lg:col-span-3' : ''}`}>
+              {label(h)}
+              <div className="text-sm break-words whitespace-pre-wrap" style={{ color: 'var(--cn-text-primary)' }}>{renderValue(h)}</div>
+            </div>
+          ))}
+          {extra && (
+            <div className="flex flex-col gap-1">
+              {label(extra.label)}
+              <div className="text-sm" style={{ color: 'var(--cn-text-primary)' }}>{extra.value}</div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end px-5 py-3 border-t" style={{ borderColor: 'var(--cn-border)' }}>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all"
+            style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 interface Props {
   data: SheetData[];
   headers: string[];
@@ -900,6 +975,10 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const popupEditing = lockShowDataFull && canEdit && editMode;
   const isEditable = canEdit && editMode && !lockShowDataFull;
   const [popupRow, setPopupRow] = useState<SheetData | null>(null);
+  // Current Month / Previous Months: click a row (or its eye) for a read-only
+  // popup with the whole project. My Projects keeps its own edit popup.
+  const viewEnabled = !lockShowDataFull;
+  const [viewRow, setViewRow] = useState<SheetData | null>(null);
   const [page, setPage] = useState(1);
   const [sortCol, setSortCol] = useState('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -1485,7 +1564,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
         <table className="w-full text-xs text-left">
           <thead>
             <tr style={{ background: 'var(--cn-bg-input)', borderColor: 'var(--cn-border)' }} className="border-b">
-              {popupEditing && <th className="px-2 py-2 w-10" aria-label="Edit row" />}
+              {(popupEditing || viewEnabled) && <th className="px-2 py-2 w-10" aria-label="Row actions" />}
               <th style={{ color: 'var(--cn-text-muted)' }} className="px-4 py-2 font-semibold uppercase tracking-wide text-[10px] w-12">#</th>
               {showPmCol && (
                 <th style={{ color: 'var(--cn-text-muted)' }} className="px-4 py-2 font-semibold uppercase tracking-wide text-[10px] min-w-[100px]">PM</th>
@@ -1517,7 +1596,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
           <tbody>
             {pageData.length === 0 ? (
               <tr>
-                <td colSpan={visibleHeaders.length + (showPmCol ? 2 : 1) + (showPendingCol ? 1 : 0) + (popupEditing ? 1 : 0)} style={{ color: 'var(--cn-text-muted)' }} className="text-center py-12">
+                <td colSpan={visibleHeaders.length + (showPmCol ? 2 : 1) + (showPendingCol ? 1 : 0) + ((popupEditing || viewEnabled) ? 1 : 0)} style={{ color: 'var(--cn-text-muted)' }} className="text-center py-12">
                   No records found
                 </td>
               </tr>
@@ -1526,8 +1605,8 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                 <tr
                   key={String(row['__id'] ?? i)}
                   style={{ backgroundColor: i % 2 === 0 ? 'var(--cn-bg-row-even)' : 'var(--cn-bg-row-odd)', borderColor: 'var(--cn-border-light)' }}
-                  className={`border-b transition-colors hover:bg-[var(--cn-bg-hover)] ${popupEditing ? 'cursor-pointer' : ''}`}
-                  onClick={popupEditing ? () => setPopupRow(row) : undefined}
+                  className={`border-b transition-colors hover:bg-[var(--cn-bg-hover)] ${(popupEditing || viewEnabled) ? 'cursor-pointer' : ''}`}
+                  onClick={popupEditing ? () => setPopupRow(row) : viewEnabled ? () => setViewRow(row) : undefined}
                 >
                   {popupEditing && (
                     <td className="px-2 py-2">
@@ -1538,6 +1617,18 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                         style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-accent)', border: '1px solid var(--cn-border)' }}
                       >
                         <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  )}
+                  {!popupEditing && viewEnabled && (
+                    <td className="px-2 py-2">
+                      <button
+                        onClick={e => { e.stopPropagation(); setViewRow(row); }}
+                        title="View full details"
+                        className="w-7 h-7 rounded-lg inline-flex items-center justify-center cursor-pointer transition-colors hover:opacity-80"
+                        style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)', border: '1px solid var(--cn-border)' }}
+                      >
+                        <Eye className="w-3.5 h-3.5" />
                       </button>
                     </td>
                   )}
@@ -1644,6 +1735,46 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
           </button>
         </div>
       </div>
+
+      {viewRow && (
+        <PmRowViewModal
+          title={projectCol ? String(viewRow[projectCol] ?? '') : ''}
+          subtitle={String(viewRow['__pm'] ?? '') ? `PM: ${String(viewRow['__pm'])}` : ''}
+          fields={allCols}
+          isWide={h => {
+            const k = h.trim().toLowerCase();
+            return h === assignedCol || h === commentsCol || h === milestonesCol || k === 'checklist' || LONG_TEXT_COLS.includes(k);
+          }}
+          renderValue={h => {
+            const val = String(viewRow[h] ?? '').trim();
+            if (!val) return <span style={{ color: 'var(--cn-text-faint)' }}>—</span>;
+            if (h === assignedCol || h.trim().toLowerCase() === 'checklist') {
+              return (
+                <div className="flex flex-wrap gap-1.5">
+                  {val.split(',').map(s => s.trim()).filter(Boolean).map(v => (
+                    <span key={v} className="px-2.5 py-1 rounded-full text-xs" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>{v}</span>
+                  ))}
+                </div>
+              );
+            }
+            if (isDurationCol(h)) { const { h: hh, m } = toHMLiteral(val); return formatHHMM(hh, m); }
+            if (isStatusLikeCol(h)) {
+              return <span className="inline-flex items-center whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: statusColor(val), color: '#fff' }}>{val}</span>;
+            }
+            return val;
+          }}
+          extra={totalHoursCol && currentMonthHoursCol
+            ? {
+                label: 'Pending Hours',
+                value: fmtHours(
+                  parseDurationDecimal(viewRow[totalHoursCol]) -
+                  (countsAsCurrent(viewRow, statusCol, paymentStatusCol) ? parseDurationDecimal(viewRow[currentMonthHoursCol]) : 0)
+                ),
+              }
+            : null}
+          onClose={() => setViewRow(null)}
+        />
+      )}
 
       {popupRow && onCellChange && (
         <PmRowEditModal
