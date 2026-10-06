@@ -8,7 +8,7 @@ import { parseHHMM, formatHHMM } from './SpecificCharts';
 
 // Report columns, in display order. `editable: false` ones come straight
 // from the sheet; the rest are filled in through the row popup and written
-// back to the same sheet. Every editable one is mandatory.
+// back to the same sheet. None of them is mandatory.
 const REPORT_COLUMNS: { header: string; label: string; editable: boolean; hours?: boolean; multi?: boolean }[] = [
   { header: 'project name', label: 'Project Name', editable: false },
   { header: 'assigned', label: 'Assigned', editable: false },
@@ -62,9 +62,9 @@ const cellValue = (row: SheetData, c: ReportCol) => {
   return c.hours ? displayHours(raw) : raw;
 };
 
-// One project's report popup — the four reference fields are shown but
-// locked, the seven report fields are editable and all required. Nothing is
-// written until Save, and Save is refused while any required field is blank.
+// One project's report popup — the reference fields are shown but locked,
+// the report fields are editable and all optional. Nothing is written until
+// Save, and only the fields that changed are sent.
 function ReportEditModal({ row, cols, checklistOptions, onSave, onCancel }: {
   row: SheetData;
   cols: ReportCol[];
@@ -79,7 +79,6 @@ function ReportEditModal({ row, cols, checklistOptions, onSave, onCancel }: {
     editable.forEach(c => { d[c.sheetCol] = String(row[c.sheetCol] ?? ''); });
     return d;
   });
-  const [tried, setTried] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -89,11 +88,7 @@ function ReportEditModal({ row, cols, checklistOptions, onSave, onCancel }: {
     return () => document.removeEventListener('keydown', onKey);
   }, [saving, onCancel]);
 
-  const missing = editable.filter(c => !draft[c.sheetCol].trim());
-
   const handleSave = async () => {
-    setTried(true);
-    if (missing.length) return;
     const changes: Record<string, string> = {};
     editable.forEach(c => {
       const next = draft[c.sheetCol].trim();
@@ -109,10 +104,10 @@ function ReportEditModal({ row, cols, checklistOptions, onSave, onCancel }: {
     }
   };
 
-  const inputStyle = (bad: boolean) => ({
+  const inputStyle = {
     background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)',
-    border: `1px solid ${bad ? '#ef4444' : 'var(--cn-border)'}`,
-  });
+    border: '1px solid var(--cn-border)',
+  };
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)' }}>
@@ -143,16 +138,21 @@ function ReportEditModal({ row, cols, checklistOptions, onSave, onCancel }: {
             ))}
           </div>
 
-          {/* Editable, all required */}
+          {/* What to cover — one line of guidance for the week boxes */}
+          <p className="text-sm rounded-lg px-3 py-2" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-secondary)', borderLeft: '3px solid var(--cn-accent)' }}>
+            <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>Cover in each update: </span>
+            Project Progress Update, Upsell/Cross-Sell, Escalation, Client Feedback, Resource Feedback, Problems - Next Month Needs.
+          </p>
+
+          {/* Editable, all optional */}
           {editable.map(c => {
-            const bad = tried && !draft[c.sheetCol].trim();
             return (
               <div key={c.header} className="flex flex-col gap-1">
                 <label className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>
-                  {c.label} <span style={{ color: '#ef4444' }}>*</span>
+                  {c.label}
                 </label>
                 {c.multi ? (
-                  <div className="rounded-lg p-1.5 grid grid-cols-1 md:grid-cols-2 gap-x-2" style={inputStyle(bad)}>
+                  <div className="rounded-lg p-1.5 grid grid-cols-1 md:grid-cols-2 gap-x-2" style={inputStyle}>
                     {checklistOptions.map(opt => {
                       const selected = parseMulti(draft[c.sheetCol]);
                       const on = selected.includes(opt);
@@ -180,21 +180,15 @@ function ReportEditModal({ row, cols, checklistOptions, onSave, onCancel }: {
                     disabled={saving}
                     onChange={e => setDraft(d => ({ ...d, [c.sheetCol]: e.target.value }))}
                     className="w-full text-sm rounded-lg px-3 py-2 resize-y focus:outline-none focus:ring-1 focus:ring-[#FE4A23] disabled:opacity-60"
-                    style={inputStyle(bad)}
+                    style={inputStyle}
                   />
                 )}
-                {bad && <span className="text-xs" style={{ color: '#ef4444' }}>This field is required.</span>}
               </div>
             );
           })}
         </div>
 
         <div className="flex items-center justify-end gap-2 px-5 py-3 border-t" style={{ borderColor: 'var(--cn-border)' }}>
-          {tried && missing.length > 0 && !error && (
-            <span className="text-xs mr-auto" style={{ color: '#ef4444' }}>
-              {missing.length} required field{missing.length === 1 ? '' : 's'} left.
-            </span>
-          )}
           {error && <span className="text-xs mr-auto" style={{ color: '#ef4444' }}>{error}</span>}
           <button onClick={onCancel} disabled={saving}
             className="px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all disabled:opacity-50"
