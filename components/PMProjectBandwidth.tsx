@@ -1016,6 +1016,102 @@ interface Props {
   allPmNames?: string[];
 }
 
+// Full-details popup for one project row — builds the field groups from the
+// sheet headers, so any tab (Current Month, Previous Months, Closed Project)
+// can show it with just `row` + `headers`.
+export function ProjectDetailsModal({ row, headers, onClose }: {
+  row: SheetData;
+  headers: string[];
+  onClose: () => void;
+}) {
+  const find = (pred: (h: string) => boolean) => headers.find(pred);
+  const timestampCol = find(h => h.toLowerCase().includes('timestamp'));
+  const emailCol = find(h => h.toLowerCase().includes('email'));
+  const projectCol = find(h => h.toLowerCase().includes('project name'));
+  const statusCol = find(h => h.toLowerCase() === 'status');
+  const assignedCol = find(h => h.toLowerCase() === 'assigned');
+  const totalHoursCol = find(h => h.toLowerCase() === 'total hours');
+  const acHoursCol = find(h => h.toLowerCase() === 'ac hours');
+  const currentMonthHoursCol = find(h => h.toLowerCase() === 'current month hours');
+  const riskMonthHoursCol = find(h => h.toLowerCase() === 'risk month hours');
+  const paymentStatusCol = find(h => h.toLowerCase().includes('payment status'));
+  const allCols = headers.filter(h => h !== timestampCol && h !== emailCol && !/ \(\d+\)$/.test(h));
+  const isDurationCol = (h: string) => h === totalHoursCol || h === acHoursCol || h === currentMonthHoursCol || h === riskMonthHoursCol;
+  const fmtHours = (n: number) => `${formatHoursClock(n)}h`;
+
+  const colOf = (name: string) => allCols.find(h => h.trim().toLowerCase() === name);
+  const chips = (val: string) => (
+    <div className="flex flex-wrap gap-1.5">
+      {val.split(',').map(s => s.trim()).filter(Boolean).map(v => (
+        <span key={v} className="px-3 py-1 rounded-full text-xs" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>{v}</span>
+      ))}
+    </div>
+  );
+  const pill = (val: string) => (
+    <span className="inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full text-xs font-semibold" style={{ background: statusColor(val), color: '#fff' }}>{val}</span>
+  );
+  const renderValue = (h: string): React.ReactNode => {
+    const val = String(row[h] ?? '').trim();
+    if (!val) return <span style={{ color: 'var(--cn-text-faint)' }}>—</span>;
+    if (h.trim().toLowerCase() === 'checklist') return chips(val);
+    if (isDurationCol(h)) { const { h: hh, m } = toHMLiteral(val); return formatHHMM(hh, m); }
+    if (isStatusLikeCol(h)) return pill(val);
+    return val;
+  };
+  const used = new Set<string>();
+  const field = (name: string): ViewField | null => {
+    const h = colOf(name);
+    if (!h) return null;
+    used.add(h);
+    return { key: h, label: h, node: renderValue(h) };
+  };
+  const pick = (names: string[]) => names.map(field).filter((f): f is ViewField => f !== null);
+
+  const pendingField: ViewField | null = totalHoursCol && currentMonthHoursCol
+    ? {
+        key: '__pending',
+        label: 'Pending Hours',
+        node: fmtHours(
+          parseDurationDecimal(row[totalHoursCol]) -
+          (countsAsCurrent(row, statusCol, paymentStatusCol) ? parseDurationDecimal(row[currentMonthHoursCol]) : 0)
+        ),
+      }
+    : null;
+
+  const statusVal = statusCol ? String(row[statusCol] ?? '').trim() : '';
+  if (statusCol) used.add(statusCol);
+  const assignedVal = assignedCol ? String(row[assignedCol] ?? '').trim() : '';
+  if (assignedCol) used.add(assignedCol);
+  const meta = pick(['department', 'year', 'month']);
+
+  const sections = [
+    pick(['project name', 'client name', 'communication channel', 'tech']),
+    pick(['total hours', 'ac hours', 'current month hours', 'risk month hours']),
+    [...pick(['payment details', 'phase', 'milestone']), ...(pendingField ? [pendingField] : [])],
+    pick(['upcoming milestones', 'upsell/cross-sell', 'payment status']),
+    pick(['project start date', 'last (project) follow-up date', 'target end date']),
+  ];
+  // Long text first in the sheet's usual order, then any column the lists
+  // above didn't claim (so a newly added column still shows up).
+  const long = [
+    ...pick(['comments', 'checklist', 'week1', 'week2', 'week3', 'week4', 'week5', 'monthly']),
+    ...allCols.filter(h => !used.has(h)).map(h => ({ key: h, label: h, node: renderValue(h) })),
+  ];
+
+  return (
+    <PmRowViewModal
+      title={projectCol ? String(row[projectCol] ?? '') : ''}
+      statusNode={statusVal ? pill(statusVal) : null}
+      pm={String(row['__pm'] ?? '')}
+      assignedNode={assignedVal ? chips(assignedVal) : null}
+      meta={meta}
+      sections={sections}
+      long={long}
+      onClose={onClose}
+    />
+  );
+}
+
 export default function PMProjectBandwidth({ data, headers, canEdit = false, onCellChange, allData, defaultToCurrentMonth = true, hideYearMonthFilter = false, lockShowDataFull = false, showAllColumns = false, hidePmFilter = false, hidePmSummary = false, allPmNames = [] }: Props) {
   const optionSourceData = allData ?? data;
   // Cells only become editable after clicking "Edit", same pattern as Tasks Assigned
@@ -1787,79 +1883,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
         </div>
       </div>
 
-      {viewRow && (() => {
-        const colOf = (name: string) => allCols.find(h => h.trim().toLowerCase() === name);
-        const chips = (val: string) => (
-          <div className="flex flex-wrap gap-1.5">
-            {val.split(',').map(s => s.trim()).filter(Boolean).map(v => (
-              <span key={v} className="px-3 py-1 rounded-full text-xs" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>{v}</span>
-            ))}
-          </div>
-        );
-        const pill = (val: string) => (
-          <span className="inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full text-xs font-semibold" style={{ background: statusColor(val), color: '#fff' }}>{val}</span>
-        );
-        const renderValue = (h: string): React.ReactNode => {
-          const val = String(viewRow[h] ?? '').trim();
-          if (!val) return <span style={{ color: 'var(--cn-text-faint)' }}>—</span>;
-          if (h.trim().toLowerCase() === 'checklist') return chips(val);
-          if (isDurationCol(h)) { const { h: hh, m } = toHMLiteral(val); return formatHHMM(hh, m); }
-          if (isStatusLikeCol(h)) return pill(val);
-          return val;
-        };
-        const used = new Set<string>();
-        const field = (name: string): ViewField | null => {
-          const h = colOf(name);
-          if (!h) return null;
-          used.add(h);
-          return { key: h, label: h, node: renderValue(h) };
-        };
-        const pick = (names: string[]) => names.map(field).filter((f): f is ViewField => f !== null);
-
-        const pendingField: ViewField | null = totalHoursCol && currentMonthHoursCol
-          ? {
-              key: '__pending',
-              label: 'Pending Hours',
-              node: fmtHours(
-                parseDurationDecimal(viewRow[totalHoursCol]) -
-                (countsAsCurrent(viewRow, statusCol, paymentStatusCol) ? parseDurationDecimal(viewRow[currentMonthHoursCol]) : 0)
-              ),
-            }
-          : null;
-
-        const statusVal = statusCol ? String(viewRow[statusCol] ?? '').trim() : '';
-        if (statusCol) used.add(statusCol);
-        const assignedVal = assignedCol ? String(viewRow[assignedCol] ?? '').trim() : '';
-        if (assignedCol) used.add(assignedCol);
-        const meta = pick(['department', 'year', 'month']);
-
-        const sections = [
-          pick(['project name', 'client name', 'communication channel', 'tech']),
-          pick(['total hours', 'ac hours', 'current month hours', 'risk month hours']),
-          [...pick(['payment details', 'phase', 'milestone']), ...(pendingField ? [pendingField] : [])],
-          pick(['upcoming milestones', 'upsell/cross-sell', 'payment status']),
-          pick(['project start date', 'last (project) follow-up date', 'target end date']),
-        ];
-        // Long text first in the sheet's usual order, then any column the
-        // lists above didn't claim (so a newly added column still shows up).
-        const long = [
-          ...pick(['comments', 'checklist', 'week1', 'week2', 'week3', 'week4', 'week5', 'monthly']),
-          ...allCols.filter(h => !used.has(h)).map(h => ({ key: h, label: h, node: renderValue(h) })),
-        ];
-
-        return (
-          <PmRowViewModal
-            title={projectCol ? String(viewRow[projectCol] ?? '') : ''}
-            statusNode={statusVal ? pill(statusVal) : null}
-            pm={String(viewRow['__pm'] ?? '')}
-            assignedNode={assignedVal ? chips(assignedVal) : null}
-            meta={meta}
-            sections={sections}
-            long={long}
-            onClose={() => setViewRow(null)}
-          />
-        );
-      })()}
+      {viewRow && <ProjectDetailsModal row={viewRow} headers={headers} onClose={() => setViewRow(null)} />}
 
       {popupRow && onCellChange && (
         <PmRowEditModal

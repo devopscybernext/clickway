@@ -5,7 +5,7 @@ import { X, Check, ArrowRight } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { memberPhoto, memberColor } from '@/lib/memberColors';
 import { MultiSelect } from './FilteredDataTable';
-import { statusColor } from './PMProjectBandwidth';
+import { statusColor, ProjectDetailsModal } from './PMProjectBandwidth';
 
 // Statuses that put a project on this tab — compared lowercase/trimmed so
 // "Closed: Good Feedback" vs "Closed: Good feedback" in the sheet both match.
@@ -74,6 +74,8 @@ export default function ClosedProjects({ data, headers }: Props) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // Clicking a card opens the full-details popup for that project.
+  const [selected, setSelected] = useState<SheetData | null>(null);
 
   const get = (r: SheetData, c?: string) => (c ? String(r[c] ?? '').trim() : '');
 
@@ -211,7 +213,12 @@ export default function ClosedProjects({ data, headers }: Props) {
             return (
               <article
                 key={id}
-                className="rounded-3xl p-6 flex flex-col gap-5 min-w-0 transition-shadow hover:shadow-lg"
+                role="button"
+                tabIndex={0}
+                title="Click to see all the details"
+                onClick={() => setSelected(r)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(r); } }}
+                className="rounded-3xl p-6 flex flex-col gap-5 min-w-0 cursor-pointer transition-shadow hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FE4A23]"
                 style={{ background: 'var(--cn-bg-row-even)', border: '1px solid var(--cn-border)' }}
               >
                 <div className="flex flex-col gap-3">
@@ -259,7 +266,7 @@ export default function ClosedProjects({ data, headers }: Props) {
                     </p>
                     {isLong && (
                       <button
-                        onClick={() => setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; })}
+                        onClick={e => { e.stopPropagation(); setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; }); }}
                         className="mt-1 text-sm font-semibold cursor-pointer hover:opacity-80"
                         style={{ color: 'var(--cn-accent)' }}
                       >
@@ -290,6 +297,8 @@ export default function ClosedProjects({ data, headers }: Props) {
           })}
         </div>
       )}
+
+      {selected && <ProjectDetailsModal row={selected} headers={headers} onClose={() => setSelected(null)} />}
     </div>
   );
 }
