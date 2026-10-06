@@ -1088,7 +1088,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   hideYearMonthFilter={effectivePmBandwidthSubTab === 'current'}
                   lockShowDataFull={effectivePmBandwidthSubTab === 'mine'}
                   showAllColumns={effectivePmBandwidthSubTab === 'archive'}
-                  allowReportDownload={effectivePmBandwidthSubTab === 'archive'}
+                  allowReportDownload={effectivePmBandwidthSubTab === 'archive' || effectivePmBandwidthSubTab === 'current'}
+                  reportName={effectivePmBandwidthSubTab === 'archive' ? 'Previous Months' : 'Current Month'}
                   hidePmFilter={effectivePmBandwidthSubTab === 'mine'}
                   hidePmSummary={effectivePmBandwidthSubTab === 'archive'}
                 />

@@ -1006,9 +1006,11 @@ interface Props {
   // report-style ones hidden elsewhere) shown by default, at the Full level
   // with no Low/Medium/Full toggle.
   showAllColumns?: boolean;
-  // True for "Previous Months" — adds a Download Report button that exports the
-  // rows currently in the table (after filters) as Excel or PDF.
+  // Adds a Download Report button that exports the rows currently in the table
+  // (after filters) as an Excel file — Current Month and Previous Months.
   allowReportDownload?: boolean;
+  // Name used for the sheet and the file, e.g. "Previous Months" / "Current Month".
+  reportName?: string;
   // True for "My Projects" — the PM filter is meaningless there since the
   // whole tab is already scoped to one PM (the logged-in user).
   hidePmFilter?: boolean;
@@ -1119,7 +1121,7 @@ export function ProjectDetailsModal({ row, headers, onClose }: {
   );
 }
 
-export default function PMProjectBandwidth({ data, headers, canEdit = false, onCellChange, allData, defaultToCurrentMonth = true, hideYearMonthFilter = false, lockShowDataFull = false, showAllColumns = false, allowReportDownload = false, hidePmFilter = false, hidePmSummary = false, allPmNames = [] }: Props) {
+export default function PMProjectBandwidth({ data, headers, canEdit = false, onCellChange, allData, defaultToCurrentMonth = true, hideYearMonthFilter = false, lockShowDataFull = false, showAllColumns = false, allowReportDownload = false, reportName = 'Report', hidePmFilter = false, hidePmSummary = false, allPmNames = [] }: Props) {
   const optionSourceData = allData ?? data;
   // Cells only become editable after clicking "Edit", same pattern as Tasks Assigned
   const [editMode, setEditMode] = useState(false);
@@ -1540,10 +1542,10 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
         : []),
     ]);
     return {
-      title: 'Previous Months',
+      title: reportName,
       columns,
       rows,
-      fileName: `Previous-Months-${new Date().toISOString().slice(0, 10)}.xlsx`,
+      fileName: `${reportName.trim().replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.xlsx`,
       colorFor: (_ci, v) => (v ? statusColor(v) : null),
     };
   };
