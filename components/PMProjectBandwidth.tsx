@@ -866,6 +866,10 @@ interface Props {
   // control entirely instead of offering tiers that don't add much value
   // at this scale.
   lockShowDataFull?: boolean;
+  // True for "Previous Months" — every sheet column (including the
+  // report-style ones hidden elsewhere) shown by default, at the Full level
+  // with no Low/Medium/Full toggle.
+  showAllColumns?: boolean;
   // True for "My Projects" — the PM filter is meaningless there since the
   // whole tab is already scoped to one PM (the logged-in user).
   hidePmFilter?: boolean;
@@ -880,7 +884,7 @@ interface Props {
   allPmNames?: string[];
 }
 
-export default function PMProjectBandwidth({ data, headers, canEdit = false, onCellChange, allData, defaultToCurrentMonth = true, hideYearMonthFilter = false, lockShowDataFull = false, hidePmFilter = false, hidePmSummary = false, allPmNames = [] }: Props) {
+export default function PMProjectBandwidth({ data, headers, canEdit = false, onCellChange, allData, defaultToCurrentMonth = true, hideYearMonthFilter = false, lockShowDataFull = false, showAllColumns = false, hidePmFilter = false, hidePmSummary = false, allPmNames = [] }: Props) {
   const optionSourceData = allData ?? data;
   // Cells only become editable after clicking "Edit", same pattern as Tasks Assigned
   const [editMode, setEditMode] = useState(false);
@@ -937,7 +941,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   // The report-style columns (Project Progress Update, Upsell, Escalation, ...)
   // are kept out of the table, the Columns picker and the My Projects edit
   // popup; they're only filled in through the Generate Report view.
-  const tableCols = allCols.filter(h => !ALWAYS_DEFAULT_HIDDEN_COLS.includes(h.trim().toLowerCase()));
+  const tableCols = showAllColumns ? allCols : allCols.filter(h => !ALWAYS_DEFAULT_HIDDEN_COLS.includes(h.trim().toLowerCase()));
 
   // Show Data always starts at Low, except My Projects (lockShowDataFull)
   // which always shows Full and has no toggle to change it. Dashboard.tsx
@@ -948,8 +952,8 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   useEffect(() => {
     if (levelDefaultApplied.current || !headers.length) return;
     levelDefaultApplied.current = true;
-    setShowDataLevel(lockShowDataFull ? 'full' : 'low');
-  }, [headers.length, lockShowDataFull]);
+    setShowDataLevel(lockShowDataFull || showAllColumns ? 'full' : 'low');
+  }, [headers.length, lockShowDataFull, showAllColumns]);
 
   // Column presets per level — Low is a bare-minimum glance, Medium is the
   // previous curated default, Full is every column. PM itself isn't part of
@@ -968,10 +972,11 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     // (still in the Columns picker, and editable in the My Projects popup).
     full: tableCols.filter(h => {
       const k = h.trim().toLowerCase();
+      if (showAllColumns) return true;
       return !ALWAYS_DEFAULT_HIDDEN_COLS.includes(k) && !(lockShowDataFull && MY_PROJECTS_DEFAULT_HIDDEN_COLS.includes(k));
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [projectCol, clientCol, totalHoursCol, currentMonthHoursCol, statusCol, departmentCol, paymentStatusCol, followupDateCol, tableCols, lockShowDataFull]);
+  }), [projectCol, clientCol, totalHoursCol, currentMonthHoursCol, statusCol, departmentCol, paymentStatusCol, followupDateCol, tableCols, lockShowDataFull, showAllColumns]);
 
   // Re-applies whenever the level changes (button click or the per-tab
   // default above) — manual Columns picker edits in between still work,
@@ -1334,7 +1339,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                 </button>
               </div>
             )}
-            {!lockShowDataFull && (
+            {!lockShowDataFull && !showAllColumns && (
               <div className="flex flex-col gap-1 col-span-2 sm:col-span-1 sm:ml-auto">
                 <span className="text-xs font-medium" style={{ color: 'var(--cn-text-muted)' }}>Show Data</span>
                 <div className="inline-flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--cn-border)' }}>
