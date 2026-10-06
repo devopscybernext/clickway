@@ -227,13 +227,16 @@ function ReportEditModal({ row, cols, checklistOptions, onSave, onCancel }: {
 // Asks what goes into the PDF before it is generated — the project header and
 // hours are always there; each report section is the user's choice.
 function PdfOptionsDialog({ options, initial, onConfirm, onCancel }: {
-  options: { key: string; label: string }[];
+  options: { key: string; label: string; locked?: boolean }[];
   initial: Set<string>;
   onConfirm: (selected: Set<string>) => void;
   onCancel: () => void;
 }) {
   useBodyScrollLock();
-  const [selected, setSelected] = useState<Set<string>>(new Set(initial));
+  const locked = options.filter(o => o.locked);
+  const optional = options.filter(o => !o.locked);
+  // Only the optional parts are the user's choice; the locked ones are always in.
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(optional.filter(o => initial.has(o.key)).map(o => o.key)));
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
@@ -243,7 +246,9 @@ function PdfOptionsDialog({ options, initial, onConfirm, onCancel }: {
 
   const toggle = (key: string) =>
     setSelected(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
-  const allOn = selected.size === options.length;
+  const confirm = () => onConfirm(new Set([...locked.map(o => o.key), ...selected]));
+
+  const rowCls = 'flex items-center gap-3 px-2 py-2 rounded-md text-sm';
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onCancel}>
@@ -258,19 +263,29 @@ function PdfOptionsDialog({ options, initial, onConfirm, onCancel }: {
         <div className="px-5 pt-5 pb-3">
           <h2 className="font-semibold text-base" style={{ color: 'var(--cn-text-primary)' }}>What should go into the PDF?</h2>
           <p className="text-xs mt-1" style={{ color: 'var(--cn-text-muted)' }}>
-            Tick the parts to include — anything unticked is left out of every page. Project name, status and hours are always shown.
+            The first group is always included. Tick any of the weekly or monthly updates you also want — unticked ones are left out of every page.
           </p>
         </div>
 
-        <div className="px-5 flex items-center gap-3 pb-2">
-          <button onClick={() => setSelected(new Set(options.map(o => o.key)))} className="text-xs font-semibold cursor-pointer hover:opacity-80" style={{ color: 'var(--cn-accent)' }}>Select all</button>
-          <span style={{ color: 'var(--cn-border)' }}>·</span>
-          <button onClick={() => setSelected(new Set())} className="text-xs font-semibold cursor-pointer hover:opacity-80" style={{ color: 'var(--cn-text-muted)' }}>Clear</button>
-        </div>
-
         <div className="px-3 overflow-y-auto overscroll-contain">
-          {options.map(o => (
-            <label key={o.key} className="flex items-center gap-3 px-2 py-2 rounded-md cursor-pointer text-sm hover:bg-[var(--cn-bg-hover)]" style={{ color: 'var(--cn-text-primary)' }}>
+          <p className="px-2 pt-1 pb-1 text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>Always included</p>
+          {locked.map(o => (
+            <div key={o.key} className={rowCls} style={{ color: 'var(--cn-text-secondary)' }}>
+              <input type="checkbox" checked disabled readOnly aria-label={`${o.label} (always included)`} className="accent-[#FE4A23] opacity-70" />
+              {o.label}
+            </div>
+          ))}
+
+          <div className="flex items-center justify-between px-2 pt-4 pb-1">
+            <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>Add if you want</p>
+            <div className="flex items-center gap-3">
+              <button onClick={() => setSelected(new Set(optional.map(o => o.key)))} className="text-xs font-semibold cursor-pointer hover:opacity-80" style={{ color: 'var(--cn-accent)' }}>Select all</button>
+              <span style={{ color: 'var(--cn-border)' }}>·</span>
+              <button onClick={() => setSelected(new Set())} className="text-xs font-semibold cursor-pointer hover:opacity-80" style={{ color: 'var(--cn-text-muted)' }}>Clear</button>
+            </div>
+          </div>
+          {optional.map(o => (
+            <label key={o.key} className={`${rowCls} cursor-pointer hover:bg-[var(--cn-bg-hover)]`} style={{ color: 'var(--cn-text-primary)' }}>
               <input type="checkbox" checked={selected.has(o.key)} onChange={() => toggle(o.key)} className="accent-[#FE4A23] cursor-pointer" />
               {o.label}
             </label>
@@ -278,14 +293,14 @@ function PdfOptionsDialog({ options, initial, onConfirm, onCancel }: {
         </div>
 
         <div className="flex items-center justify-between gap-2 px-5 py-4 mt-1 border-t" style={{ borderColor: 'var(--cn-border)' }}>
-          <span className="text-xs" style={{ color: 'var(--cn-text-muted)' }}>{allOn ? 'Everything' : `${selected.size} of ${options.length}`} selected</span>
+          <span className="text-xs" style={{ color: 'var(--cn-text-muted)' }}>{selected.size} of {optional.length} optional added</span>
           <div className="flex items-center gap-2">
             <button onClick={onCancel}
               className="px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all"
               style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>
               Cancel
             </button>
-            <button onClick={() => onConfirm(selected)}
+            <button onClick={confirm}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all"
               style={{ background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }}>
               <FileDown className="w-4 h-4" />
@@ -397,11 +412,14 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
   // One A4 page per project, straight to the user's downloads — built from
   // the rows currently on screen (so just-saved edits are included).
   // The report sections the user can choose to include (everything editable).
-  // 'overview' = the opening page; the rest are the report sections.
+  // 'overview' = the opening page; the rest are the report sections. Overview,
+  // Checklist and Comments are always in the PDF; the weekly / monthly updates
+  // are the user's choice.
+  const ALWAYS_IN_PDF = ['overview', 'checklist', 'comments'];
   const pdfOptions = [
     { key: 'overview', label: 'Overview page — total, current & pending hours + project list' },
     ...cols.filter(c => c.editable).map(c => ({ key: c.header, label: c.label })),
-  ];
+  ].map(o => ({ ...o, locked: ALWAYS_IN_PDF.includes(o.key) }));
   const [pdfDialogOpen, setPdfDialogOpen] = useState(false);
   // Remembered between downloads in this session; null = nothing chosen yet, i.e. everything on.
   const [pdfSelection, setPdfSelection] = useState<Set<string> | null>(null);
