@@ -112,7 +112,7 @@ function ReportEditModal({ row, cols, checklistOptions, onSave, onCancel }: {
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)' }}>
       <div role="dialog" aria-modal="true" className="rounded-lg w-full flex flex-col"
-        style={{ background: 'var(--cn-bg-card)', maxWidth: 720, maxHeight: '90vh', border: '1px solid var(--cn-border)' }}>
+        style={{ background: 'var(--cn-bg-card)', maxWidth: 960, maxHeight: '90vh', border: '1px solid var(--cn-border)' }}>
         <div className="flex items-center justify-between gap-3 px-5 py-3 border-b" style={{ borderColor: 'var(--cn-border)' }}>
           <div className="min-w-0">
             <h2 className="font-semibold text-base truncate" style={{ color: 'var(--cn-text-primary)' }}>Project Report</h2>
@@ -139,8 +139,8 @@ function ReportEditModal({ row, cols, checklistOptions, onSave, onCancel }: {
           </div>
 
           {/* What to cover — one line of guidance for the week boxes */}
-          <p className="text-sm rounded-lg px-3 py-2" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-secondary)', borderLeft: '3px solid var(--cn-accent)' }}>
-            <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>Cover in each update: </span>
+          <p className="text-[12px] rounded-lg px-3 py-2" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-secondary)', borderLeft: '3px solid var(--cn-accent)' }}>
+            <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>Weekly/Monthly Updates: </span>
             Project Progress Update, Upsell/Cross-Sell, Escalation, Client Feedback, Resource Feedback, Problems - Next Month Needs.
           </p>
 
@@ -152,7 +152,7 @@ function ReportEditModal({ row, cols, checklistOptions, onSave, onCancel }: {
                   {c.label}
                 </label>
                 {c.multi ? (
-                  <div className="rounded-lg p-1.5 grid grid-cols-1 md:grid-cols-2 gap-x-2" style={inputStyle}>
+                  <div className="rounded-lg p-1.5 flex flex-col" style={inputStyle}>
                     {checklistOptions.map(opt => {
                       const selected = parseMulti(draft[c.sheetCol]);
                       const on = selected.includes(opt);
@@ -165,9 +165,9 @@ function ReportEditModal({ row, cols, checklistOptions, onSave, onCancel }: {
                         setDraft(d => ({ ...d, [c.sheetCol]: next.join(', ') }));
                       };
                       return (
-                        <label key={opt} className="flex items-start gap-2 px-2 py-1.5 rounded-md cursor-pointer text-sm hover:bg-[var(--cn-bg-hover)]"
+                        <label key={opt} className="flex items-center gap-2.5 px-2 py-1.5 rounded-md cursor-pointer text-sm hover:bg-[var(--cn-bg-hover)]"
                           style={{ color: 'var(--cn-text-primary)' }}>
-                          <input type="checkbox" checked={on} disabled={saving} onChange={toggle} className="mt-0.5 accent-[#FE4A23] cursor-pointer shrink-0" />
+                          <input type="checkbox" checked={on} disabled={saving} onChange={toggle} className="accent-[#FE4A23] cursor-pointer shrink-0" />
                           <span className="break-words">{opt}</span>
                         </label>
                       );
