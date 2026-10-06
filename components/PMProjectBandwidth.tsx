@@ -851,15 +851,20 @@ function PmRowEditModal({ row, fields, kindOf, optionsFor, pendingHoursOf, onSav
   );
 }
 
-// Read-only "full details" popup for Current Month / Previous Months — every
-// column of one project in a 3-column grid, long text shown in full.
-function PmRowViewModal({ title, subtitle, fields, renderValue, isWide, extra, onClose }: {
+// Read-only "full details" popup for Current Month / Previous Months — a
+// header (project, status, PM, assigned, department/year/month), then the
+// project's fields grouped into divided sections of four, then the long-text
+// fields stacked full width.
+type ViewField = { key: string; label: string; node: React.ReactNode };
+
+function PmRowViewModal({ title, statusNode, pm, assignedNode, meta, sections, long, onClose }: {
   title: string;
-  subtitle: string;
-  fields: string[];
-  renderValue: (h: string) => React.ReactNode;
-  isWide: (h: string) => boolean;
-  extra?: { label: string; value: string } | null;
+  statusNode: React.ReactNode;
+  pm: string;
+  assignedNode: React.ReactNode;
+  meta: ViewField[];
+  sections: ViewField[][];
+  long: ViewField[];
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -868,50 +873,96 @@ function PmRowViewModal({ title, subtitle, fields, renderValue, isWide, extra, o
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const label = (text: string) => (
-    <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>{text}</div>
-  );
+  const labelCls = 'text-[11px] font-semibold uppercase tracking-wide';
+  const labelStyle = { color: 'var(--cn-text-muted)' };
+  const photo = pm ? memberPhoto(pm) : '';
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
-        className="rounded-lg w-full flex flex-col"
+        className="rounded-2xl w-full flex flex-col"
         style={{ background: 'var(--cn-bg-card)', maxWidth: 1280, height: '94vh', border: '1px solid var(--cn-border)' }}
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between gap-3 px-5 py-3 border-b" style={{ borderColor: 'var(--cn-border)' }}>
-          <div className="min-w-0">
-            <h2 className="font-semibold text-base truncate" style={{ color: 'var(--cn-text-primary)' }}>{title || 'Untitled project'}</h2>
-            {subtitle && <p className="text-xs truncate" style={{ color: 'var(--cn-text-muted)' }}>{subtitle}</p>}
+        <div className="overflow-y-auto flex-1 px-8 sm:px-10 pt-8 pb-4">
+          {/* Header */}
+          <div className="flex items-start justify-between gap-4">
+            <h2 className="text-2xl sm:text-3xl font-bold leading-tight break-words min-w-0" style={{ color: 'var(--cn-text-primary)' }}>
+              {title || 'Untitled project'}
+            </h2>
+            <div className="flex items-center gap-3 shrink-0">
+              {statusNode}
+              <button
+                onClick={onClose}
+                title="Close"
+                className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors hover:opacity-80"
+                style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
-          <button
-            onClick={onClose}
-            title="Close"
-            className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors hover:opacity-80 shrink-0"
-            style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
 
-        <div className="overflow-y-auto px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-4 content-start flex-1">
-          {fields.map(h => (
-            <div key={h} className={`flex flex-col gap-1 min-w-0 ${isWide(h) ? 'sm:col-span-2 lg:col-span-3' : ''}`}>
-              {label(h)}
-              <div className="text-sm break-words whitespace-pre-wrap" style={{ color: 'var(--cn-text-primary)' }}>{renderValue(h)}</div>
+          {/* Who / when */}
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-x-8 gap-y-4">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+              {pm && (
+                <div className="flex items-center gap-2.5 text-base" style={{ color: 'var(--cn-text-muted)' }}>
+                  {photo
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={photo} alt={pm} className="w-8 h-8 rounded-full object-cover shrink-0" />
+                    : <span className="w-8 h-8 rounded-full inline-flex items-center justify-center text-white text-sm font-bold shrink-0" style={{ background: memberColor(pm) }}>{pm.trim().charAt(0).toUpperCase()}</span>}
+                  <span>Managed by <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{pm}</span></span>
+                </div>
+              )}
+              {pm && assignedNode && <span className="hidden sm:block self-stretch w-px" style={{ background: 'var(--cn-border)' }} />}
+              {assignedNode && (
+                <div className="flex flex-col gap-1.5">
+                  <span className={labelCls} style={labelStyle}>Assigned</span>
+                  {assignedNode}
+                </div>
+              )}
+            </div>
+            {meta.length > 0 && (
+              <div className="flex flex-wrap gap-x-8 gap-y-3">
+                {meta.map(f => (
+                  <div key={f.key} className="flex flex-col gap-1">
+                    <span className={labelCls} style={labelStyle}>{f.label}</span>
+                    <span className="text-sm" style={{ color: 'var(--cn-text-primary)' }}>{f.node}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Divided sections of four */}
+          {sections.filter(s => s.length > 0).map((section, i) => (
+            <div key={i} className="mt-6 pt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-5" style={{ borderTop: '1px solid var(--cn-border)' }}>
+              {section.map(f => (
+                <div key={f.key} className="flex flex-col gap-1.5 min-w-0">
+                  <span className={labelCls} style={labelStyle}>{f.label}</span>
+                  <div className="text-sm break-words whitespace-pre-wrap" style={{ color: 'var(--cn-text-primary)' }}>{f.node}</div>
+                </div>
+              ))}
             </div>
           ))}
-          {extra && (
-            <div className="flex flex-col gap-1">
-              {label(extra.label)}
-              <div className="text-sm" style={{ color: 'var(--cn-text-primary)' }}>{extra.value}</div>
+
+          {/* Long text, stacked */}
+          {long.length > 0 && (
+            <div className="mt-6 pt-6 flex flex-col gap-5" style={{ borderTop: '1px solid var(--cn-border)' }}>
+              {long.map(f => (
+                <div key={f.key} className="flex flex-col gap-1.5 min-w-0">
+                  <span className={labelCls} style={labelStyle}>{f.label}</span>
+                  <div className="text-sm break-words whitespace-pre-wrap" style={{ color: 'var(--cn-text-primary)' }}>{f.node}</div>
+                </div>
+              ))}
             </div>
           )}
         </div>
 
-        <div className="flex items-center justify-end px-5 py-3 border-t" style={{ borderColor: 'var(--cn-border)' }}>
+        <div className="flex items-center justify-end px-8 sm:px-10 py-3 border-t" style={{ borderColor: 'var(--cn-border)' }}>
           <button
             onClick={onClose}
             className="px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all"
@@ -1736,45 +1787,79 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
         </div>
       </div>
 
-      {viewRow && (
-        <PmRowViewModal
-          title={projectCol ? String(viewRow[projectCol] ?? '') : ''}
-          subtitle={String(viewRow['__pm'] ?? '') ? `PM: ${String(viewRow['__pm'])}` : ''}
-          fields={allCols}
-          isWide={h => {
-            const k = h.trim().toLowerCase();
-            return h === assignedCol || h === commentsCol || h === milestonesCol || k === 'checklist' || LONG_TEXT_COLS.includes(k);
-          }}
-          renderValue={h => {
-            const val = String(viewRow[h] ?? '').trim();
-            if (!val) return <span style={{ color: 'var(--cn-text-faint)' }}>—</span>;
-            if (h === assignedCol || h.trim().toLowerCase() === 'checklist') {
-              return (
-                <div className="flex flex-wrap gap-1.5">
-                  {val.split(',').map(s => s.trim()).filter(Boolean).map(v => (
-                    <span key={v} className="px-2.5 py-1 rounded-full text-xs" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>{v}</span>
-                  ))}
-                </div>
-              );
+      {viewRow && (() => {
+        const colOf = (name: string) => allCols.find(h => h.trim().toLowerCase() === name);
+        const chips = (val: string) => (
+          <div className="flex flex-wrap gap-1.5">
+            {val.split(',').map(s => s.trim()).filter(Boolean).map(v => (
+              <span key={v} className="px-3 py-1 rounded-full text-xs" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>{v}</span>
+            ))}
+          </div>
+        );
+        const pill = (val: string) => (
+          <span className="inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full text-xs font-semibold" style={{ background: statusColor(val), color: '#fff' }}>{val}</span>
+        );
+        const renderValue = (h: string): React.ReactNode => {
+          const val = String(viewRow[h] ?? '').trim();
+          if (!val) return <span style={{ color: 'var(--cn-text-faint)' }}>—</span>;
+          if (h.trim().toLowerCase() === 'checklist') return chips(val);
+          if (isDurationCol(h)) { const { h: hh, m } = toHMLiteral(val); return formatHHMM(hh, m); }
+          if (isStatusLikeCol(h)) return pill(val);
+          return val;
+        };
+        const used = new Set<string>();
+        const field = (name: string): ViewField | null => {
+          const h = colOf(name);
+          if (!h) return null;
+          used.add(h);
+          return { key: h, label: h, node: renderValue(h) };
+        };
+        const pick = (names: string[]) => names.map(field).filter((f): f is ViewField => f !== null);
+
+        const pendingField: ViewField | null = totalHoursCol && currentMonthHoursCol
+          ? {
+              key: '__pending',
+              label: 'Pending Hours',
+              node: fmtHours(
+                parseDurationDecimal(viewRow[totalHoursCol]) -
+                (countsAsCurrent(viewRow, statusCol, paymentStatusCol) ? parseDurationDecimal(viewRow[currentMonthHoursCol]) : 0)
+              ),
             }
-            if (isDurationCol(h)) { const { h: hh, m } = toHMLiteral(val); return formatHHMM(hh, m); }
-            if (isStatusLikeCol(h)) {
-              return <span className="inline-flex items-center whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: statusColor(val), color: '#fff' }}>{val}</span>;
-            }
-            return val;
-          }}
-          extra={totalHoursCol && currentMonthHoursCol
-            ? {
-                label: 'Pending Hours',
-                value: fmtHours(
-                  parseDurationDecimal(viewRow[totalHoursCol]) -
-                  (countsAsCurrent(viewRow, statusCol, paymentStatusCol) ? parseDurationDecimal(viewRow[currentMonthHoursCol]) : 0)
-                ),
-              }
-            : null}
-          onClose={() => setViewRow(null)}
-        />
-      )}
+          : null;
+
+        const statusVal = statusCol ? String(viewRow[statusCol] ?? '').trim() : '';
+        if (statusCol) used.add(statusCol);
+        const assignedVal = assignedCol ? String(viewRow[assignedCol] ?? '').trim() : '';
+        if (assignedCol) used.add(assignedCol);
+        const meta = pick(['department', 'year', 'month']);
+
+        const sections = [
+          pick(['project name', 'client name', 'communication channel', 'tech']),
+          pick(['total hours', 'ac hours', 'current month hours', 'risk month hours']),
+          [...pick(['payment details', 'phase', 'milestone']), ...(pendingField ? [pendingField] : [])],
+          pick(['upcoming milestones', 'upsell/cross-sell', 'payment status']),
+          pick(['project start date', 'last (project) follow-up date', 'target end date']),
+        ];
+        // Long text first in the sheet's usual order, then any column the
+        // lists above didn't claim (so a newly added column still shows up).
+        const long = [
+          ...pick(['comments', 'checklist', 'week1', 'week2', 'week3', 'week4', 'week5', 'monthly']),
+          ...allCols.filter(h => !used.has(h)).map(h => ({ key: h, label: h, node: renderValue(h) })),
+        ];
+
+        return (
+          <PmRowViewModal
+            title={projectCol ? String(viewRow[projectCol] ?? '') : ''}
+            statusNode={statusVal ? pill(statusVal) : null}
+            pm={String(viewRow['__pm'] ?? '')}
+            assignedNode={assignedVal ? chips(assignedVal) : null}
+            meta={meta}
+            sections={sections}
+            long={long}
+            onClose={() => setViewRow(null)}
+          />
+        );
+      })()}
 
       {popupRow && onCellChange && (
         <PmRowEditModal
