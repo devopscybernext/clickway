@@ -67,6 +67,10 @@ const escapeHtml = (s: string) =>
 // in the table (works on both the light and dark theme).
 const FLAG_BG = 'rgba(239, 68, 68, 0.16)';
 
+// The weekly / monthly updates — the parts of a report the user picks in the
+// Download PDF and Copy report popups (everything else is always included).
+const OPTIONAL_REPORT_COLS = ['week1', 'week2', 'week3', 'week4', 'week5', 'monthly'];
+
 const cellValue = (row: SheetData, c: ReportCol) => {
   const raw = String(row[c.sheetCol] ?? '');
   return c.hours ? displayHours(raw) : raw;
@@ -221,7 +225,13 @@ function ReportEditModal({ row, cols, checklistOptions, onSave, onCancel }: {
 
 // Asks what goes into the PDF before it is generated — the project header and
 // hours are always there; each report section is the user's choice.
-function PdfOptionsDialog({ options, initial, onConfirm, onCancel }: {
+// Shared by Download PDF and Copy report: what is always in, and which of the
+// weekly / monthly updates to add.
+function ReportOptionsDialog({ title, intro, confirmLabel, ConfirmIcon, options, initial, onConfirm, onCancel }: {
+  title: string;
+  intro: string;
+  confirmLabel: string;
+  ConfirmIcon: React.ComponentType<{ className?: string }>;
   options: { key: string; label: string; locked?: boolean }[];
   initial: Set<string>;
   onConfirm: (selected: Set<string>) => void;
@@ -250,16 +260,14 @@ function PdfOptionsDialog({ options, initial, onConfirm, onCancel }: {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Choose what to include in the PDF"
+        aria-label={title}
         className="rounded-xl w-full flex flex-col"
         style={{ background: 'var(--cn-bg-card)', maxWidth: 440, maxHeight: '90vh', border: '1px solid var(--cn-border)' }}
         onClick={e => e.stopPropagation()}
       >
         <div className="px-5 pt-5 pb-3">
-          <h2 className="font-semibold text-base" style={{ color: 'var(--cn-text-primary)' }}>What should go into the PDF?</h2>
-          <p className="text-xs mt-1" style={{ color: 'var(--cn-text-muted)' }}>
-            The first group is always included. Tick any of the weekly or monthly updates you also want — unticked ones are left out of every page.
-          </p>
+          <h2 className="font-semibold text-base" style={{ color: 'var(--cn-text-primary)' }}>{title}</h2>
+          <p className="text-xs mt-1" style={{ color: 'var(--cn-text-muted)' }}>{intro}</p>
         </div>
 
         <div className="px-3 overflow-y-auto overscroll-contain">
@@ -298,8 +306,8 @@ function PdfOptionsDialog({ options, initial, onConfirm, onCancel }: {
             <button onClick={confirm}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all"
               style={{ background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }}>
-              <FileDown className="w-4 h-4" />
-              Download PDF
+              <ConfirmIcon className="w-4 h-4" />
+              {confirmLabel}
             </button>
           </div>
         </div>
@@ -318,7 +326,7 @@ interface Props {
 
 // My Projects → Generate Report. A read-only table of the PM's current month
 // projects (same look as All Projects); "Edit" reveals a pencil on each row
-// which opens a popup to fill that project's report fields. "Copy table"
+// which opens a popup to fill that project's report fields. "Copy report"
 // puts every column on the clipboard as both a real table (for Docs / Gmail /
 // Slack / Word) and tab-separated text (for Sheets / Excel); "Download PDF"
 // saves the whole report straight to the user's machine, one A4 page per
@@ -335,16 +343,20 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
   const [popupRow, setPopupRow] = useState<SheetData | null>(null);
   const [copied, setCopied] = useState<'ok' | 'fail' | null>(null);
 
-  const copyTable = async () => {
+  // `include` = the keys chosen in the Copy report popup. Weekly / monthly
+  // columns that weren't ticked are left out of the copy entirely; every other
+  // column (project, hours, Checklist, Comments, ...) is always copied.
+  const copyTable = async (include: Set<string>) => {
+    const copyCols = cols.filter(c => !OPTIONAL_REPORT_COLS.includes(c.header) || include.has(c.header));
     // Each project's Status is copied too — a column right after Project Name
     // (the Status isn't one of the on-screen report columns).
     const STATUS_AT = 1;
     const hasStatus = !!statusCol;
-    const header = cols.map(c => c.label);
-    const multiAt = cols.map(c => !!c.multi);
+    const header = copyCols.map(c => c.label);
+    const multiAt = copyCols.map(c => !!c.multi);
     if (hasStatus) { header.splice(STATUS_AT, 0, 'Status'); multiAt.splice(STATUS_AT, 0, false); }
     const body = data.map(r => {
-      const line = cols.map(c => cellValue(r, c));
+      const line = copyCols.map(c => cellValue(r, c));
       if (hasStatus) line.splice(STATUS_AT, 0, String(r[statusCol] ?? '').trim());
       return line;
     });
@@ -423,6 +435,11 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
     ...cols.filter(c => c.editable).map(c => ({ key: c.header, label: c.label })),
   ].map(o => ({ ...o, locked: ALWAYS_IN_PDF.includes(o.key) }));
   const [pdfDialogOpen, setPdfDialogOpen] = useState(false);
+  // Copy report uses the same choices minus the PDF-only Overview page, and
+  // remembers its own selection for the session.
+  const copyOptions = pdfOptions.filter(o => o.key !== 'overview');
+  const [copyDialogOpen, setCopyDialogOpen] = useState(false);
+  const [copySelection, setCopySelection] = useState<Set<string> | null>(null);
   // Remembered between downloads in this session; null = nothing chosen yet, i.e. everything on.
   const [pdfSelection, setPdfSelection] = useState<Set<string> | null>(null);
 
@@ -511,15 +528,16 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
             {editMode ? 'Done Editing' : 'Edit'}
           </button>
           <button
-            onClick={copyTable}
+            onClick={() => setCopyDialogOpen(true)}
             disabled={data.length === 0}
+            title="Copy the report as a table — choose which weeks to include"
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             style={copied === 'ok'
               ? { background: '#16a34a', color: '#fff', border: '1px solid #16a34a' }
               : { background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }}
           >
             {copied === 'ok' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-            {copied === 'ok' ? 'Copied!' : copied === 'fail' ? 'Copy failed' : 'Copy table'}
+            {copied === 'ok' ? 'Copied!' : copied === 'fail' ? 'Copy failed' : 'Copy report'}
           </button>
           <button
             onClick={() => setPdfDialogOpen(true)}
@@ -595,8 +613,25 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
         </table>
       </div>
 
+      {copyDialogOpen && (
+        <ReportOptionsDialog
+          title="What should go into the copy?"
+          intro="The first group is always included. Tick any of the weekly or monthly updates you also want — unticked ones are left out of the copied report."
+          confirmLabel="Copy report"
+          ConfirmIcon={Copy}
+          options={copyOptions}
+          initial={copySelection ?? new Set(copyOptions.map(o => o.key))}
+          onConfirm={selected => { setCopySelection(selected); setCopyDialogOpen(false); copyTable(selected); }}
+          onCancel={() => setCopyDialogOpen(false)}
+        />
+      )}
+
       {pdfDialogOpen && (
-        <PdfOptionsDialog
+        <ReportOptionsDialog
+          title="What should go into the PDF?"
+          intro="The first group is always included. Tick any of the weekly or monthly updates you also want — unticked ones are left out of every page."
+          confirmLabel="Download PDF"
+          ConfirmIcon={FileDown}
           options={pdfOptions}
           initial={pdfSelection ?? new Set(pdfOptions.map(o => o.key))}
           onConfirm={selected => { setPdfSelection(selected); setPdfDialogOpen(false); downloadPdf(selected); }}
