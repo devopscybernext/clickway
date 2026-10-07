@@ -60,11 +60,32 @@ export async function downloadProjectReportPdf(projects: ReportPdfProject[], fil
   const { jsPDF } = await import('jspdf');
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
 
-  // Optional overview first, then one page per project.
-  if (summary) drawSummary(doc, summary);
+  // Optional overview first, then one page per project. A project can run
+  // onto a second page, so each one's *first* page is recorded as it is drawn.
+  const rowLinks = summary ? drawSummary(doc, summary) : [];
+  const startPage: number[] = [];
   projects.forEach((p, idx) => {
     if (idx > 0 || summary) doc.addPage();
+    startPage[idx] = doc.getNumberOfPages();
     drawProject(doc, p);
+  });
+
+  // Make every row of the overview a clickable link to that project's page.
+  // This happens last because the target page numbers are only known now;
+  // jumping back to the overview page(s) to add the link area is allowed.
+  rowLinks.forEach(l => {
+    const target = startPage[l.index];
+    if (!target) return;
+    doc.setPage(l.page);
+    // Underlined name + "p.N" so it reads as a link on paper as well
+    doc.setDrawColor(...MUTED);
+    doc.setLineWidth(0.2);
+    doc.line(MARGIN + 12, l.y + 1.2, l.nameEndX, l.y + 1.2);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...MUTED);
+    doc.text(`p.${target}`, l.nameEndX + 3, l.y);
+    doc.link(MARGIN, l.y - 5.2, CONTENT_W, ROW_H_LINK, { pageNumber: target });
   });
 
   // Footer with real page numbers, now that the total is known.
@@ -83,10 +104,15 @@ export async function downloadProjectReportPdf(projects: ReportPdfProject[], fil
 
 type Doc = InstanceType<Awaited<typeof import('jspdf')>['jsPDF']>;
 
+// Where one overview row was drawn, so it can be turned into a link later.
+interface SummaryRowLink { index: number; page: number; y: number; nameEndX: number }
+const ROW_H_LINK = 8; // same as the overview list's row height
+
 // The opening page: the same overview figures as the PM Projects screen
 // (Total / Current / Pending hours) and the list of every project with its
 // status. Long lists continue onto extra pages.
-function drawSummary(doc: Doc, s: ReportPdfSummary) {
+function drawSummary(doc: Doc, s: ReportPdfSummary): SummaryRowLink[] {
+  const links: SummaryRowLink[] = [];
   const strip = () => { doc.setFillColor(...ORANGE); doc.rect(0, 0, PAGE_W, 4, 'F'); };
   strip();
 
@@ -170,6 +196,7 @@ function drawSummary(doc: Doc, s: ReportPdfSummary) {
     const nameW = CONTENT_W - 16 - 62;
     const name = (doc.splitTextToSize(clean(p.name || 'Untitled project'), nameW) as string[])[0];
     doc.text(name, MARGIN + 12, y);
+    links.push({ index: i, page: doc.getNumberOfPages(), y, nameEndX: MARGIN + 12 + doc.getTextWidth(name) });
 
     // Status pill, right-aligned
     if (p.status) {
@@ -189,6 +216,7 @@ function drawSummary(doc: Doc, s: ReportPdfSummary) {
     }
     y += ROW_H;
   });
+  return links;
 }
 
 function drawProject(doc: Doc, p: ReportPdfProject) {
