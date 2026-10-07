@@ -1548,7 +1548,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
       rows,
       fileName: `${reportName.trim().replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.xlsx`,
       colorFor: (_ci, v) => (v ? statusColor(v) : null),
-      // Red border round rows whose Status needs attention — judged on the
+      // Light red fill on rows whose Status needs attention — judged on the
       // Status column even when it isn't one of the columns being exported.
       flagged: sorted.map(row => !!statusCol && isFlaggedStatus(String(row[statusCol] ?? ''))),
     };

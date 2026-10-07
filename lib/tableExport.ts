@@ -16,26 +16,15 @@ export interface TableExport {
   fileName: string;
   /** Hex colour for a status-like cell, or null for the default text colour. */
   colorFor?: (columnIndex: number, value: string) => string | null;
-  /** One flag per row (aligned with `rows`): true = draw a red border round the row. */
+  /** One flag per row (aligned with `rows`): true = fill the row light red. */
   flagged?: boolean[];
 }
 
 const HEADER_BG = '#f3f4f6';
 const HEADER_TEXT = '#6b7280';
 const ZEBRA_BG = '#fafafa';
-const RED = '#ef4444';
-
-// Border pieces for one cell of a flagged row: top and bottom on every cell,
-// left on the first, right on the last — together a box round the whole row.
-function redRowBorder(flagged: boolean, first: boolean, last: boolean) {
-  if (!flagged) return {};
-  return {
-    topBorderColor: RED, topBorderStyle: 'medium' as const,
-    bottomBorderColor: RED, bottomBorderStyle: 'medium' as const,
-    ...(first ? { leftBorderColor: RED, leftBorderStyle: 'medium' as const } : {}),
-    ...(last ? { rightBorderColor: RED, rightBorderStyle: 'medium' as const } : {}),
-  };
-}
+// Light red fill for rows that need attention (replaces the zebra stripe).
+const FLAG_BG = '#fee2e2';
 
 export async function downloadTableXlsx(t: TableExport): Promise<void> {
   const { default: writeExcelFile } = await import('write-excel-file/browser');
@@ -53,22 +42,19 @@ export async function downloadTableXlsx(t: TableExport): Promise<void> {
   ];
 
   const body = t.rows.map((row, ri) => {
-    const bg = ri % 2 === 1 ? ZEBRA_BG : undefined;
     const flagged = !!t.flagged?.[ri];
-    const lastCol = t.columns.length - 1;
+    const bg = flagged ? FLAG_BG : ri % 2 === 1 ? ZEBRA_BG : undefined;
     return [
-      { value: ri + 1, textColor: '#9ca3af', alignVertical: 'top' as const, backgroundColor: bg, ...redRowBorder(flagged, true, false) },
+      { value: ri + 1, textColor: '#9ca3af', alignVertical: 'top' as const, backgroundColor: bg },
       ...row.map((v, ci) => {
         const color = t.columns[ci].kind === 'status' && t.colorFor ? t.colorFor(ci, v) : null;
-        const border = redRowBorder(flagged, false, ci === lastCol);
-        if (!v) return { value: null, backgroundColor: bg, ...border };
+        if (!v) return { value: null, backgroundColor: bg };
         return {
           value: v,
           wrap: true,
           alignVertical: 'top' as const,
           backgroundColor: bg,
           ...(color ? { textColor: color, fontWeight: 'bold' as const } : {}),
-          ...border,
         };
       }),
     ];

@@ -63,14 +63,9 @@ function displayHours(raw: string): string {
 const escapeHtml = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/\n/g, '<br>');
 
-// Rows with a flagged status (see lib/statusFlags) get a red border in the table.
-const RED_EDGE = '2px solid #ef4444';
-// Border pieces for one cell of a flagged row (collapsed borders: top and
-// bottom on every cell, left on the first, right on the last).
-const redEdge = (flagged: boolean, first: boolean, last: boolean): React.CSSProperties =>
-  flagged
-    ? { borderTop: RED_EDGE, borderBottom: RED_EDGE, ...(first ? { borderLeft: RED_EDGE } : {}), ...(last ? { borderRight: RED_EDGE } : {}) }
-    : {};
+// Rows with a flagged status (see lib/statusFlags) get a light red background
+// in the table (works on both the light and dark theme).
+const FLAG_BG = 'rgba(239, 68, 68, 0.16)';
 
 const cellValue = (row: SheetData, c: ReportCol) => {
   const raw = String(row[c.sheetCol] ?? '');
@@ -375,12 +370,6 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
     // Inline styles so it survives pasting into Gmail / Outlook / Docs.
     // Bottom "Total Time" row: sums Total / Current / AC Hours across projects.
     const total = totalTimeRow(header, body);
-    // Flagged rows get a red border all the way round (top/bottom on every
-    // cell, left on the first, right on the last) — declared after the base
-    // border so it wins in the paste.
-    const RED = '2px solid #ef4444';
-    const redBorder = (i: number, first: boolean, last: boolean) => !flags[i] ? '' :
-      `border-top:${RED};border-bottom:${RED};${first ? `border-left:${RED};` : ''}${last ? `border-right:${RED};` : ''}`;
     const html = `
 <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;color:#111;">
   <thead>
@@ -391,9 +380,9 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
   </thead>
   <tbody>
     ${body.map((line, i) => `
-    <tr style="background-color:${flags[i] ? '#fef2f2' : i % 2 === 0 ? '#ffffff' : '#fafafa'};">
-      <td style="border:1px solid #ddd;padding:6px 12px;color:#888;white-space:nowrap;${redBorder(i, true, false)}">${flags[i] ? '<span style="color:#ef4444;font-size:15px;">●</span> ' : ''}${i + 1}</td>
-      ${line.map((v, ci) => `<td style="border:1px solid #ddd;padding:6px 12px;${redBorder(i, false, ci === line.length - 1)}">${hasStatus && ci === STATUS_AT ? statusPill(v) : multiAt[ci] ? listHtml(v) : escapeHtml(v)}</td>`).join('')}
+    <tr style="background-color:${flags[i] ? '#fee2e2' : i % 2 === 0 ? '#ffffff' : '#fafafa'};">
+      <td style="border:1px solid #ddd;padding:6px 12px;color:#888;white-space:nowrap;">${flags[i] ? '<span style="color:#ef4444;font-size:15px;">●</span> ' : ''}${i + 1}</td>
+      ${line.map((v, ci) => `<td style="border:1px solid #ddd;padding:6px 12px;">${hasStatus && ci === STATUS_AT ? statusPill(v) : multiAt[ci] ? listHtml(v) : escapeHtml(v)}</td>`).join('')}
     </tr>`).join('')}${totalRowHtml(total)}
   </tbody>
 </table>${anyFlagged ? `<p style="font-family:Arial,sans-serif;font-size:12px;color:#555;margin:6px 0 0;"><span style="color:#ef4444;">●</span> ${LEGEND}</p>` : ''}`;
@@ -504,7 +493,7 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
           <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{data.length}</span> project{data.length === 1 ? '' : 's'} this month
           {flaggedCount > 0 && (
             <span className="ml-3 inline-flex items-center gap-1.5 text-xs">
-              <span className="inline-block w-3 h-3 rounded-sm" style={{ border: RED_EDGE }} />
+              <span className="inline-block w-3 h-3 rounded-sm" style={{ background: FLAG_BG, border: '1px solid rgba(239, 68, 68, 0.5)' }} />
               {flaggedCount} paused / escalated / closed / on hold
             </span>
           )}
@@ -577,11 +566,11 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
               <tr
                 key={String(row['__id'])}
                 className={`border-b transition-colors hover:bg-[var(--cn-bg-hover)] ${editMode ? 'cursor-pointer' : ''}`}
-                style={{ backgroundColor: i % 2 === 0 ? 'var(--cn-bg-row-even)' : 'var(--cn-bg-row-odd)', borderColor: 'var(--cn-border-light)' }}
+                style={{ backgroundColor: flagged ? FLAG_BG : i % 2 === 0 ? 'var(--cn-bg-row-even)' : 'var(--cn-bg-row-odd)', borderColor: 'var(--cn-border-light)' }}
                 onClick={editMode ? () => setPopupRow(row) : undefined}
               >
                 {editMode && (
-                  <td className="px-2 py-2" style={redEdge(flagged, true, false)}>
+                  <td className="px-2 py-2">
                     <button
                       onClick={e => { e.stopPropagation(); setPopupRow(row); }}
                       title="Edit this project's report"
@@ -592,10 +581,10 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
                     </button>
                   </td>
                 )}
-                <td className="px-4 py-2 tabular-nums align-top" style={{ color: 'var(--cn-text-faint)', ...redEdge(flagged, !editMode, false) }}>{i + 1}</td>
+                <td className="px-4 py-2 tabular-nums align-top" style={{ color: 'var(--cn-text-faint)' }}>{i + 1}</td>
                 {cols.map((c, ci) => (
                   <td key={c.header} className={`px-4 py-2 align-top ${c.hours ? 'whitespace-nowrap' : c.multi ? 'break-words min-w-[260px] max-w-sm' : c.editable ? 'break-words min-w-[240px] max-w-xs whitespace-pre-wrap' : 'break-words min-w-[120px] max-w-xs whitespace-pre-wrap'}`}
-                    style={{ color: 'var(--cn-text-secondary)', ...redEdge(flagged, false, ci === cols.length - 1) }}>
+                    style={{ color: 'var(--cn-text-secondary)' }}>
                     {c.hours ? (cellValue(row, c) || '—') : <ClampedText text={c.multi ? parseMulti(cellValue(row, c)).join(', ') : cellValue(row, c)} limit={30} />}
                   </td>
                 ))}
