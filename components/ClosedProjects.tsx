@@ -1,11 +1,13 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { X, Check, ArrowRight } from 'lucide-react';
+import { X, Check, ArrowRight, Download } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { memberPhoto, memberColor } from '@/lib/memberColors';
 import { MultiSelect } from './FilteredDataTable';
-import { statusColor, ProjectDetailsModal } from './PMProjectBandwidth';
+import { statusColor, ProjectDetailsModal, buildDetailsExcel, downloadProjectsPdf } from './PMProjectBandwidth';
+import DownloadReportDialog, { ALL_DOWNLOAD_PDF_KEYS } from './DownloadReportDialog';
+import { downloadTableXlsx } from '@/lib/tableExport';
 
 // Statuses that put a project on this tab — compared lowercase/trimmed so
 // "Closed: Good Feedback" vs "Closed: Good feedback" in the sheet both match.
@@ -76,6 +78,11 @@ export default function ClosedProjects({ data, headers }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // Clicking a card opens the full-details popup for that project.
   const [selected, setSelected] = useState<SheetData | null>(null);
+  // Download Report: Excel or PDF of the projects currently shown (after filters)
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const [reportPdfSelection, setReportPdfSelection] = useState<Set<string> | null>(null);
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportError, setReportError] = useState(false);
 
   const get = (r: SheetData, c?: string) => (c ? String(r[c] ?? '').trim() : '');
 
@@ -123,6 +130,28 @@ export default function ClosedProjects({ data, headers }: Props) {
   const toggleStatus = (s: string) =>
     setStatusSel(prev => (prev.includes(s) ? prev.filter(v => v !== s) : [...prev, s]));
 
+  const today = new Date().toISOString().slice(0, 10);
+  const runDownload = async (job: () => Promise<void>) => {
+    setReportDialogOpen(false);
+    setReportError(false);
+    setReportBusy(true);
+    try { await job(); }
+    catch { setReportError(true); setTimeout(() => setReportError(false), 3500); }
+    finally { setReportBusy(false); }
+  };
+  const downloadExcel = () => runDownload(() =>
+    downloadTableXlsx(buildDetailsExcel(rows, headers, 'Closed Project', `Closed-Project-${today}.xlsx`)));
+  const downloadPdf = (include: Set<string>) => {
+    setReportPdfSelection(include);
+    return runDownload(() => downloadProjectsPdf({
+      rows,
+      headers,
+      include,
+      eyebrow: 'Closed Project',
+      fileName: `Closed-Project-${today}.pdf`,
+    }));
+  };
+
   const dateInputStyle = { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', borderColor: 'var(--cn-border)' };
 
   return (
@@ -157,6 +186,22 @@ export default function ClosedProjects({ data, headers }: Props) {
             </button>
           );
         })}
+
+        {/* Download Report — only the projects left after the filters */}
+        <button
+          onClick={() => setReportDialogOpen(true)}
+          disabled={rows.length === 0 || reportBusy}
+          title={rows.length === 0 ? 'No projects to download' : `Download the ${rows.length} project${rows.length === 1 ? '' : 's'} shown (after filters) as Excel or PDF`}
+          className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg cursor-pointer transition-all text-xs font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+          style={reportError
+            ? { background: '#dc2626', color: '#fff', border: '1px solid #dc2626' }
+            : { background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }}
+        >
+          {reportBusy
+            ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            : <Download className="w-3.5 h-3.5" />}
+          {reportBusy ? 'Preparing…' : reportError ? 'Download failed' : 'Download Report'}
+        </button>
       </div>
 
       {/* Narrow it down */}
@@ -299,6 +344,17 @@ export default function ClosedProjects({ data, headers }: Props) {
       )}
 
       {selected && <ProjectDetailsModal row={selected} headers={headers} onClose={() => setSelected(null)} />}
+
+      {reportDialogOpen && (
+        <DownloadReportDialog
+          rowCount={rows.length}
+          scopeNote={`Only the ${rows.length} closed project${rows.length === 1 ? '' : 's'} matching your filters ${rows.length === 1 ? 'is' : 'are'} included.`}
+          initialPdfSelection={reportPdfSelection ?? ALL_DOWNLOAD_PDF_KEYS()}
+          onExcel={downloadExcel}
+          onPdf={downloadPdf}
+          onCancel={() => setReportDialogOpen(false)}
+        />
+      )}
     </div>
   );
 }

@@ -17,6 +17,8 @@ export interface ReportPdfProject {
 
 /** The opening overview page: headline figures + every project with its status. */
 export interface ReportPdfSummary {
+  /** Small orange label above the title; defaults to PROJECT REPORT. */
+  eyebrow?: string;
   pm: string;
   monthLabel: string;
   stats: { label: string; value: string }[];
@@ -70,6 +72,15 @@ export async function downloadProjectReportPdf(projects: ReportPdfProject[], fil
     drawProject(doc, p);
   });
 
+  finishPdf(doc, rowLinks, startPage, fileName);
+}
+
+type Doc = InstanceType<Awaited<typeof import('jspdf')>['jsPDF']>;
+
+
+// Last step of every PDF: turn each overview row into a link to its project's
+// first page, add page-number footers, and save.
+function finishPdf(doc: Doc, rowLinks: SummaryRowLink[], startPage: number[], fileName: string) {
   // Make every row of the overview a clickable link to that project's page.
   // This happens last because the target page numbers are only known now;
   // jumping back to the overview page(s) to add the link area is allowed.
@@ -102,8 +113,6 @@ export async function downloadProjectReportPdf(projects: ReportPdfProject[], fil
   doc.save(fileName);
 }
 
-type Doc = InstanceType<Awaited<typeof import('jspdf')>['jsPDF']>;
-
 // Where one overview row was drawn, so it can be turned into a link later.
 interface SummaryRowLink { index: number; page: number; y: number; nameEndX: number }
 const ROW_H_LINK = 8; // same as the overview list's row height
@@ -120,7 +129,7 @@ function drawSummary(doc: Doc, s: ReportPdfSummary): SummaryRowLink[] {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.setTextColor(...ORANGE);
-  doc.text('PROJECT REPORT', MARGIN, y);
+  doc.text(clean(s.eyebrow ?? 'PROJECT REPORT').toUpperCase(), MARGIN, y);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...MUTED);
   if (s.monthLabel) doc.text(clean(s.monthLabel), PAGE_W - MARGIN, y, { align: 'right' });
@@ -217,6 +226,268 @@ function drawSummary(doc: Doc, s: ReportPdfSummary): SummaryRowLink[] {
     y += ROW_H;
   });
   return links;
+}
+
+// ─── Details-style PDF (Current Month / Previous Months / Closed Project) ───
+// One page per project laid out like the full-details popup: header, then the
+// fields grouped in divided rows of four, then the long text stacked below.
+
+/** One labelled value on a details page. */
+export interface DetailField {
+  label: string;
+  value: string;
+  /** 'status' = coloured pill (colour in `color`); 'chips' = comma-separated list. */
+  kind?: 'text' | 'status' | 'chips';
+  color?: string;
+}
+
+export interface DetailPdfProject {
+  title: string;
+  status: string;
+  statusColor: string;
+  flagged: boolean;
+  pm: string;
+  assigned: string[];
+  monthLabel: string;
+  meta: DetailField[];        // Department / Year / Month
+  sections: DetailField[][];  // rows of up to four fields
+  long: DetailField[];        // Comments, Checklist, Week1-5, Monthly, ...
+}
+
+export async function downloadDetailsPdf(
+  projects: DetailPdfProject[],
+  fileName: string,
+  summary: ReportPdfSummary | null,
+  eyebrow: string,
+): Promise<void> {
+  const { jsPDF } = await import('jspdf');
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+
+  const rowLinks = summary ? drawSummary(doc, summary) : [];
+  const startPage: number[] = [];
+  projects.forEach((p, idx) => {
+    if (idx > 0 || summary) doc.addPage();
+    startPage[idx] = doc.getNumberOfPages();
+    drawDetails(doc, p, eyebrow);
+  });
+
+  finishPdf(doc, rowLinks, startPage, fileName);
+}
+
+function drawDetails(doc: Doc, p: DetailPdfProject, eyebrow: string) {
+  doc.setFillColor(...(p.flagged ? RED : ORANGE));
+  doc.rect(0, 0, PAGE_W, 4, 'F');
+
+  let y = 16;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(...ORANGE);
+  doc.text(clean(eyebrow).toUpperCase(), MARGIN, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...MUTED);
+  if (p.monthLabel) doc.text(clean(p.monthLabel), PAGE_W - MARGIN, y, { align: 'right' });
+  y += 8;
+
+  // Title (up to two lines)
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(20);
+  doc.setTextColor(...INK);
+  (doc.splitTextToSize(clean(p.title || 'Untitled project'), CONTENT_W) as string[]).slice(0, 2)
+    .forEach(line => { doc.text(line, MARGIN, y); y += 8.5; });
+  y += 1;
+
+  // Status pill, attention indicator, Managed by
+  let x = MARGIN;
+  if (p.status) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    const label = clean(p.status);
+    const w = doc.getTextWidth(label) + 7;
+    doc.setFillColor(...hexToRgb(p.statusColor));
+    doc.roundedRect(x, y - 4.6, w, 6.6, 3.3, 3.3, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.text(label, x + 3.5, y);
+    x += w + 5;
+  }
+  if (p.flagged) {
+    doc.setFillColor(...RED);
+    doc.circle(x + 1.6, y - 1.3, 1.6, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(...RED);
+    doc.text('Needs attention', x + 5, y);
+    x += 5 + doc.getTextWidth('Needs attention') + 5;
+  }
+  if (p.pm) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    doc.setTextColor(...MUTED);
+    doc.text(clean(`Managed by ${p.pm}`), x, y);
+  }
+  y += 9;
+
+  // Assigned chips (wrap onto further lines when needed)
+  if (p.assigned.length) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.5);
+    doc.setTextColor(...MUTED);
+    doc.text('ASSIGNED', MARGIN, y);
+    y += 3.6;
+    let cx = MARGIN;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    p.assigned.forEach(name => {
+      const label = clean(name);
+      const w = doc.getTextWidth(label) + 6;
+      if (cx + w > PAGE_W - MARGIN) { cx = MARGIN; y += 7; }
+      doc.setFillColor(243, 244, 246);
+      doc.roundedRect(cx, y, w, 5.6, 2.8, 2.8, 'F');
+      doc.setTextColor(...INK);
+      doc.text(label, cx + 3, y + 4);
+      cx += w + 2;
+    });
+    y += 12;
+  }
+
+  // Department / Year / Month
+  if (p.meta.length) {
+    let mx = MARGIN;
+    p.meta.forEach(m => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6.5);
+      doc.setTextColor(...MUTED);
+      doc.text(clean(m.label).toUpperCase(), mx, y);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(...INK);
+      const v = clean(m.value || '-');
+      doc.text(v, mx, y + 4.4);
+      mx += Math.max(doc.getTextWidth(v), 14) + 12;
+    });
+    y += 8.5;
+  }
+
+  // Body — largest long-text font that keeps the project on one page.
+  const sizes = [9.5, 9, 8.5, 8, 7.5, 7];
+  let fs = sizes[sizes.length - 1];
+  for (const candidate of sizes) {
+    if (y + runDetailsBody(doc, p, candidate, 0, true) <= BOTTOM_LIMIT) { fs = candidate; break; }
+  }
+  runDetailsBody(doc, p, fs, y, false);
+}
+
+// One walker for measuring (dry) and drawing, so the two can't drift apart.
+function runDetailsBody(doc: Doc, p: DetailPdfProject, fs: number, startY: number, dry: boolean): number {
+  let y = startY;
+  const lh = lineHeight(fs);
+  const ensureRoom = (needed: number) => {
+    if (!dry && y + needed > BOTTOM_LIMIT) {
+      doc.addPage();
+      doc.setFillColor(...ORANGE);
+      doc.rect(0, 0, PAGE_W, 4, 'F');
+      y = 16;
+    }
+  };
+
+  // Rows of up to four fields, each row under a divider
+  const colW = CONTENT_W / 4;
+  p.sections.filter(sec => sec.length).forEach(sec => {
+    ensureRoom(20);
+    if (!dry) {
+      doc.setDrawColor(...RULE);
+      doc.setLineWidth(0.25);
+      doc.line(MARGIN, y, PAGE_W - MARGIN, y);
+    }
+    y += 5.5;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    const cells = sec.map(f => ({ f, lines: f.kind === 'status' ? [] : (doc.splitTextToSize(clean(f.value || '-'), colW - 5) as string[]) }));
+    const valueH = Math.max(...cells.map(c => (c.f.kind === 'status' ? 6.5 : c.lines.length * 4.2)));
+    ensureRoom(4.6 + valueH + 4);
+    if (!dry) {
+      cells.forEach((c, i) => {
+        const cx = MARGIN + i * colW;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(6.5);
+        doc.setTextColor(...MUTED);
+        doc.text(clean(c.f.label).toUpperCase(), cx, y);
+        if (c.f.kind === 'status' && c.f.value) {
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(7.5);
+          const label = clean(c.f.value);
+          const w = Math.min(doc.getTextWidth(label) + 6, colW - 3);
+          doc.setFillColor(...hexToRgb(c.f.color || '#6b7280'));
+          doc.roundedRect(cx, y + 1.6, w, 5.4, 2.7, 2.7, 'F');
+          doc.setTextColor(255, 255, 255);
+          doc.text(label, cx + 3, y + 5.3);
+        } else {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(9);
+          if (c.f.value) doc.setTextColor(...INK); else doc.setTextColor(156, 163, 175);
+          c.lines.forEach((line, li) => doc.text(line, cx, y + 5 + li * 4.2));
+        }
+      });
+    }
+    y += 4.6 + valueH + 4;
+  });
+
+  // Long text, stacked full width
+  if (p.long.length) {
+    ensureRoom(14);
+    if (!dry) {
+      doc.setDrawColor(...RULE);
+      doc.setLineWidth(0.25);
+      doc.line(MARGIN, y, PAGE_W - MARGIN, y);
+    }
+    y += 5.5;
+  }
+  const headingFs = Math.max(fs - 2, 6.5);
+  p.long.forEach(f => {
+    ensureRoom(headingFs * PT_TO_MM + lh);
+    if (!dry) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(headingFs);
+      doc.setTextColor(...MUTED);
+      doc.text(clean(f.label).toUpperCase(), MARGIN, y);
+    }
+    y += headingFs * PT_TO_MM * 1.5 + 0.8;
+
+    const items = f.kind === 'chips' ? f.value.split(',').map(s => s.trim()).filter(Boolean) : [];
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(fs);
+    if (f.kind === 'chips' && items.length) {
+      items.forEach(item => {
+        const lines = doc.splitTextToSize(clean(item), CONTENT_W - 6) as string[];
+        lines.forEach((line, i) => {
+          ensureRoom(lh);
+          if (!dry) {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(fs);
+            doc.setTextColor(...INK);
+            if (i === 0) { doc.setFillColor(...ORANGE); doc.circle(MARGIN + 1.2, y - fs * PT_TO_MM * 0.32, 0.6, 'F'); }
+            doc.text(line, MARGIN + 5, y);
+          }
+          y += lh;
+        });
+      });
+    } else {
+      const text = f.value.trim();
+      const lines = doc.splitTextToSize(clean(text || '-'), CONTENT_W) as string[];
+      lines.forEach(line => {
+        ensureRoom(lh);
+        if (!dry) {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(fs);
+          if (text) doc.setTextColor(...INK); else doc.setTextColor(156, 163, 175);
+          doc.text(line, MARGIN, y);
+        }
+        y += lh;
+      });
+    }
+    y += lh * 0.6;
+  });
+
+  return y - startY;
 }
 
 function drawProject(doc: Doc, p: ReportPdfProject) {

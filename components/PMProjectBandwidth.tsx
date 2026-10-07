@@ -2,7 +2,7 @@
 
 import { createPortal } from 'react-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronLeft, ChevronRight, Pencil, Eye, SlidersHorizontal, FileSpreadsheet } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronLeft, ChevronRight, Pencil, Eye, SlidersHorizontal, Download } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { MultiSelect } from './FilteredDataTable';
 import { parseHHMM, formatHHMM, hhmmToDecimalHours, DURATION_MINUTE_OPTIONS, formatHoursClock } from './SpecificCharts';
@@ -10,7 +10,9 @@ import { memberPhoto, memberColor } from '@/lib/memberColors';
 import ClampedText from './ClampedText';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { downloadTableXlsx, type TableExport } from '@/lib/tableExport';
+import { downloadDetailsPdf, type DetailPdfProject, type ReportPdfSummary } from '@/lib/projectReportPdf';
 import { isFlaggedStatus } from '@/lib/statusFlags';
+import DownloadReportDialog, { ALL_DOWNLOAD_PDF_KEYS } from './DownloadReportDialog';
 
 const PAGE_SIZE = 50;
 const FOLLOWUP_DUE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days since last follow-up counts as due
@@ -1026,14 +1028,21 @@ interface Props {
   allPmNames?: string[];
 }
 
-// Full-details popup for one project row — builds the field groups from the
-// sheet headers, so any tab (Current Month, Previous Months, Closed Project)
-// can show it with just `row` + `headers`.
-export function ProjectDetailsModal({ row, headers, onClose }: {
-  row: SheetData;
-  headers: string[];
-  onClose: () => void;
-}) {
+// Everything shown for one project — header facts, the grouped fields and the
+// long text — as plain strings. The details popup renders it as nodes, and
+// the Download Report PDF draws the same content, so both always agree.
+export interface DetailValue { key: string; label: string; value: string; kind: 'text' | 'status' | 'chips' }
+export interface ProjectDetails {
+  title: string;
+  status: string;
+  pm: string;
+  assigned: string[];
+  meta: DetailValue[];          // Department / Year / Month
+  sections: DetailValue[][];    // rows of up to four fields
+  long: DetailValue[];          // Comments, Checklist, Week1-5, Monthly, + any new column
+}
+
+export function buildProjectDetails(row: SheetData, headers: string[]): ProjectDetails {
   const find = (pred: (h: string) => boolean) => headers.find(pred);
   const timestampCol = find(h => h.toLowerCase().includes('timestamp'));
   const emailCol = find(h => h.toLowerCase().includes('email'));
@@ -1047,9 +1056,72 @@ export function ProjectDetailsModal({ row, headers, onClose }: {
   const paymentStatusCol = find(h => h.toLowerCase().includes('payment status'));
   const allCols = headers.filter(h => h !== timestampCol && h !== emailCol && !/ \(\d+\)$/.test(h));
   const isDurationCol = (h: string) => h === totalHoursCol || h === acHoursCol || h === currentMonthHoursCol || h === riskMonthHoursCol;
-  const fmtHours = (n: number) => `${formatHoursClock(n)}h`;
 
   const colOf = (name: string) => allCols.find(h => h.trim().toLowerCase() === name);
+  const valueOf = (h: string): DetailValue => {
+    const raw = String(row[h] ?? '').trim();
+    if (h.trim().toLowerCase() === 'checklist') return { key: h, label: h, value: raw, kind: 'chips' };
+    if (isDurationCol(h)) {
+      if (!raw) return { key: h, label: h, value: '', kind: 'text' };
+      const { h: hh, m } = toHMLiteral(raw);
+      return { key: h, label: h, value: formatHHMM(hh, m), kind: 'text' };
+    }
+    return { key: h, label: h, value: raw, kind: isStatusLikeCol(h) ? 'status' : 'text' };
+  };
+  const used = new Set<string>();
+  const pick = (names: string[]): DetailValue[] => names
+    .map(n => colOf(n))
+    .filter((h): h is string => !!h)
+    .map(h => { used.add(h); return valueOf(h); });
+
+  const pending: DetailValue[] = totalHoursCol && currentMonthHoursCol
+    ? [{
+        key: '__pending',
+        label: 'Pending Hours',
+        kind: 'text',
+        value: `${formatHoursClock(
+          parseDurationDecimal(row[totalHoursCol]) -
+          (countsAsCurrent(row, statusCol, paymentStatusCol) ? parseDurationDecimal(row[currentMonthHoursCol]) : 0)
+        )}h`,
+      }]
+    : [];
+
+  if (statusCol) used.add(statusCol);
+  if (assignedCol) used.add(assignedCol);
+  const meta = pick(['department', 'year', 'month']);
+  const sections = [
+    pick(['project name', 'client name', 'communication channel', 'tech']),
+    pick(['total hours', 'ac hours', 'current month hours', 'risk month hours']),
+    [...pick(['payment details', 'phase', 'milestone']), ...pending],
+    pick(['upcoming milestones', 'upsell/cross-sell', 'payment status']),
+    pick(['project start date', 'last (project) follow-up date', 'target end date']),
+  ];
+  // Long text first in the sheet's usual order, then any column the lists
+  // above didn't claim (so a newly added column still shows up).
+  const long = [
+    ...pick(['comments', 'checklist', 'week1', 'week2', 'week3', 'week4', 'week5', 'monthly']),
+    ...allCols.filter(h => !used.has(h)).map(valueOf),
+  ];
+
+  return {
+    title: projectCol ? String(row[projectCol] ?? '').trim() : '',
+    status: statusCol ? String(row[statusCol] ?? '').trim() : '',
+    pm: String(row['__pm'] ?? ''),
+    assigned: assignedCol ? String(row[assignedCol] ?? '').split(',').map(s => s.trim()).filter(Boolean) : [],
+    meta,
+    sections,
+    long,
+  };
+}
+
+// Full-details popup for one project row — any tab (Current Month, Previous
+// Months, Closed Project) can show it with just `row` + `headers`.
+export function ProjectDetailsModal({ row, headers, onClose }: {
+  row: SheetData;
+  headers: string[];
+  onClose: () => void;
+}) {
+  const d = buildProjectDetails(row, headers);
   const chips = (val: string) => (
     <div className="flex flex-wrap gap-1.5">
       {val.split(',').map(s => s.trim()).filter(Boolean).map(v => (
@@ -1060,66 +1132,133 @@ export function ProjectDetailsModal({ row, headers, onClose }: {
   const pill = (val: string) => (
     <span className="inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full text-xs font-semibold" style={{ background: statusColor(val), color: '#fff' }}>{val}</span>
   );
-  const renderValue = (h: string): React.ReactNode => {
-    const val = String(row[h] ?? '').trim();
-    if (!val) return <span style={{ color: 'var(--cn-text-faint)' }}>—</span>;
-    if (h.trim().toLowerCase() === 'checklist') return chips(val);
-    if (isDurationCol(h)) { const { h: hh, m } = toHMLiteral(val); return formatHHMM(hh, m); }
-    if (isStatusLikeCol(h)) return pill(val);
-    return val;
-  };
-  const used = new Set<string>();
-  const field = (name: string): ViewField | null => {
-    const h = colOf(name);
-    if (!h) return null;
-    used.add(h);
-    return { key: h, label: h, node: renderValue(h) };
-  };
-  const pick = (names: string[]) => names.map(field).filter((f): f is ViewField => f !== null);
-
-  const pendingField: ViewField | null = totalHoursCol && currentMonthHoursCol
-    ? {
-        key: '__pending',
-        label: 'Pending Hours',
-        node: fmtHours(
-          parseDurationDecimal(row[totalHoursCol]) -
-          (countsAsCurrent(row, statusCol, paymentStatusCol) ? parseDurationDecimal(row[currentMonthHoursCol]) : 0)
-        ),
-      }
-    : null;
-
-  const statusVal = statusCol ? String(row[statusCol] ?? '').trim() : '';
-  if (statusCol) used.add(statusCol);
-  const assignedVal = assignedCol ? String(row[assignedCol] ?? '').trim() : '';
-  if (assignedCol) used.add(assignedCol);
-  const meta = pick(['department', 'year', 'month']);
-
-  const sections = [
-    pick(['project name', 'client name', 'communication channel', 'tech']),
-    pick(['total hours', 'ac hours', 'current month hours', 'risk month hours']),
-    [...pick(['payment details', 'phase', 'milestone']), ...(pendingField ? [pendingField] : [])],
-    pick(['upcoming milestones', 'upsell/cross-sell', 'payment status']),
-    pick(['project start date', 'last (project) follow-up date', 'target end date']),
-  ];
-  // Long text first in the sheet's usual order, then any column the lists
-  // above didn't claim (so a newly added column still shows up).
-  const long = [
-    ...pick(['comments', 'checklist', 'week1', 'week2', 'week3', 'week4', 'week5', 'monthly']),
-    ...allCols.filter(h => !used.has(h)).map(h => ({ key: h, label: h, node: renderValue(h) })),
-  ];
+  const toField = (f: DetailValue): ViewField => ({
+    key: f.key,
+    label: f.label,
+    node: !f.value ? <span style={{ color: 'var(--cn-text-faint)' }}>—</span>
+      : f.kind === 'chips' ? chips(f.value)
+      : f.kind === 'status' ? pill(f.value)
+      : f.value,
+  });
 
   return (
     <PmRowViewModal
-      title={projectCol ? String(row[projectCol] ?? '') : ''}
-      statusNode={statusVal ? pill(statusVal) : null}
-      pm={String(row['__pm'] ?? '')}
-      assignedNode={assignedVal ? chips(assignedVal) : null}
-      meta={meta}
-      sections={sections}
-      long={long}
+      title={d.title}
+      statusNode={d.status ? pill(d.status) : null}
+      pm={d.pm}
+      assignedNode={d.assigned.length ? chips(d.assigned.join(', ')) : null}
+      meta={d.meta.map(toField)}
+      sections={d.sections.map(sec => sec.map(toField))}
+      long={d.long.map(toField)}
       onClose={onClose}
     />
   );
+}
+
+// Excel version of the same content for tabs that have no table (Closed
+// Project): one row per project — PM, Status, Assigned, then every field in
+// the details popup's order — with the status coloured and attention rows
+// filled light red, like the other Excel downloads.
+export function buildDetailsExcel(rows: SheetData[], headers: string[], title: string, fileName: string): TableExport {
+  const details = rows.map(r => buildProjectDetails(r, headers));
+  const fieldsOf = (d: ProjectDetails) => [...d.meta, ...d.sections.flat(), ...d.long];
+  // Column list from the union of fields across rows, in first-seen order
+  const kinds = new Map<string, DetailValue['kind']>();
+  details.forEach(d => fieldsOf(d).forEach(f => { if (!kinds.has(f.label)) kinds.set(f.label, f.kind); }));
+  const LONG = ['comments', 'checklist', 'week1', 'week2', 'week3', 'week4', 'week5', 'monthly', 'payment details', 'upcoming milestones'];
+  const labels = [...kinds.keys()];
+  const columns: TableExport['columns'] = [
+    { label: 'PM' },
+    { label: 'Status', kind: 'status' },
+    { label: 'Assigned' },
+    ...labels.map(l => ({
+      label: l,
+      kind: kinds.get(l) === 'status' ? 'status' as const : LONG.includes(l.trim().toLowerCase()) ? 'long' as const : 'text' as const,
+    })),
+  ];
+  return {
+    title,
+    columns,
+    rows: details.map(d => {
+      const byLabel = new Map(fieldsOf(d).map(f => [f.label, f.value]));
+      return [d.pm, d.status, d.assigned.join(', '), ...labels.map(l => byLabel.get(l) ?? '')];
+    }),
+    fileName,
+    colorFor: (_ci, v) => (v ? statusColor(v) : null),
+    flagged: details.map(d => !!d.status && isFlaggedStatus(d.status)),
+  };
+}
+
+// Download Report as PDF for a list of project rows (Current Month, Previous
+// Months, Closed Project): an overview page, then one page per project laid
+// out like the details popup. `include` holds the keys ticked in the
+// Download Report popup — 'overview' and the optional week / monthly columns.
+const OPTIONAL_DETAIL_KEYS = ['week1', 'week2', 'week3', 'week4', 'week5', 'monthly'];
+export async function downloadProjectsPdf({ rows, headers, include, eyebrow, fileName }: {
+  rows: SheetData[];
+  headers: string[];
+  include: Set<string>;
+  eyebrow: string;
+  fileName: string;
+}): Promise<void> {
+  const find = (pred: (h: string) => boolean) => headers.find(pred);
+  const monthCol = find(h => h.trim().toLowerCase() === 'month');
+  const yearCol = find(h => h.trim().toLowerCase() === 'year');
+  const monthLabelOf = (r: SheetData) =>
+    [monthCol ? String(r[monthCol] ?? '').trim() : '', yearCol ? String(r[yearCol] ?? '').trim() : ''].filter(Boolean).join(' ');
+
+  const projects: DetailPdfProject[] = rows.map(r => {
+    const d = buildProjectDetails(r, headers);
+    const toField = (f: DetailValue) => ({
+      label: f.label,
+      value: f.value,
+      kind: f.kind,
+      color: f.kind === 'status' && f.value ? statusColor(f.value) : undefined,
+    });
+    return {
+      title: d.title,
+      status: d.status,
+      statusColor: d.status ? statusColor(d.status) : '#6b7280',
+      flagged: !!d.status && isFlaggedStatus(d.status),
+      pm: d.pm,
+      assigned: d.assigned.filter(n => n.toLowerCase() !== 'no action taken'),
+      monthLabel: monthLabelOf(r),
+      meta: d.meta.map(toField),
+      sections: d.sections.map(sec => sec.map(toField)),
+      // weeks / monthly only when ticked; Checklist, Comments and any other column always
+      long: d.long
+        .filter(f => !OPTIONAL_DETAIL_KEYS.includes(f.label.trim().toLowerCase()) || include.has(f.label.trim().toLowerCase()))
+        .map(toField),
+    };
+  });
+
+  let summary: ReportPdfSummary | null = null;
+  if (include.has('overview')) {
+    const stats = computeStatsFor(rows, {
+      totalHoursCol: find(h => h.toLowerCase() === 'total hours'),
+      currentMonthHoursCol: find(h => h.toLowerCase() === 'current month hours'),
+      riskMonthHoursCol: find(h => h.toLowerCase() === 'risk month hours'),
+      paymentStatusCol: find(h => h.toLowerCase().includes('payment status')),
+      followupDateCol: undefined,
+      statusCol: find(h => h.toLowerCase() === 'status'),
+    });
+    const fmt = (n: number) => `${formatHoursClock(n)}h`;
+    const uniq = (vals: string[]) => [...new Set(vals.filter(Boolean))];
+    const months = uniq(rows.map(monthLabelOf));
+    const pms = uniq(rows.map(r => String(r['__pm'] ?? '')));
+    summary = {
+      eyebrow,
+      pm: pms.length === 1 ? pms[0] : '',
+      monthLabel: months.length === 1 ? months[0] : '',
+      stats: [
+        { label: 'Total Hours', value: fmt(stats.totalHours) },
+        { label: 'Current Hours', value: fmt(stats.currentMonthHours) },
+        { label: 'Pending Hours', value: fmt(stats.pendingHours) },
+      ],
+      projects: projects.map(p => ({ name: p.title, status: p.status, statusColor: p.statusColor, flagged: p.flagged })),
+    };
+  }
+  await downloadDetailsPdf(projects, fileName, summary, eyebrow);
 }
 
 export default function PMProjectBandwidth({ data, headers, canEdit = false, onCellChange, allData, defaultToCurrentMonth = true, hideYearMonthFilter = false, lockShowDataFull = false, showAllColumns = false, allowReportDownload = false, reportName = 'Report', hidePmFilter = false, hidePmSummary = false, allPmNames = [] }: Props) {
@@ -1138,6 +1277,10 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   const [viewRow, setViewRow] = useState<SheetData | null>(null);
   const [reportBusy, setReportBusy] = useState(false);
   const [reportError, setReportError] = useState(false);
+  // Download Report asks Excel or PDF first; the PDF week/monthly choice is
+  // remembered for the session (null = nothing chosen yet, i.e. everything on).
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const [reportPdfSelection, setReportPdfSelection] = useState<Set<string> | null>(null);
   const [page, setPage] = useState(1);
   const [sortCol, setSortCol] = useState('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -1554,10 +1697,32 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     };
   };
   const downloadReport = async () => {
+    setReportDialogOpen(false);
     setReportError(false);
     setReportBusy(true);
     try {
       await downloadTableXlsx(buildExport());
+    } catch {
+      setReportError(true);
+      setTimeout(() => setReportError(false), 3500);
+    } finally {
+      setReportBusy(false);
+    }
+  };
+  // PDF: overview + one page per project, only the rows left after filters.
+  const downloadReportPdf = async (include: Set<string>) => {
+    setReportPdfSelection(include);
+    setReportDialogOpen(false);
+    setReportError(false);
+    setReportBusy(true);
+    try {
+      await downloadProjectsPdf({
+        rows: sorted,
+        headers,
+        include,
+        eyebrow: reportName,
+        fileName: `${reportName.trim().replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.pdf`,
+      });
     } catch {
       setReportError(true);
       setTimeout(() => setReportError(false), 3500);
@@ -1768,11 +1933,11 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
           )}
           {allowReportDownload && (
             <button
-              onClick={downloadReport}
+              onClick={() => setReportDialogOpen(true)}
               disabled={sorted.length === 0 || reportBusy}
               title={sorted.length === 0
                 ? 'No rows to download'
-                : `Download the ${sorted.length} row${sorted.length === 1 ? '' : 's'} shown (after filters) as an Excel file`}
+                : `Download the ${sorted.length} project${sorted.length === 1 ? '' : 's'} shown (after filters) as Excel or PDF`}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg cursor-pointer transition-all text-xs font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
               style={reportError
                 ? { background: '#dc2626', color: '#fff', border: '1px solid #dc2626' }
@@ -1780,7 +1945,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
             >
               {reportBusy
                 ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                : <FileSpreadsheet className="w-3.5 h-3.5" />}
+                : <Download className="w-3.5 h-3.5" />}
               {reportBusy ? 'Preparing…' : reportError ? 'Download failed' : 'Download Report'}
             </button>
           )}
@@ -1964,6 +2129,17 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
       </div>
 
       {viewRow && <ProjectDetailsModal row={viewRow} headers={headers} onClose={() => setViewRow(null)} />}
+
+      {reportDialogOpen && (
+        <DownloadReportDialog
+          rowCount={sorted.length}
+          scopeNote={`Only the ${sorted.length} project${sorted.length === 1 ? '' : 's'} left after your filters ${sorted.length === 1 ? 'is' : 'are'} included.`}
+          initialPdfSelection={reportPdfSelection ?? ALL_DOWNLOAD_PDF_KEYS()}
+          onExcel={downloadReport}
+          onPdf={downloadReportPdf}
+          onCancel={() => setReportDialogOpen(false)}
+        />
+      )}
 
       {popupRow && onCellChange && (
         <PmRowEditModal
