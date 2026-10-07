@@ -341,8 +341,21 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
   const [copied, setCopied] = useState<'ok' | 'fail' | null>(null);
 
   const copyTable = async () => {
+    // Each project's Status is copied too — a column right after Project Name
+    // (the Status isn't one of the on-screen report columns).
+    const STATUS_AT = 1;
+    const hasStatus = !!statusCol;
     const header = cols.map(c => c.label);
-    const body = data.map(r => cols.map(c => cellValue(r, c)));
+    const multiAt = cols.map(c => !!c.multi);
+    if (hasStatus) { header.splice(STATUS_AT, 0, 'Status'); multiAt.splice(STATUS_AT, 0, false); }
+    const body = data.map(r => {
+      const line = cols.map(c => cellValue(r, c));
+      if (hasStatus) line.splice(STATUS_AT, 0, String(r[statusCol] ?? '').trim());
+      return line;
+    });
+    const statusPill = (v: string) => v
+      ? `<span style="display:inline-block;background:${statusColor(v)};color:#ffffff;font-weight:bold;font-size:12px;padding:2px 10px;border-radius:12px;white-space:nowrap;">${escapeHtml(v)}</span>`
+      : '';
     // Rows with a Paused / Escalated / Closed / On Hold status carry a red
     // dot (and a light red tint) so the flag survives the paste.
     const flags = data.map(r => !!statusCol && isFlaggedStatus(String(r[statusCol] ?? '')));
@@ -380,7 +393,7 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
     ${body.map((line, i) => `
     <tr style="background-color:${flags[i] ? '#fef2f2' : i % 2 === 0 ? '#ffffff' : '#fafafa'};">
       <td style="border:1px solid #ddd;padding:6px 12px;color:#888;white-space:nowrap;${redBorder(i, true, false)}">${flags[i] ? '<span style="color:#ef4444;font-size:15px;">●</span> ' : ''}${i + 1}</td>
-      ${line.map((v, ci) => `<td style="border:1px solid #ddd;padding:6px 12px;${redBorder(i, false, ci === line.length - 1)}">${cols[ci].multi ? listHtml(v) : escapeHtml(v)}</td>`).join('')}
+      ${line.map((v, ci) => `<td style="border:1px solid #ddd;padding:6px 12px;${redBorder(i, false, ci === line.length - 1)}">${hasStatus && ci === STATUS_AT ? statusPill(v) : multiAt[ci] ? listHtml(v) : escapeHtml(v)}</td>`).join('')}
     </tr>`).join('')}${totalRowHtml(total)}
   </tbody>
 </table>${anyFlagged ? `<p style="font-family:Arial,sans-serif;font-size:12px;color:#555;margin:6px 0 0;"><span style="color:#ef4444;">●</span> ${LEGEND}</p>` : ''}`;
@@ -389,7 +402,7 @@ export default function ProjectReport({ data, headers, onCellChange }: Props) {
     const quote = (v: string) => (/[\t\n"]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
     const tsv = [
       ['#', ...header].join('\t'),
-      ...body.map((line, i) => [`${flags[i] ? '● ' : ''}${i + 1}`, ...line.map((v, ci) => quote(cols[ci].multi ? listText(v) : v))].join('\t')),
+      ...body.map((line, i) => [`${flags[i] ? '● ' : ''}${i + 1}`, ...line.map((v, ci) => quote(multiAt[ci] ? listText(v) : v))].join('\t')),
       ...(total ? [totalRowText(total)] : []),
       ...(anyFlagged ? ['', `● = ${LEGEND}`] : []),
     ].join('\n');
