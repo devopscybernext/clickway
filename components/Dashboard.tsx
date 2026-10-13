@@ -18,6 +18,7 @@ import Leaderboard, { calcLeaderboard, PersonStats } from './Leaderboard';
 import PMProjectBandwidth from './PMProjectBandwidth';
 import ClosedProjects from './ClosedProjects';
 import ProjectReport from './ProjectReport';
+import Reports from './Reports';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import LeaveStatus from './LeaveStatus';
 import AdminPortal from './AdminPortal';
@@ -598,6 +599,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const isLeaveStatus       = selectedSheet === '2';
   const isTools             = selectedSheet === '14';
   const isAdminPortal       = selectedSheet === '15';
+  const isReport            = selectedSheet === '16';
 
   // "Add New Project" form — single shared form, only shown to PM-tier users
   const myProjectFormUrl = isPmTier ? PM_PROJECT_FORM_URL : undefined;
@@ -1016,6 +1018,16 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           )}
 
           {/* ── Admin Portal: User Details (HM/Admin/Mod only) ── */}
+          {/* ── Report (Web): cards that generate PDF / Excel reports ── */}
+          {isReport && (isAdmin || isPmTier || isTeamAdmin) && (
+            <section
+              className="cn-card rounded-lg border transition-colors"
+              style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
+            >
+              <Reports data={activeBandwidthData} headers={bandwidthHeaders} />
+            </section>
+          )}
+
           {isAdminPortal && (
             <section
               className="cn-card rounded-lg border transition-colors"

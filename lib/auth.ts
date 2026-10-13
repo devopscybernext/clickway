@@ -1,4 +1,4 @@
-export type SheetId = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | '11' | '12' | '14' | '15';
+export type SheetId = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | '11' | '12' | '14' | '15' | '16';
 
 // New role taxonomy (2026 rollout) — kept alongside legacy role slugs so
 // accounts that haven't been migrated in the UserDetails sheet keep working
@@ -116,12 +116,14 @@ const WEB_FULL: NavLeaf[] = [
   { id: '9', team: 'web', label: 'Tasks Overview' },
   { id: '7', label: 'Leaderboard' },
   { id: '6', team: 'web', label: 'Add Task' },
+  { id: '16', team: 'web', label: 'Report' },
 ];
 const WEB_NO_TASKS_ASSIGNED: NavLeaf[] = [
   { id: '3', team: 'web', label: 'Team Bandwidth' },
   { id: '9', team: 'web', label: 'Tasks Overview' },
   { id: '7', label: 'Leaderboard' },
   { id: '6', team: 'web', label: 'Add Task' },
+  { id: '16', team: 'web', label: 'Report' },
 ];
 const WEB_INDIVIDUAL: NavLeaf[] = [
   { id: '3', team: 'web', label: 'Team Bandwidth' },
@@ -265,6 +267,7 @@ export const SHEET_LABELS: Record<SheetId, string> = {
   '12': 'Team Bandwidth',
   '14': 'Tools',
   '15': 'Admin Portal',
+  '16': 'Report',
 };
 
 export function getSheetLabel(id: SheetId, role: Role): string {
