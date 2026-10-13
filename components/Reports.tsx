@@ -18,7 +18,7 @@ const REPORTS = [
     id: 'productivity',
     title: 'Productivity Meter',
     description:
-      'How each resource\'s time compares with the estimate. Pick a date range and the resources, and get every task with its Total Time Est, Total Time, deadline and statuses — flagged green when it came in within the estimate and red when it ran over.',
+      'See who finished tasks within the estimated time. Pick dates and resources. Green means on time, red means over the estimate.',
     Icon: Gauge,
   },
 ];
