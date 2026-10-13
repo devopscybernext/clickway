@@ -1596,7 +1596,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
   const timeLoggedCol = headers.find(h => h.toLowerCase().includes('time logged'));
   const deadlineCol  = headers.find(h => h.toLowerCase().includes('deadline'));
   // "Total Hours" on the Marketing Tasks sheet, "Total Time" on Bandwidth Allocation
-  const totalHoursCol = headers.find(h => h.toLowerCase().includes('total hours') || h.toLowerCase().includes('total time'));
+  const totalHoursCol = headers.find(h => h.toLowerCase().includes('total hours') || (h.toLowerCase().includes('total time') && !h.toLowerCase().includes('est')));
   // Marketing-only fields — absent from Bandwidth Allocation, present on the Marketing Tasks sheet
   const actionTakenCol = headers.find(h => h.toLowerCase().includes('action taken today'));
   const performanceSignalCol = headers.find(h => h.toLowerCase().includes('performance signal'));
@@ -2622,7 +2622,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
   const bucketSetCol = sheet1Headers.find(h => h.toLowerCase().includes('today bucket set') || h.toLowerCase().includes('bucket set'));
   const pmStatusCol2 = sheet1Headers.find(h => h.toLowerCase().includes('pm status'));
   // "Total Hours" on the Marketing Tasks sheet, "Total Time" on Bandwidth Allocation
-  const totalHoursCol2 = sheet1Headers.find(h => h.toLowerCase().includes('total hours') || h.toLowerCase().includes('total time'));
+  const totalHoursCol2 = sheet1Headers.find(h => h.toLowerCase().includes('total hours') || (h.toLowerCase().includes('total time') && !h.toLowerCase().includes('est')));
   // Team Bandwidth has no individual-tier viewers — Time Logged On AC never
   // shows here (only in Tasks Overview, for the row's own owner). Total Hours
   // shows whenever the sheet has it, independent of team.
@@ -3004,7 +3004,7 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
   const projectCol    = findCol(sheet1Headers, 'project name', 'project');
   const taskUrlCol    = findCol(sheet1Headers, 'task url', 'task link', 'link', 'url');
   // "Total Time" on Bandwidth Allocation, "Total Hours" on the Marketing Tasks sheet
-  const totalHoursCol = sheet1Headers.find(h => h.toLowerCase().includes('total hours') || h.toLowerCase().includes('total time'));
+  const totalHoursCol = sheet1Headers.find(h => h.toLowerCase().includes('total hours') || (h.toLowerCase().includes('total time') && !h.toLowerCase().includes('est')));
   const availNameCol   = availHeaders ? findCol(availHeaders, 'name', 'resource', 'person', 'team') : undefined;
   const availStatusCol = availHeaders ? findCol(availHeaders, 'availability', 'status', 'leave') : undefined;
 
@@ -3784,7 +3784,7 @@ export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = fal
   const taskUrlCol   = findCol(sheet1Headers, 'task url', 'task link', 'link', 'url');
   // "Total Hours" on the Marketing Tasks sheet, "Total Time" on Bandwidth
   // Allocation — same HH.MM-notation column ResourceStatusGrid reads.
-  const totalHoursCol = sheet1Headers.find(h => h.toLowerCase().includes('total hours') || h.toLowerCase().includes('total time'));
+  const totalHoursCol = sheet1Headers.find(h => h.toLowerCase().includes('total hours') || (h.toLowerCase().includes('total time') && !h.toLowerCase().includes('est')));
   const timestampCol  = sheet1Headers.find(h => h.toLowerCase().includes('timestamp'));
 
   if (!sheet1Data.length) return null;

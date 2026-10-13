@@ -112,6 +112,7 @@ const FILTER_CONFIG: Record<'1' | '2', { term: string; label: string }[]> = {
 // sheet's own column order doesn't match this display order.
 const SHEET1_COL_ORDER = [
   'project name', 'task name', 'task url', 'time estimation', 'task estimation',
+  'total time est',
   'total hours', 'total time',
   'assigned person', 'assigned to', 'task daily bucket', 'today bucket set',
   'time logged', 'task status', 'status updation', 'pm status',
@@ -1166,7 +1167,10 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                       const isPmStatus = h.toLowerCase().includes('pm status');
                       const isTimeLogged = h.toLowerCase().includes('time logged');
                       const isTimeEst = h.toLowerCase().includes('time estim') || h.toLowerCase().includes('task estim');
-                      const isTotalHours = h.toLowerCase().includes('total hours') || h.toLowerCase().includes('total time');
+                      // "Total Time Est" is the task's overall estimate — a time ("03.00 Hours") or
+                      // free text ("As Per Task"), so it is handled apart from Total Time / Total Hours.
+                      const isTotalTimeEst = h.toLowerCase().includes('total time est');
+                      const isTotalHours = !isTotalTimeEst && (h.toLowerCase().includes('total hours') || h.toLowerCase().includes('total time'));
                       const isAssigned = h.toLowerCase().includes('assigned person') || h.toLowerCase().includes('assigned to');
                       const isBucket = h.toLowerCase().includes('task daily bucket') || (h.toLowerCase().includes('bucket') && !h.toLowerCase().includes('today'));
                       const isTodayBucketSet = h.toLowerCase().includes('today bucket') || h.toLowerCase().includes('bucket set');
@@ -1300,6 +1304,8 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                             />
                           ) : isTimeEst ? (
                             val.trim() ? <span className="whitespace-nowrap">{formatHHMM(toHM(val).h, toHM(val).m)}</span> : '—'
+                          ) : isTotalTimeEst ? (
+                            val.trim() ? (/^\s*\d/.test(val) ? <span className="whitespace-nowrap">{formatHHMM(toHM(val).h, toHM(val).m)}</span> : val) : '—'
                           ) : isTotalHours ? (
                             val.trim() ? <span className="whitespace-nowrap">{formatHHMM(toHM(val).h, toHM(val).m)}</span> : '—'
                           ) : isBucket ? (BUCKET_OPTIONS.find(o => o.toLowerCase() === normalizeBucket(val)) ?? val) || '—'

@@ -77,7 +77,7 @@ export function calcLeaderboard(
   const pmStatusCol = bandwidthHeaders.find(h => h.toLowerCase().includes('pm status'));
   const personCol   = bandwidthHeaders.find(h => h.toLowerCase().includes('assigned person'));
   const tsCol       = bandwidthHeaders.find(h => h.toLowerCase().includes('timestamp'));
-  const timeEstCol  = bandwidthHeaders.find(h => h.toLowerCase().includes('total time'))
+  const timeEstCol  = bandwidthHeaders.find(h => h.toLowerCase().includes('total time') && !h.toLowerCase().includes('est'))
     ?? bandwidthHeaders.find(h => h.toLowerCase().includes('time estimation') || h.toLowerCase().includes('time estimate') || h.toLowerCase().includes('estimation'));
   if (!personCol) return [];
 
