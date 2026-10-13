@@ -642,6 +642,72 @@ function TimeEstDurationCell({ value, row, col, onStatusChange }: {
   );
 }
 
+// "Total Time Est" — like Time Estimation (hour / minute dropdowns), but the
+// sheet also uses the text "As Per Task" for work with no fixed estimate, so
+// that is offered as a choice too. Anything non-numeric reads as that text.
+const AS_PER_TASK = 'As Per Task';
+function TotalTimeEstCell({ value, row, col, onStatusChange }: {
+  value: string; row: SheetData; col: string;
+  onStatusChange: (row: SheetData, col: string, newValue: string) => Promise<void>;
+}) {
+  const isText = value.trim() !== '' && !/^\s*\d/.test(value);
+  const { h, m } = toHM(value);
+  const [saving, setSaving] = useState(false);
+
+  const save = async (next: string) => {
+    setSaving(true);
+    try { await onStatusChange(row, col, next); }
+    finally { setSaving(false); }
+  };
+
+  const selectStyle = {
+    background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)',
+  };
+  const linkBtn = 'text-[10px] font-semibold rounded px-1.5 py-1 cursor-pointer disabled:opacity-60 whitespace-nowrap';
+
+  if (isText) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs whitespace-nowrap" style={{ color: 'var(--cn-text-primary)' }}>{value}</span>
+        <button onClick={() => save(formatHHMM(0, 0))} disabled={saving} title="Set a time instead"
+          className={linkBtn} style={{ color: 'var(--cn-accent)', border: '1px solid var(--cn-border)' }}>
+          Set time
+        </button>
+        {saving && <span className="w-3 h-3 border border-t-transparent rounded-full animate-spin shrink-0" style={{ borderColor: 'var(--cn-accent)' }} />}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <select
+        value={h}
+        onChange={e => save(formatHHMM(Number(e.target.value), m))}
+        disabled={saving}
+        className="text-xs rounded px-1.5 py-1 focus:outline-none disabled:opacity-60 cursor-pointer"
+        style={selectStyle}
+      >
+        {DURATION_HOUR_OPTIONS.map(o => <option key={o} value={o}>{String(o).padStart(2, '0')}</option>)}
+      </select>
+      <span style={{ color: 'var(--cn-text-muted)' }}>.</span>
+      <select
+        value={m}
+        onChange={e => save(formatHHMM(h, Number(e.target.value)))}
+        disabled={saving}
+        className="text-xs rounded px-1.5 py-1 focus:outline-none disabled:opacity-60 cursor-pointer"
+        style={selectStyle}
+      >
+        {DURATION_MINUTE_OPTIONS.map(o => <option key={o} value={o}>{String(o).padStart(2, '0')}</option>)}
+      </select>
+      <button onClick={() => save(AS_PER_TASK)} disabled={saving} title={`Mark as "${AS_PER_TASK}"`}
+        className={linkBtn} style={{ color: 'var(--cn-text-muted)', border: '1px solid var(--cn-border)' }}>
+        {AS_PER_TASK}
+      </button>
+      {saving && <span className="w-3 h-3 border border-t-transparent rounded-full animate-spin shrink-0" style={{ borderColor: 'var(--cn-accent)' }} />}
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 interface Props {
   data: SheetData[];
@@ -1304,6 +1370,13 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                             />
                           ) : isTimeEst ? (
                             val.trim() ? <span className="whitespace-nowrap">{formatHHMM(toHM(val).h, toHM(val).m)}</span> : '—'
+                          ) : isTotalTimeEst && onStatusChange && canEditPersonBucket ? (
+                            <TotalTimeEstCell
+                              value={val}
+                              row={row}
+                              col={h}
+                              onStatusChange={onStatusChange}
+                            />
                           ) : isTotalTimeEst ? (
                             val.trim() ? (/^\s*\d/.test(val) ? <span className="whitespace-nowrap">{formatHHMM(toHM(val).h, toHM(val).m)}</span> : val) : '—'
                           ) : isTotalHours ? (
