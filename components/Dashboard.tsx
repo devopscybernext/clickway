@@ -1018,13 +1018,22 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           )}
 
           {/* ── Admin Portal: User Details (HM/Admin/Mod only) ── */}
-          {/* ── Report (Web): cards that generate PDF / Excel reports ── */}
+          {/* ── Report (Web / Marketing): cards that generate PDF / Excel reports ── */}
           {isReport && (isAdmin || isPmTier || isTeamAdmin) && (
             <section
               className="cn-card rounded-lg border transition-colors"
               style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
             >
-              <Reports data={activeBandwidthData} headers={bandwidthHeaders} />
+              {navTeam === 'marketing' && marketingTeamData.length === 0 ? (
+                <p className="p-6 text-sm" style={{ color: 'var(--cn-text-muted)' }}>Loading Marketing tasks…</p>
+              ) : (
+                <Reports
+                  key={navTeam}
+                  team={navTeam}
+                  data={navTeam === 'marketing' ? marketingTeamData : activeBandwidthData}
+                  headers={navTeam === 'marketing' ? marketingTeamHeaders : bandwidthHeaders}
+                />
+              )}
             </section>
           )}
 

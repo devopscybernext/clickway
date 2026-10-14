@@ -4,16 +4,30 @@
 
 import { timeToMinutes } from './copyTotals';
 
+// ── Teams ──────────────────────────────────────────────────────────────────
+// Web and Marketing keep the same kind of task rows, but name the two time
+// columns differently and write their dates in a different order.
+export type ReportTeam = 'web' | 'marketing';
+
+export const TEAM_LABELS: Record<ReportTeam, { team: string; est: string; total: string }> = {
+  web: { team: 'Web', est: 'Total Time Est', total: 'Total Time' },
+  marketing: { team: 'Marketing', est: 'Task Estimation', total: 'Total Hours' },
+};
+
 // ── Dates ──────────────────────────────────────────────────────────────────
-// The Web sheets store dates day-first ("21/04/2026 17:42:25"). Reading them
-// month-first (what `new Date(str)` does) silently turns 05/06 into May 6th.
-export function parseSheetDate(value: unknown): Date | null {
+// The Web sheet stores dates day-first ("21/04/2026 17:42:25"), the Marketing
+// sheet month-first ("8/31/2026"). Reading either the wrong way round (what
+// `new Date(str)` does) silently turns 05/06 into the wrong month.
+export type DateOrder = 'dmy' | 'mdy';
+export function parseSheetDate(value: unknown, order: DateOrder = 'dmy'): Date | null {
   if (value === null || value === undefined) return null;
   const s = String(value).trim();
   if (!s) return null;
   const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   if (m) {
-    const day = +m[1], month = +m[2], year = +m[3];
+    const day = order === 'mdy' ? +m[2] : +m[1];
+    const month = order === 'mdy' ? +m[1] : +m[2];
+    const year = +m[3];
     if (month < 1 || month > 12 || day < 1 || day > 31) return null;
     const d = new Date(year, month - 1, day);
     return isNaN(d.getTime()) ? null : d;
@@ -99,6 +113,8 @@ export interface TaskFilter {
   /** Which date the range is applied to. */
   dateBy: 'created' | 'deadline';
   people: Set<string>;
+  /** Which team's columns and date order to use. Defaults to Web. */
+  team?: ReportTeam;
 }
 
 export interface WebColumns {
@@ -106,7 +122,7 @@ export interface WebColumns {
   deadline?: string; taskStatus?: string; pmStatus?: string; created?: string;
 }
 
-export function findWebColumns(headers: string[]): WebColumns {
+export function findWebColumns(headers: string[], team: ReportTeam = 'web'): WebColumns {
   const lower = (h: string) => h.trim().toLowerCase();
   const find = (pred: (l: string) => boolean) => headers.find(h => pred(lower(h)));
   return {
@@ -114,9 +130,9 @@ export function findWebColumns(headers: string[]): WebColumns {
     project: find(l => l.includes('project name')),
     task: find(l => l.includes('task name')),
     url: find(l => l.includes('task url')),
-    est: find(l => l === 'total time est'),
-    // exactly "Total Time" — never "Total Time Est"
-    total: find(l => l === 'total time'),
+    // exact names — Web's "Total Time" must never pick up "Total Time Est"
+    est: find(l => l === TEAM_LABELS[team].est.toLowerCase()),
+    total: find(l => l === TEAM_LABELS[team].total.toLowerCase()),
     deadline: find(l => l === 'deadline'),
     taskStatus: find(l => l.includes('status updation')),
     pmStatus: find(l => l.includes('pm status')),
@@ -131,18 +147,28 @@ export function buildProductivityTasks(
   headers: string[],
   filter: TaskFilter,
 ): ProductivityTask[] {
-  const c = findWebColumns(headers);
+  const team = filter.team ?? 'web';
+  const order: DateOrder = team === 'marketing' ? 'mdy' : 'dmy';
+  const c = findWebColumns(headers, team);
   if (!c.person) return [];
   const startMs = filter.from ? new Date(filter.from.getFullYear(), filter.from.getMonth(), filter.from.getDate()).getTime() : null;
   const endMs = filter.to ? new Date(filter.to.getFullYear(), filter.to.getMonth(), filter.to.getDate()).getTime() : null;
+
+  // The Marketing sheet's archive tab mirrors its current-month tab, so the same
+  // task can arrive twice. Keep the first copy (the current-month one).
+  const seen = new Set<string>();
 
   const out: ProductivityTask[] = [];
   for (const r of rows) {
     const person = str(r[c.person]);
     if (!person || !filter.people.has(person)) continue;
 
-    const created = c.created ? parseSheetDate(r[c.created]) : null;
-    const dateValue = filter.dateBy === 'deadline' ? (c.deadline ? parseSheetDate(r[c.deadline]) : null) : created;
+    const dupKey = [c.created ? str(r[c.created]) : '', person, c.project ? str(r[c.project]) : '', c.task ? str(r[c.task]) : ''].join('|');
+    if (seen.has(dupKey)) continue;
+    seen.add(dupKey);
+
+    const created = c.created ? parseSheetDate(r[c.created], order) : null;
+    const dateValue = filter.dateBy === 'deadline' ? (c.deadline ? parseSheetDate(r[c.deadline], order) : null) : created;
     if (startMs !== null || endMs !== null) {
       if (!dateValue) continue; // no usable date → can't be placed in a range
       const t = new Date(dateValue.getFullYear(), dateValue.getMonth(), dateValue.getDate()).getTime();

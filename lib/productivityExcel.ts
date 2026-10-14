@@ -3,7 +3,7 @@
 // flag filled green / red / grey and the task link clickable.
 
 import { timeToMinutes, formatTotalTime } from './copyTotals';
-import { FLAG_STYLE, fmtDuration, type PersonSummary } from './productivity';
+import { FLAG_STYLE, TEAM_LABELS, fmtDuration, type PersonSummary, type ReportTeam } from './productivity';
 
 const HEADER = { fontWeight: 'bold' as const, backgroundColor: '#f3f4f6', textColor: '#6b7280', wrap: true, alignVertical: 'center' as const };
 const TOTAL_BG = '#fff1ec';
@@ -26,8 +26,10 @@ export async function downloadProductivityExcel(opts: {
   summaries: PersonSummary[];
   rangeLabel: string;
   fileName: string;
+  team?: ReportTeam;
 }): Promise<void> {
-  const { summaries, rangeLabel, fileName } = opts;
+  const { summaries, rangeLabel, fileName, team = 'web' } = opts;
+  const labels = TEAM_LABELS[team];
   const { default: writeExcelFile } = await import('write-excel-file/browser');
   const names = sheetNames(summaries.map(s => s.person));
 
@@ -67,7 +69,7 @@ export async function downloadProductivityExcel(opts: {
   const summarySheet = {
     sheet: 'Summary',
     data: [
-      [{ value: 'Productivity Meter', fontWeight: 'bold' as const, fontSize: 14 }],
+      [{ value: team === 'web' ? 'Productivity Meter' : `Productivity Meter - ${labels.team}`, fontWeight: 'bold' as const, fontSize: 14 }],
       [{ value: rangeLabel, textColor: '#6b7280' }],
       [{ value: 'Efficiency = time estimated / time taken, over tasks that have both. 100% = on plan; above = faster than estimated.', textColor: '#6b7280' }],
       [],
@@ -81,7 +83,7 @@ export async function downloadProductivityExcel(opts: {
 
   // ── One sheet per resource ───────────────────────────────────────────────
   const personSheets = summaries.map((p, i) => {
-    const head = ['#', 'PROJECT NAME', 'TASK NAME', 'TASK URL', 'TOTAL TIME EST', 'TOTAL TIME', 'DEADLINE', 'TASK STATUS', 'PM STATUS', 'FLAG', 'MESSAGE']
+    const head = ['#', 'PROJECT NAME', 'TASK NAME', 'TASK URL', labels.est.toUpperCase(), labels.total.toUpperCase(), 'DEADLINE', 'TASK STATUS', 'PM STATUS', 'FLAG', 'MESSAGE']
       .map(value => ({ value, ...HEADER }));
     const body = p.tasks.map((t, ti) => {
       const st = FLAG_STYLE[t.flag.kind];

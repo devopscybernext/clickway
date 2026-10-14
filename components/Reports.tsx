@@ -4,15 +4,17 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Gauge, FileText, FileSpreadsheet, X, AlertCircle } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
-import { WEB_TEAM } from '@/lib/config';
+import { WEB_TEAM, MARKETING_ASSIGNED_PERSONS } from '@/lib/config';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
-import { buildProductivityTasks, findWebColumns, formatRange, summarise } from '@/lib/productivity';
+import { TEAM_LABELS, buildProductivityTasks, findWebColumns, formatRange, summarise, type ReportTeam } from '@/lib/productivity';
 import { downloadProductivityPdf } from '@/lib/productivityPdf';
 import { downloadProductivityExcel } from '@/lib/productivityExcel';
 
 type Format = 'pdf' | 'xlsx';
 
-// One entry per report. More reports (and the Marketing set) slot in here later.
+const ROSTER: Record<ReportTeam, string[]> = { web: WEB_TEAM, marketing: MARKETING_ASSIGNED_PERSONS };
+
+// One entry per report. More reports slot in here later.
 const REPORTS = [
   {
     id: 'productivity',
@@ -31,14 +33,15 @@ const fromIso = (s: string): Date | null => {
 };
 
 interface Props {
-  /** Every Web task row (current month + archive tabs) */
+  /** Every task row of the team (current month + archive tabs) */
   data: SheetData[];
   headers: string[];
+  team: ReportTeam;
 }
 
-// Report tab (Web): a grid of report cards, 3 per row, each with Generate PDF
+// Report tab (Web and Marketing): a grid of report cards, 3 per row, each with Generate PDF
 // and Generate Excel. A report with options opens its popup first.
-export default function Reports({ data, headers }: Props) {
+export default function Reports({ data, headers, team }: Props) {
   const [open, setOpen] = useState<{ reportId: string; format: Format } | null>(null);
 
   return (
@@ -46,7 +49,7 @@ export default function Reports({ data, headers }: Props) {
       <div className="mb-5">
         <h2 className="font-semibold text-base" style={{ color: 'var(--cn-text-primary)' }}>Reports</h2>
         <p className="text-xs mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>
-          Web team reports. Choose one, set what it should cover, and download it as a PDF or an Excel sheet.
+          {TEAM_LABELS[team].team} team reports. Choose one, set what it should cover, and download it as a PDF or an Excel sheet.
         </p>
       </div>
 
@@ -87,33 +90,37 @@ export default function Reports({ data, headers }: Props) {
       </div>
 
       {open?.reportId === 'productivity' && (
-        <ProductivityDialog format={open.format} data={data} headers={headers} onClose={() => setOpen(null)} />
+        <ProductivityDialog format={open.format} data={data} headers={headers} team={team} onClose={() => setOpen(null)} />
       )}
     </div>
   );
 }
 
 // ─── Productivity Meter popup ────────────────────────────────────────────────
-function ProductivityDialog({ format, data, headers, onClose }: {
+function ProductivityDialog({ format, data, headers, team, onClose }: {
   format: Format;
   data: SheetData[];
   headers: string[];
+  team: ReportTeam;
   onClose: () => void;
 }) {
   useBodyScrollLock();
 
+  const roster = ROSTER[team];
+  const teamName = TEAM_LABELS[team].team;
+
   // Everyone who has a task, the roster first
   const people = useMemo(() => {
-    const col = findWebColumns(headers).person;
+    const col = findWebColumns(headers, team).person;
     const found = new Set<string>();
     if (col) data.forEach(r => { const n = String(r[col] ?? '').trim(); if (n) found.add(n); });
-    // The Web roster first (in roster order, even if someone has no tasks yet),
+    // The team roster first (in roster order, even if someone has no tasks yet),
     // then anyone else who appears in the data.
     const has = (n: string) => [...found].find(f => f.toLowerCase() === n.toLowerCase());
-    const roster = WEB_TEAM.map(n => has(n) ?? n);
-    const rest = [...found].filter(n => !WEB_TEAM.some(t => t.toLowerCase() === n.toLowerCase())).sort((a, b) => a.localeCompare(b));
-    return [...roster, ...rest];
-  }, [data, headers]);
+    const ordered = roster.map(n => has(n) ?? n);
+    const rest = [...found].filter(n => !roster.some(t => t.toLowerCase() === n.toLowerCase())).sort((a, b) => a.localeCompare(b));
+    return [...ordered, ...rest];
+  }, [data, headers, team, roster]);
 
   const today = new Date();
   const [from, setFrom] = useState(iso(new Date(today.getFullYear(), today.getMonth(), 1)));
@@ -135,7 +142,7 @@ function ProductivityDialog({ format, data, headers, onClose }: {
 
   // Live counts: how many tasks each person has inside the chosen dates
   const counts = useMemo(() => {
-    const all = buildProductivityTasks(data, headers, { from: fromDate, to: toDate, dateBy, people: new Set(people) });
+    const all = buildProductivityTasks(data, headers, { from: fromDate, to: toDate, dateBy, people: new Set(people), team });
     const map = new Map<string, number>();
     all.forEach(t => map.set(t.person, (map.get(t.person) ?? 0) + 1));
     return map;
@@ -158,15 +165,15 @@ function ProductivityDialog({ format, data, headers, onClose }: {
 
   const generate = async () => {
     setError('');
-    const tasks = buildProductivityTasks(data, headers, { from: fromDate, to: toDate, dateBy, people: selected });
-    const summaries = summarise(tasks, WEB_TEAM);
+    const tasks = buildProductivityTasks(data, headers, { from: fromDate, to: toDate, dateBy, people: selected, team });
+    const summaries = summarise(tasks, roster);
     if (!summaries.length) { setError('No tasks found for these resources in that date range.'); return; }
     const rangeLabel = formatRange(fromDate, toDate, dateBy);
-    const stamp = `${from || 'start'}_to_${to || 'now'}`;
+    const stamp = `${team === 'web' ? '' : `${teamName}-`}${from || 'start'}_to_${to || 'now'}`;
     setBusy(true);
     try {
-      if (format === 'pdf') await downloadProductivityPdf({ summaries, rangeLabel, fileName: `Productivity-Meter-${stamp}.pdf` });
-      else await downloadProductivityExcel({ summaries, rangeLabel, fileName: `Productivity-Meter-${stamp}.xlsx` });
+      if (format === 'pdf') await downloadProductivityPdf({ summaries, rangeLabel, fileName: `Productivity-Meter-${stamp}.pdf`, team });
+      else await downloadProductivityExcel({ summaries, rangeLabel, fileName: `Productivity-Meter-${stamp}.xlsx`, team });
       onClose();
     } catch {
       setError('Could not generate the report. Please try again.');
@@ -182,7 +189,7 @@ function ProductivityDialog({ format, data, headers, onClose }: {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Productivity Meter report"
+        aria-label={`Productivity Meter report - ${teamName}`}
         className="rounded-xl w-full flex flex-col"
         style={{ background: 'var(--cn-bg-card)', maxWidth: 560, maxHeight: '92vh', border: '1px solid var(--cn-border)' }}
         onClick={e => e.stopPropagation()}
@@ -190,7 +197,7 @@ function ProductivityDialog({ format, data, headers, onClose }: {
         <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
           <div>
             <h2 className="font-semibold text-base" style={{ color: 'var(--cn-text-primary)' }}>
-              Productivity Meter — {format === 'pdf' ? 'PDF' : 'Excel'}
+              Productivity Meter{team === 'web' ? '' : ` · ${teamName}`} — {format === 'pdf' ? 'PDF' : 'Excel'}
             </h2>
             <p className="text-xs mt-1" style={{ color: 'var(--cn-text-muted)' }}>
               Choose the dates and the resources. Each task is flagged green when it took no longer than its estimate, red when it ran over.

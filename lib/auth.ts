@@ -136,11 +136,13 @@ const MARKETING_FULL: NavLeaf[] = [
   { id: '1', team: 'marketing', label: 'Tasks Assigned' },
   { id: '9', team: 'marketing', label: 'Tasks Overview' },
   { id: '6', team: 'marketing', label: 'Add Task' },
+  { id: '16', team: 'marketing', label: 'Report' },
 ];
 const MARKETING_NO_TASKS_ASSIGNED: NavLeaf[] = [
   { id: '3', team: 'marketing', label: 'Team Bandwidth' },
   { id: '9', team: 'marketing', label: 'Tasks Overview' },
   { id: '6', team: 'marketing', label: 'Add Task' },
+  { id: '16', team: 'marketing', label: 'Report' },
 ];
 const MARKETING_INDIVIDUAL: NavLeaf[] = [
   { id: '3', team: 'marketing', label: 'Team Bandwidth' },

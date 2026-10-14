@@ -5,7 +5,7 @@
 
 import { clean } from './projectReportPdf';
 import { timeToMinutes, formatTotalTime } from './copyTotals';
-import { FLAG_STYLE, fmtDuration, type PersonSummary, type ProductivityTask } from './productivity';
+import { FLAG_STYLE, TEAM_LABELS, fmtDuration, type PersonSummary, type ProductivityTask, type ReportTeam } from './productivity';
 
 const PAGE_W = 297;
 const PAGE_H = 210;
@@ -29,8 +29,10 @@ export async function downloadProductivityPdf(opts: {
   summaries: PersonSummary[];
   rangeLabel: string;
   fileName: string;
+  team?: ReportTeam;
 }): Promise<void> {
-  const { summaries, rangeLabel, fileName } = opts;
+  const { summaries, rangeLabel, fileName, team = 'web' } = opts;
+  const labels = TEAM_LABELS[team];
   const { jsPDF } = await import('jspdf');
   const { autoTable } = await import('jspdf-autotable');
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
@@ -43,7 +45,7 @@ export async function downloadProductivityPdf(opts: {
   strip();
   let y = 15;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...ORANGE);
-  doc.text('PRODUCTIVITY METER', MARGIN, y);
+  doc.text(team === 'web' ? 'PRODUCTIVITY METER' : `PRODUCTIVITY METER  |  ${labels.team.toUpperCase()}`, MARGIN, y);
   doc.setFont('helvetica', 'normal'); doc.setTextColor(...MUTED);
   doc.text(clean(rangeLabel), PAGE_W - MARGIN, y, { align: 'right' });
   y += 9;
@@ -190,7 +192,7 @@ export async function downloadProductivityPdf(opts: {
     const sumTaken = p.tasks.reduce((s, t) => s + t.totalMin, 0);
     autoTable(d, {
       startY: ry + 5,
-      head: [['#', 'PROJECT NAME', 'TASK NAME', 'LINK', 'TOTAL TIME EST', 'TOTAL TIME', 'DEADLINE', 'TASK STATUS', 'PM STATUS', 'FLAG']],
+      head: [['#', 'PROJECT NAME', 'TASK NAME', 'LINK', labels.est.toUpperCase(), labels.total.toUpperCase(), 'DEADLINE', 'TASK STATUS', 'PM STATUS', 'FLAG']],
       body: p.tasks.map((t: ProductivityTask, i: number) => [
         String(i + 1), clean(t.project || '-'), clean(t.task || '-'), t.url ? 'Open' : '-',
         timeText(t.estRaw), timeText(t.totalRaw), clean(t.deadline || '-'), clean(t.taskStatus || '-'), clean(t.pmStatus || '-'),
