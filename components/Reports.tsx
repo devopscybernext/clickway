@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Gauge, CalendarClock, Target, FolderKanban, CalendarRange, Activity, Hourglass, HeartPulse, MessageSquareWarning, FileText, FileSpreadsheet, type LucideIcon } from 'lucide-react';
+import { Gauge, CalendarClock, Target, CalendarRange, Hourglass, MessageSquareWarning, FileText, FileSpreadsheet, type LucideIcon } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { WEB_TEAM, MARKETING_ASSIGNED_PERSONS } from '@/lib/config';
 import { TEAM_LABELS, buildProductivityTasks, formatRange, summarise, type ReportTeam } from '@/lib/productivity';
@@ -16,9 +16,9 @@ import {
   exportDoc, rangePresets, teamSuffix, today0, useGenerate,
   type DialogProps, type Format,
 } from './ReportDialogParts';
-import { AgingDialog, BlockersDialog, MonthlyDialog, ProjectHealthDialog, ProjectTimeDialog, UtilisationDialog } from './ExtraReportDialogs';
+import { AgingDialog, BlockersDialog, MonthlyDialog } from './ExtraReportDialogs';
 
-type ReportId = 'productivity' | 'deadlines' | 'estimation' | 'projectTime' | 'monthly' | 'utilisation' | 'aging' | 'health' | 'blockers';
+type ReportId = 'productivity' | 'deadlines' | 'estimation' | 'monthly' | 'aging' | 'blockers';
 
 const ROSTER: Record<ReportTeam, string[]> = { web: WEB_TEAM, marketing: MARKETING_ASSIGNED_PERSONS };
 
@@ -47,24 +47,10 @@ const REPORTS: { id: ReportId; title: string; description: string; Icon: LucideI
     teams: ['web', 'marketing'],
   },
   {
-    id: 'projectTime',
-    title: 'Project Time Report',
-    description: 'See how much time each project used, and who worked on it.',
-    Icon: FolderKanban,
-    teams: ['web', 'marketing'],
-  },
-  {
     id: 'monthly',
     title: 'Monthly Team Summary',
     description: 'A one-month view of tasks, time and projects, compared with last month.',
     Icon: CalendarRange,
-    teams: ['web', 'marketing'],
-  },
-  {
-    id: 'utilisation',
-    title: 'Utilisation',
-    description: 'See who is under-used and who is stretched, month by month.',
-    Icon: Activity,
     teams: ['web', 'marketing'],
   },
   {
@@ -73,13 +59,6 @@ const REPORTS: { id: ReportId; title: string; description: string; Icon: LucideI
     description: 'See open tasks that have been waiting the longest.',
     Icon: Hourglass,
     teams: ['web', 'marketing'],
-  },
-  {
-    id: 'health',
-    title: 'Project Health',
-    description: 'See which client projects are at risk this month.',
-    Icon: HeartPulse,
-    teams: ['web'],
   },
   {
     id: 'blockers',
@@ -95,14 +74,11 @@ interface Props {
   data: SheetData[];
   headers: string[];
   team: ReportTeam;
-  /** PM Projects rows — used by Project Health */
-  pmData?: SheetData[];
-  pmHeaders?: string[];
 }
 
 // Report tab (Web and Marketing): a grid of report cards, 3 per row, each with
 // Generate PDF and Generate Excel. A report with options opens its popup first.
-export default function Reports({ data, headers, team, pmData, pmHeaders }: Props) {
+export default function Reports({ data, headers, team }: Props) {
   const [open, setOpen] = useState<{ reportId: ReportId; format: Format } | null>(null);
 
   const roster = ROSTER[team];
@@ -159,12 +135,9 @@ export default function Reports({ data, headers, team, pmData, pmHeaders }: Prop
       {open?.reportId === 'productivity' && <ProductivityDialog {...common} format={open.format} data={data} headers={headers} />}
       {open?.reportId === 'deadlines' && <DeadlineDialog {...common} format={open.format} />}
       {open?.reportId === 'estimation' && <EstimationDialog {...common} format={open.format} />}
-      {open?.reportId === 'projectTime' && <ProjectTimeDialog {...common} format={open.format} />}
       {open?.reportId === 'monthly' && <MonthlyDialog {...common} format={open.format} />}
-      {open?.reportId === 'utilisation' && <UtilisationDialog {...common} format={open.format} />}
       {open?.reportId === 'aging' && <AgingDialog {...common} format={open.format} />}
       {open?.reportId === 'blockers' && <BlockersDialog {...common} format={open.format} />}
-      {open?.reportId === 'health' && <ProjectHealthDialog format={open.format} pmData={pmData ?? []} pmHeaders={pmHeaders ?? []} onClose={common.onClose} />}
     </div>
   );
 }

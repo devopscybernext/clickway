@@ -66,8 +66,6 @@ export const asCell = (c: Cell): DocCell => (typeof c === 'string' ? { text: c }
 
 export const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
 export const signedPct = (n: number) => `${n > 0 ? '+' : ''}${n}%`;
-/** green within 10%, amber beyond, red beyond 25% */
-export const biasTone = (pct: number): Tone => (Math.abs(pct) <= 10 ? 'good' : pct > 25 ? 'bad' : 'warn');
 /** Sort comparator: names in the given order first, anything else alphabetically after */
 export const byRoster = (order: string[]) => (a: string, b: string) => {
   const ia = order.indexOf(a), ib = order.indexOf(b);
