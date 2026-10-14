@@ -101,17 +101,3 @@ export function listPeople(tasks: ReportTask[], roster: string[]): string[] {
   const rest = [...found].filter(n => !roster.some(t => t.toLowerCase() === n.toLowerCase())).sort((a, b) => a.localeCompare(b));
   return [...ordered, ...rest];
 }
-
-/** Department per person (from the Leave sheet: "Web Development", "PPC", ...) */
-export function departmentMap(availData: Record<string, unknown>[], availHeaders: string[]): Map<string, string> {
-  const nameCol = availHeaders.find(h => h.trim().toLowerCase() === 'team');
-  const deptCol = availHeaders.find(h => h.trim().toLowerCase() === 'department');
-  const map = new Map<string, string>();
-  if (!nameCol || !deptCol) return map;
-  availData.forEach(r => {
-    const n = str(r[nameCol]).toLowerCase();
-    const d = str(r[deptCol]);
-    if (n && d) map.set(n, d);
-  });
-  return map;
-}

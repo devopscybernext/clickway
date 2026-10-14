@@ -1,25 +1,24 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Gauge, CalendarClock, Scale, Target, FileText, FileSpreadsheet, type LucideIcon } from 'lucide-react';
+import { Gauge, CalendarClock, Target, FileText, FileSpreadsheet, type LucideIcon } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { WEB_TEAM, MARKETING_ASSIGNED_PERSONS } from '@/lib/config';
 import { TEAM_LABELS, buildProductivityTasks, formatRange, summarise, type ReportTeam } from '@/lib/productivity';
 import { downloadProductivityPdf } from '@/lib/productivityPdf';
 import { downloadProductivityExcel } from '@/lib/productivityExcel';
-import { departmentMap, extractTasks, listPeople, startOfDay, type ReportTask } from '@/lib/reportTasks';
+import { extractTasks, listPeople, startOfDay, type ReportTask } from '@/lib/reportTasks';
 import { buildDeadlineDoc, buildDeadlines } from '@/lib/deadlines';
-import { buildWorkload, buildWorkloadDoc, workingDays } from '@/lib/workload';
 import { buildEstimation, buildEstimationDoc, comparableTasks } from '@/lib/estimation';
 import type { ReportDoc } from '@/lib/reportDoc';
 import { downloadReportDocPdf } from '@/lib/reportDocPdf';
 import { downloadReportDocExcel } from '@/lib/reportDocExcel';
 import {
-  DateRangeSection, DialogFrame, Hint, ResourceSection, SectionLabel, chipClass, chipStyle, fromIso, inputStyle, iso,
+  DateRangeSection, DialogFrame, Hint, ResourceSection, SectionLabel, chipClass, chipStyle, fromIso, iso,
   type Format, type Preset,
 } from './ReportDialogParts';
 
-type ReportId = 'productivity' | 'deadlines' | 'workload' | 'estimation';
+type ReportId = 'productivity' | 'deadlines' | 'estimation';
 
 const ROSTER: Record<ReportTeam, string[]> = { web: WEB_TEAM, marketing: MARKETING_ASSIGNED_PERSONS };
 
@@ -36,12 +35,6 @@ const REPORTS: { id: ReportId; title: string; description: string; Icon: LucideI
     title: 'Deadline Tracker',
     description: 'See which tasks are overdue or due soon, and who is falling behind.',
     Icon: CalendarClock,
-  },
-  {
-    id: 'workload',
-    title: 'Workload Balance',
-    description: 'See who has too much work and who has room, with ideas to rebalance.',
-    Icon: Scale,
   },
   {
     id: 'estimation',
@@ -61,9 +54,6 @@ interface Props {
   data: SheetData[];
   headers: string[];
   team: ReportTeam;
-  /** Leave sheet rows — used to know each person's department */
-  availData?: SheetData[];
-  availHeaders?: string[];
 }
 
 interface DialogProps {
@@ -72,22 +62,19 @@ interface DialogProps {
   roster: string[];
   tasks: ReportTask[];
   people: string[];
-  deptOf: (person: string) => string;
   onClose: () => void;
 }
 
 // Report tab (Web and Marketing): a grid of report cards, 3 per row, each with
 // Generate PDF and Generate Excel. A report with options opens its popup first.
-export default function Reports({ data, headers, team, availData, availHeaders }: Props) {
+export default function Reports({ data, headers, team }: Props) {
   const [open, setOpen] = useState<{ reportId: ReportId; format: Format } | null>(null);
 
   const roster = ROSTER[team];
   const tasks = useMemo(() => extractTasks(data, headers, team), [data, headers, team]);
   const people = useMemo(() => listPeople(tasks, roster), [tasks, roster]);
-  const depts = useMemo(() => departmentMap(availData ?? [], availHeaders ?? []), [availData, availHeaders]);
-  const deptOf = useMemo(() => (p: string) => depts.get(p.toLowerCase()) ?? '', [depts]);
 
-  const common: Omit<DialogProps, 'format'> = { team, roster, tasks, people, deptOf, onClose: () => setOpen(null) };
+  const common: Omit<DialogProps, 'format'> = { team, roster, tasks, people, onClose: () => setOpen(null) };
 
   return (
     <div className="p-3 sm:p-6">
@@ -136,7 +123,6 @@ export default function Reports({ data, headers, team, availData, availHeaders }
 
       {open?.reportId === 'productivity' && <ProductivityDialog {...common} format={open.format} data={data} headers={headers} />}
       {open?.reportId === 'deadlines' && <DeadlineDialog {...common} format={open.format} />}
-      {open?.reportId === 'workload' && <WorkloadDialog {...common} format={open.format} />}
       {open?.reportId === 'estimation' && <EstimationDialog {...common} format={open.format} />}
     </div>
   );
@@ -278,69 +264,6 @@ function DeadlineDialog({ format, team, roster, tasks, people, onClose }: Dialog
         <p className="text-xs mt-2" style={{ color: 'var(--cn-text-muted)' }}>Overdue tasks are always included.</p>
       </section>
       <ResourceSection people={people} selected={selected} setSelected={setSelected} countOf={p => byPerson.get(p)?.tasks.length ?? 0} unit="task" />
-    </DialogFrame>
-  );
-}
-
-// ─── Workload Balance popup ──────────────────────────────────────────────────
-const dayMonth = (e: Date) => e.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-const HORIZONS: { key: string; label: string; end: (t: Date) => Date }[] = [
-  { key: '7', label: 'Next 7 days', end: t => new Date(t.getFullYear(), t.getMonth(), t.getDate() + 7) },
-  { key: '14', label: 'Next 14 days', end: t => new Date(t.getFullYear(), t.getMonth(), t.getDate() + 14) },
-  { key: 'month', label: 'Until end of month', end: t => new Date(t.getFullYear(), t.getMonth() + 1, 0) },
-];
-
-function WorkloadDialog({ format, team, roster, tasks, people, deptOf, onClose }: DialogProps) {
-  const [horizonKey, setHorizonKey] = useState('7');
-  const [hours, setHours] = useState('8');
-  const [selected, setSelected] = useState<Set<string>>(() => new Set(people));
-  const g = useGenerate(onClose);
-  const today = useMemo(() => today0(), []);
-  const horizon = HORIZONS.find(h => h.key === horizonKey) ?? HORIZONS[0];
-  const endDate = useMemo(() => horizon.end(today), [horizon, today]);
-  const hoursPerDay = Math.min(Math.max(parseFloat(hours) || 0, 0), 24);
-  const days = workingDays(today, endDate);
-
-  const all = useMemo(
-    () => buildWorkload(tasks, { people: new Set(people), endDate, hoursPerDay: hoursPerDay || 8, today, deptOf }),
-    [tasks, people, endDate, hoursPerDay, today, deptOf],
-  );
-  const byPerson = useMemo(() => new Map(all.map(p => [p.person, p])), [all]);
-  const chosen = all.filter(p => selected.has(p.person));
-  const openTotal = chosen.reduce((s, p) => s + p.tasks.length, 0);
-  const missingEst = chosen.reduce((s, p) => s + p.noEstimate, 0);
-  const canGenerate = !g.busy && chosen.length > 0 && hoursPerDay > 0;
-
-  const generate = () => g.run(async () => {
-    if (!chosen.length) throw new Error('None of the selected resources have tasks.');
-    await exportDoc(buildWorkloadDoc(chosen, { team, order: roster, endDate, endLabel: dayMonth(endDate), hoursPerDay, today }), format);
-  });
-
-  return (
-    <DialogFrame
-      title={`Workload Balance${teamSuffix(team)}`}
-      intro="Compares each person's open work with the working hours they have left, and suggests tasks to move from people who are over capacity."
-      format={format} busy={g.busy} error={g.error} canGenerate={canGenerate} onClose={onClose} onGenerate={generate}
-      footer={`${plural(chosen.length, 'resource')} · ${plural(openTotal, 'open task')} · ${plural(days, 'working day')}`}
-    >
-      <section>
-        <div className="mb-2"><SectionLabel>Look ahead</SectionLabel></div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {HORIZONS.map(h => (
-            <button key={h.key} onClick={() => setHorizonKey(h.key)} aria-pressed={horizonKey === h.key} className={chipClass} style={chipStyle(horizonKey === h.key)}>{h.label}</button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2 mt-3">
-          <label htmlFor="wl-hours" className="text-xs" style={{ color: 'var(--cn-text-muted)' }}>Working hours per day</label>
-          <input id="wl-hours" type="number" min={1} max={24} step={0.5} value={hours} onChange={e => setHours(e.target.value)}
-            className="w-20 text-sm rounded-lg px-2.5 py-1.5 border focus:outline-none focus:ring-1 focus:ring-[#FE4A23]" style={inputStyle} />
-        </div>
-        {!hoursPerDay && <p className="text-xs mt-2" style={{ color: '#ef4444' }}>Enter the working hours per day.</p>}
-      </section>
-      <ResourceSection people={people} selected={selected} setSelected={setSelected} countOf={p => byPerson.get(p)?.tasks.length ?? 0} unit="open task" />
-      {missingEst > 0 && (
-        <Hint tone="warn">{plural(missingEst, 'open task')} {missingEst === 1 ? 'has' : 'have'} no estimate, so {missingEst === 1 ? 'its' : 'their'} work can&rsquo;t be measured. Add the estimate in the sheet for a fuller picture.</Hint>
-      )}
     </DialogFrame>
   );
 }
