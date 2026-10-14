@@ -1251,7 +1251,6 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                       const isStatusUpdation = h.toLowerCase().includes('status updation');
                       const isStatus = h.toLowerCase().includes('task status') && !isStatusUpdation;
                       const isPmStatus = h.toLowerCase().includes('pm status');
-                      const isTimeLogged = h.toLowerCase().includes('time logged');
                       const isTimeEst = h.toLowerCase().includes('time estim') || h.toLowerCase().includes('task estim');
                       // "Total Time Est" is the task's overall estimate — a time ("03.00 Hours") or
                       // free text ("As Per Task"), so it is handled apart from Total Time / Total Hours.
@@ -1374,13 +1373,6 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                                 </span>
                               );
                             })()
-                          ) : isTimeLogged && onStatusChange && canEditStatusUpdation ? (
-                            <InlineEditCell
-                              value={val}
-                              row={row}
-                              col={h}
-                              onStatusChange={onStatusChange}
-                            />
                           ) : isTimeEst && onStatusChange && canEditPersonBucket ? (
                             <TimeEstDurationCell
                               value={val}
