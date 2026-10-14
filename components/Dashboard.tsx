@@ -913,7 +913,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 defaultPersonFilter={isIndividual ? user.displayName : undefined}
                 editPersonBucket={isAdmin || isPmTier || isTeamAdmin}
                 editProjectTask={isAdmin || isPmTier || isTeamAdmin}
-                allowPushToAdmin={isAdmin || isPmTier || isTeamAdmin}
+                allowPushToAdmin={isAdmin}
                 showCopy={isAdmin}
                 rowCopy={isAdmin}
               />
