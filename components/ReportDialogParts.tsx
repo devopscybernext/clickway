@@ -1,9 +1,14 @@
 'use client';
 
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { FileText, FileSpreadsheet, X, AlertCircle } from 'lucide-react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
+import { TEAM_LABELS, type ReportTeam } from '@/lib/productivity';
+import { startOfDay, type ReportTask } from '@/lib/reportTasks';
+import type { ReportDoc } from '@/lib/reportDoc';
+import { downloadReportDocPdf } from '@/lib/reportDocPdf';
+import { downloadReportDocExcel } from '@/lib/reportDocExcel';
 
 export type Format = 'pdf' | 'xlsx';
 
@@ -185,3 +190,47 @@ export function Hint({ children, tone = 'muted' }: { children: ReactNode; tone?:
     </p>
   );
 }
+
+// ─── Helpers every report popup uses ─────────────────────────────────────────
+export interface DialogProps {
+  format: Format;
+  team: ReportTeam;
+  roster: string[];
+  tasks: ReportTask[];
+  people: string[];
+  onClose: () => void;
+}
+
+export const today0 = () => startOfDay(new Date());
+export const teamSuffix = (team: ReportTeam) => (team === 'web' ? '' : ` · ${TEAM_LABELS[team].team}`);
+
+export async function exportDoc(doc: ReportDoc, format: Format) {
+  if (format === 'pdf') await downloadReportDocPdf(doc);
+  else await downloadReportDocExcel(doc);
+}
+
+// Busy / error handling around generating a file; closes the popup when done
+export function useGenerate(onClose: () => void) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const run = async (task: () => Promise<void>) => {
+    setError('');
+    setBusy(true);
+    try {
+      await task();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error && e.message ? e.message : 'Could not generate the report. Please try again.');
+      setBusy(false);
+    }
+  };
+  return { busy, error, run };
+}
+
+export const rangePresets = (extra: Preset[] = []): Preset[] => [
+  { key: 'month', label: 'This month', range: () => { const n = new Date(); return [iso(new Date(n.getFullYear(), n.getMonth(), 1)), iso(n)]; } },
+  { key: 'last', label: 'Last month', range: () => { const n = new Date(); return [iso(new Date(n.getFullYear(), n.getMonth() - 1, 1)), iso(new Date(n.getFullYear(), n.getMonth(), 0))]; } },
+  { key: 'three', label: 'Last 3 months', range: () => { const n = new Date(); return [iso(new Date(n.getFullYear(), n.getMonth() - 2, 1)), iso(n)]; } },
+  ...extra,
+  { key: 'all', label: 'All time', range: () => ['', ''] },
+];

@@ -1,73 +1,108 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Gauge, CalendarClock, Target, FileText, FileSpreadsheet, type LucideIcon } from 'lucide-react';
+import { Gauge, CalendarClock, Target, FolderKanban, CalendarRange, Activity, Hourglass, HeartPulse, MessageSquareWarning, FileText, FileSpreadsheet, type LucideIcon } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { WEB_TEAM, MARKETING_ASSIGNED_PERSONS } from '@/lib/config';
 import { TEAM_LABELS, buildProductivityTasks, formatRange, summarise, type ReportTeam } from '@/lib/productivity';
 import { downloadProductivityPdf } from '@/lib/productivityPdf';
 import { downloadProductivityExcel } from '@/lib/productivityExcel';
-import { extractTasks, listPeople, startOfDay, type ReportTask } from '@/lib/reportTasks';
+import { extractTasks, listPeople } from '@/lib/reportTasks';
 import { buildDeadlineDoc, buildDeadlines } from '@/lib/deadlines';
 import { buildEstimation, buildEstimationDoc, comparableTasks } from '@/lib/estimation';
-import type { ReportDoc } from '@/lib/reportDoc';
-import { downloadReportDocPdf } from '@/lib/reportDocPdf';
-import { downloadReportDocExcel } from '@/lib/reportDocExcel';
+import { plural } from '@/lib/reportDoc';
 import {
   DateRangeSection, DialogFrame, Hint, ResourceSection, SectionLabel, chipClass, chipStyle, fromIso, iso,
-  type Format, type Preset,
+  exportDoc, rangePresets, teamSuffix, today0, useGenerate,
+  type DialogProps, type Format,
 } from './ReportDialogParts';
+import { AgingDialog, BlockersDialog, MonthlyDialog, ProjectHealthDialog, ProjectTimeDialog, UtilisationDialog } from './ExtraReportDialogs';
 
-type ReportId = 'productivity' | 'deadlines' | 'estimation';
+type ReportId = 'productivity' | 'deadlines' | 'estimation' | 'projectTime' | 'monthly' | 'utilisation' | 'aging' | 'health' | 'blockers';
 
 const ROSTER: Record<ReportTeam, string[]> = { web: WEB_TEAM, marketing: MARKETING_ASSIGNED_PERSONS };
 
 // One entry per report. More reports slot in here later.
-const REPORTS: { id: ReportId; title: string; description: string; Icon: LucideIcon }[] = [
+// `teams` says which team's Report tab shows the card.
+const REPORTS: { id: ReportId; title: string; description: string; Icon: LucideIcon; teams: ReportTeam[] }[] = [
   {
     id: 'productivity',
     title: 'Productivity Meter',
     description: 'See who finished tasks within the estimated time. Pick dates and resources. Green means on time, red means over the estimate.',
     Icon: Gauge,
+    teams: ['web', 'marketing'],
   },
   {
     id: 'deadlines',
     title: 'Deadline Tracker',
     description: 'See which tasks are overdue or due soon, and who is falling behind.',
     Icon: CalendarClock,
+    teams: ['web', 'marketing'],
   },
   {
     id: 'estimation',
     title: 'Estimation Accuracy',
     description: 'See whose time estimates run over or under, and by how much.',
     Icon: Target,
+    teams: ['web', 'marketing'],
+  },
+  {
+    id: 'projectTime',
+    title: 'Project Time Report',
+    description: 'See how much time each project used, and who worked on it.',
+    Icon: FolderKanban,
+    teams: ['web', 'marketing'],
+  },
+  {
+    id: 'monthly',
+    title: 'Monthly Team Summary',
+    description: 'A one-month view of tasks, time and projects, compared with last month.',
+    Icon: CalendarRange,
+    teams: ['web', 'marketing'],
+  },
+  {
+    id: 'utilisation',
+    title: 'Utilisation',
+    description: 'See who is under-used and who is stretched, month by month.',
+    Icon: Activity,
+    teams: ['web', 'marketing'],
+  },
+  {
+    id: 'aging',
+    title: 'Aging Tasks',
+    description: 'See open tasks that have been waiting the longest.',
+    Icon: Hourglass,
+    teams: ['web', 'marketing'],
+  },
+  {
+    id: 'health',
+    title: 'Project Health',
+    description: 'See which client projects are at risk this month.',
+    Icon: HeartPulse,
+    teams: ['web'],
+  },
+  {
+    id: 'blockers',
+    title: 'Blockers and Insights',
+    description: 'See what is stuck, and what each person plans next.',
+    Icon: MessageSquareWarning,
+    teams: ['marketing'],
   },
 ];
-
-async function exportDoc(doc: ReportDoc, format: Format) {
-  if (format === 'pdf') await downloadReportDocPdf(doc);
-  else await downloadReportDocExcel(doc);
-}
 
 interface Props {
   /** Every task row of the team (current month + archive tabs) */
   data: SheetData[];
   headers: string[];
   team: ReportTeam;
-}
-
-interface DialogProps {
-  format: Format;
-  team: ReportTeam;
-  roster: string[];
-  tasks: ReportTask[];
-  people: string[];
-  onClose: () => void;
+  /** PM Projects rows — used by Project Health */
+  pmData?: SheetData[];
+  pmHeaders?: string[];
 }
 
 // Report tab (Web and Marketing): a grid of report cards, 3 per row, each with
 // Generate PDF and Generate Excel. A report with options opens its popup first.
-export default function Reports({ data, headers, team }: Props) {
+export default function Reports({ data, headers, team, pmData, pmHeaders }: Props) {
   const [open, setOpen] = useState<{ reportId: ReportId; format: Format } | null>(null);
 
   const roster = ROSTER[team];
@@ -86,7 +121,7 @@ export default function Reports({ data, headers, team }: Props) {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {REPORTS.map(r => (
+        {REPORTS.filter(r => r.teams.includes(team)).map(r => (
           <article
             key={r.id}
             className="rounded-xl border p-5 flex flex-col gap-3 transition-shadow hover:shadow-lg"
@@ -124,41 +159,15 @@ export default function Reports({ data, headers, team }: Props) {
       {open?.reportId === 'productivity' && <ProductivityDialog {...common} format={open.format} data={data} headers={headers} />}
       {open?.reportId === 'deadlines' && <DeadlineDialog {...common} format={open.format} />}
       {open?.reportId === 'estimation' && <EstimationDialog {...common} format={open.format} />}
+      {open?.reportId === 'projectTime' && <ProjectTimeDialog {...common} format={open.format} />}
+      {open?.reportId === 'monthly' && <MonthlyDialog {...common} format={open.format} />}
+      {open?.reportId === 'utilisation' && <UtilisationDialog {...common} format={open.format} />}
+      {open?.reportId === 'aging' && <AgingDialog {...common} format={open.format} />}
+      {open?.reportId === 'blockers' && <BlockersDialog {...common} format={open.format} />}
+      {open?.reportId === 'health' && <ProjectHealthDialog format={open.format} pmData={pmData ?? []} pmHeaders={pmHeaders ?? []} onClose={common.onClose} />}
     </div>
   );
 }
-
-// ─── Shared bits for the popups ──────────────────────────────────────────────
-const today0 = () => startOfDay(new Date());
-
-// Busy / error handling around generating a file; closes the popup when done
-function useGenerate(onClose: () => void) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const run = async (task: () => Promise<void>) => {
-    setError('');
-    setBusy(true);
-    try {
-      await task();
-      onClose();
-    } catch (e) {
-      setError(e instanceof Error && e.message ? e.message : 'Could not generate the report. Please try again.');
-      setBusy(false);
-    }
-  };
-  return { busy, error, run };
-}
-
-const rangePresets = (extra: Preset[] = []): Preset[] => [
-  { key: 'month', label: 'This month', range: () => { const n = new Date(); return [iso(new Date(n.getFullYear(), n.getMonth(), 1)), iso(n)]; } },
-  { key: 'last', label: 'Last month', range: () => { const n = new Date(); return [iso(new Date(n.getFullYear(), n.getMonth() - 1, 1)), iso(new Date(n.getFullYear(), n.getMonth(), 0))]; } },
-  { key: 'three', label: 'Last 3 months', range: () => { const n = new Date(); return [iso(new Date(n.getFullYear(), n.getMonth() - 2, 1)), iso(n)]; } },
-  ...extra,
-  { key: 'all', label: 'All time', range: () => ['', ''] },
-];
-
-const teamSuffix = (team: ReportTeam) => (team === 'web' ? '' : ` · ${TEAM_LABELS[team].team}`);
-const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
 // ─── Productivity Meter popup ────────────────────────────────────────────────
 function ProductivityDialog({ format, team, roster, people, data, headers, onClose }: DialogProps & { data: SheetData[]; headers: string[] }) {

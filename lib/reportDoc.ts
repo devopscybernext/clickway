@@ -43,6 +43,8 @@ export interface DocSection {
 }
 
 export interface ReportDoc {
+  /** What each summary row is, for the "N resources" line (default "resource") */
+  unit?: string;
   /** Small orange label, e.g. "DEADLINE TRACKER  |  MARKETING" */
   eyebrow: string;
   title: string;
@@ -61,3 +63,14 @@ export interface ReportDoc {
 
 export const cellText = (c: Cell): string => (typeof c === 'string' ? c : c.text);
 export const asCell = (c: Cell): DocCell => (typeof c === 'string' ? { text: c } : c);
+
+export const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+export const signedPct = (n: number) => `${n > 0 ? '+' : ''}${n}%`;
+/** green within 10%, amber beyond, red beyond 25% */
+export const biasTone = (pct: number): Tone => (Math.abs(pct) <= 10 ? 'good' : pct > 25 ? 'bad' : 'warn');
+/** Sort comparator: names in the given order first, anything else alphabetically after */
+export const byRoster = (order: string[]) => (a: string, b: string) => {
+  const ia = order.indexOf(a), ib = order.indexOf(b);
+  if (ia !== -1 || ib !== -1) return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+  return a.localeCompare(b);
+};

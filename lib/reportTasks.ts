@@ -38,6 +38,11 @@ export interface ReportTask {
   pmStatus: string;
   priority: string;
   state: TaskState;
+  /** Marketing's free-text notes (blank on Web) */
+  blocker: string;
+  nextSteps: string;
+  performance: string;
+  actionToday: string;
 }
 
 const str = (v: unknown) => String(v ?? '').trim();
@@ -46,6 +51,30 @@ const hasTime = (raw: string) => /^\s*\d/.test(raw);
 export const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 /** Whole calendar days from a to b (negative when b is earlier) */
 export const daysBetween = (a: Date, b: Date) => Math.round((startOfDay(b).getTime() - startOfDay(a).getTime()) / 86400000);
+
+/** Monday-Friday days from `from` to `to`, both included (public holidays and leave are not taken off) */
+export function workingDays(from: Date, to: Date): number {
+  let n = 0;
+  for (let d = startOfDay(from); d <= startOfDay(to); d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) {
+    const wd = d.getDay();
+    if (wd !== 0 && wd !== 6) n++;
+  }
+  return n;
+}
+
+/** True when `d` falls on or between `from` and `to` (either may be null = open ended); a missing date only passes with no range */
+export function inDateRange(d: Date | null, from: Date | null, to: Date | null): boolean {
+  if (!from && !to) return true;
+  if (!d) return false;
+  const t = startOfDay(d).getTime();
+  if (from && t < startOfDay(from).getTime()) return false;
+  if (to && t > startOfDay(to).getTime()) return false;
+  return true;
+}
+
+export const monthStart = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
+export const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+export const monthLabel = (d: Date) => d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
 
 /** Local date as YYYY-MM-DD (toISOString would shift the day by the UTC offset) */
 export const isoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -88,6 +117,10 @@ export function extractTasks(rows: Record<string, unknown>[], headers: string[],
       pmStatus,
       priority: c.priority ? str(r[c.priority]) : '',
       state: taskState(taskStatus, pmStatus),
+      blocker: c.blocker ? str(r[c.blocker]) : '',
+      nextSteps: c.nextSteps ? str(r[c.nextSteps]) : '',
+      performance: c.performance ? str(r[c.performance]) : '',
+      actionToday: c.actionToday ? str(r[c.actionToday]) : '',
     });
   }
   return out;

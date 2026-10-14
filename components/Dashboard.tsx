@@ -1032,6 +1032,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   team={navTeam}
                   data={navTeam === 'marketing' ? marketingTeamData : activeBandwidthData}
                   headers={navTeam === 'marketing' ? marketingTeamHeaders : bandwidthHeaders}
+                  pmData={pmBandwidthData}
+                  pmHeaders={pmBandwidthHeaders}
                 />
               )}
             </section>

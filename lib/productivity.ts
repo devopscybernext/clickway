@@ -121,6 +121,7 @@ export interface WebColumns {
   person?: string; project?: string; task?: string; url?: string; est?: string; total?: string;
   deadline?: string; taskStatus?: string; pmStatus?: string; created?: string;
   priority?: string; department?: string;
+  blocker?: string; nextSteps?: string; performance?: string; actionToday?: string;
 }
 
 export function findWebColumns(headers: string[], team: ReportTeam = 'web'): WebColumns {
@@ -140,6 +141,10 @@ export function findWebColumns(headers: string[], team: ReportTeam = 'web'): Web
     created: find(l => l.includes('timestamp')),
     priority: find(l => l === 'task priority'),
     department: find(l => l === 'department'),
+    blocker: find(l => l === 'blocker'),
+    nextSteps: find(l => l === 'next steps'),
+    performance: find(l => l.startsWith('performance signal')),
+    actionToday: find(l => l === 'action taken today'),
   };
 }
 

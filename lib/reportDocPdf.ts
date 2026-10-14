@@ -159,7 +159,7 @@ export async function downloadReportDocPdf(model: ReportDoc): Promise<void> {
   doc.text(clean(model.title), MARGIN, y);
   y += 6.5;
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...MUTED);
-  doc.text(`${model.sections.length} resource${model.sections.length === 1 ? '' : 's'}`, MARGIN, y);
+  doc.text(`${model.sections.length} ${model.unit ?? 'resource'}${model.sections.length === 1 ? '' : 's'}`, MARGIN, y);
   y += 8;
 
   const stripH = 21;
