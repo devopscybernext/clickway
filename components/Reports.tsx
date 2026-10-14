@@ -1,48 +1,93 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { Gauge, FileText, FileSpreadsheet, X, AlertCircle } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Gauge, CalendarClock, Scale, Target, FileText, FileSpreadsheet, type LucideIcon } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { WEB_TEAM, MARKETING_ASSIGNED_PERSONS } from '@/lib/config';
-import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
-import { TEAM_LABELS, buildProductivityTasks, findWebColumns, formatRange, summarise, type ReportTeam } from '@/lib/productivity';
+import { TEAM_LABELS, buildProductivityTasks, formatRange, summarise, type ReportTeam } from '@/lib/productivity';
 import { downloadProductivityPdf } from '@/lib/productivityPdf';
 import { downloadProductivityExcel } from '@/lib/productivityExcel';
+import { departmentMap, extractTasks, listPeople, startOfDay, type ReportTask } from '@/lib/reportTasks';
+import { buildDeadlineDoc, buildDeadlines } from '@/lib/deadlines';
+import { buildWorkload, buildWorkloadDoc, workingDays } from '@/lib/workload';
+import { buildEstimation, buildEstimationDoc, comparableTasks } from '@/lib/estimation';
+import type { ReportDoc } from '@/lib/reportDoc';
+import { downloadReportDocPdf } from '@/lib/reportDocPdf';
+import { downloadReportDocExcel } from '@/lib/reportDocExcel';
+import {
+  DateRangeSection, DialogFrame, Hint, ResourceSection, SectionLabel, chipClass, chipStyle, fromIso, inputStyle, iso,
+  type Format, type Preset,
+} from './ReportDialogParts';
 
-type Format = 'pdf' | 'xlsx';
+type ReportId = 'productivity' | 'deadlines' | 'workload' | 'estimation';
 
 const ROSTER: Record<ReportTeam, string[]> = { web: WEB_TEAM, marketing: MARKETING_ASSIGNED_PERSONS };
 
 // One entry per report. More reports slot in here later.
-const REPORTS = [
+const REPORTS: { id: ReportId; title: string; description: string; Icon: LucideIcon }[] = [
   {
     id: 'productivity',
     title: 'Productivity Meter',
-    description:
-      'See who finished tasks within the estimated time. Pick dates and resources. Green means on time, red means over the estimate.',
+    description: 'See who finished tasks within the estimated time. Pick dates and resources. Green means on time, red means over the estimate.',
     Icon: Gauge,
+  },
+  {
+    id: 'deadlines',
+    title: 'Deadline Tracker',
+    description: 'See which tasks are overdue or due soon, and who is falling behind.',
+    Icon: CalendarClock,
+  },
+  {
+    id: 'workload',
+    title: 'Workload Balance',
+    description: 'See who has too much work and who has room, with ideas to rebalance.',
+    Icon: Scale,
+  },
+  {
+    id: 'estimation',
+    title: 'Estimation Accuracy',
+    description: 'See whose time estimates run over or under, and by how much.',
+    Icon: Target,
   },
 ];
 
-// Local date → "YYYY-MM-DD" (toISOString would shift the day by the UTC offset)
-const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const fromIso = (s: string): Date | null => {
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
-};
+async function exportDoc(doc: ReportDoc, format: Format) {
+  if (format === 'pdf') await downloadReportDocPdf(doc);
+  else await downloadReportDocExcel(doc);
+}
 
 interface Props {
   /** Every task row of the team (current month + archive tabs) */
   data: SheetData[];
   headers: string[];
   team: ReportTeam;
+  /** Leave sheet rows — used to know each person's department */
+  availData?: SheetData[];
+  availHeaders?: string[];
 }
 
-// Report tab (Web and Marketing): a grid of report cards, 3 per row, each with Generate PDF
-// and Generate Excel. A report with options opens its popup first.
-export default function Reports({ data, headers, team }: Props) {
-  const [open, setOpen] = useState<{ reportId: string; format: Format } | null>(null);
+interface DialogProps {
+  format: Format;
+  team: ReportTeam;
+  roster: string[];
+  tasks: ReportTask[];
+  people: string[];
+  deptOf: (person: string) => string;
+  onClose: () => void;
+}
+
+// Report tab (Web and Marketing): a grid of report cards, 3 per row, each with
+// Generate PDF and Generate Excel. A report with options opens its popup first.
+export default function Reports({ data, headers, team, availData, availHeaders }: Props) {
+  const [open, setOpen] = useState<{ reportId: ReportId; format: Format } | null>(null);
+
+  const roster = ROSTER[team];
+  const tasks = useMemo(() => extractTasks(data, headers, team), [data, headers, team]);
+  const people = useMemo(() => listPeople(tasks, roster), [tasks, roster]);
+  const depts = useMemo(() => departmentMap(availData ?? [], availHeaders ?? []), [availData, availHeaders]);
+  const deptOf = useMemo(() => (p: string) => depts.get(p.toLowerCase()) ?? '', [depts]);
+
+  const common: Omit<DialogProps, 'format'> = { team, roster, tasks, people, deptOf, onClose: () => setOpen(null) };
 
   return (
     <div className="p-3 sm:p-6">
@@ -89,52 +134,55 @@ export default function Reports({ data, headers, team }: Props) {
         ))}
       </div>
 
-      {open?.reportId === 'productivity' && (
-        <ProductivityDialog format={open.format} data={data} headers={headers} team={team} onClose={() => setOpen(null)} />
-      )}
+      {open?.reportId === 'productivity' && <ProductivityDialog {...common} format={open.format} data={data} headers={headers} />}
+      {open?.reportId === 'deadlines' && <DeadlineDialog {...common} format={open.format} />}
+      {open?.reportId === 'workload' && <WorkloadDialog {...common} format={open.format} />}
+      {open?.reportId === 'estimation' && <EstimationDialog {...common} format={open.format} />}
     </div>
   );
 }
 
-// ─── Productivity Meter popup ────────────────────────────────────────────────
-function ProductivityDialog({ format, data, headers, team, onClose }: {
-  format: Format;
-  data: SheetData[];
-  headers: string[];
-  team: ReportTeam;
-  onClose: () => void;
-}) {
-  useBodyScrollLock();
+// ─── Shared bits for the popups ──────────────────────────────────────────────
+const today0 = () => startOfDay(new Date());
 
-  const roster = ROSTER[team];
-  const teamName = TEAM_LABELS[team].team;
-
-  // Everyone who has a task, the roster first
-  const people = useMemo(() => {
-    const col = findWebColumns(headers, team).person;
-    const found = new Set<string>();
-    if (col) data.forEach(r => { const n = String(r[col] ?? '').trim(); if (n) found.add(n); });
-    // The team roster first (in roster order, even if someone has no tasks yet),
-    // then anyone else who appears in the data.
-    const has = (n: string) => [...found].find(f => f.toLowerCase() === n.toLowerCase());
-    const ordered = roster.map(n => has(n) ?? n);
-    const rest = [...found].filter(n => !roster.some(t => t.toLowerCase() === n.toLowerCase())).sort((a, b) => a.localeCompare(b));
-    return [...ordered, ...rest];
-  }, [data, headers, team, roster]);
-
-  const today = new Date();
-  const [from, setFrom] = useState(iso(new Date(today.getFullYear(), today.getMonth(), 1)));
-  const [to, setTo] = useState(iso(today));
-  const [dateBy, setDateBy] = useState<'created' | 'deadline'>('created');
-  const [selected, setSelected] = useState<Set<string>>(() => new Set(people));
+// Busy / error handling around generating a file; closes the popup when done
+function useGenerate(onClose: () => void) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const run = async (task: () => Promise<void>) => {
+    setError('');
+    setBusy(true);
+    try {
+      await task();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error && e.message ? e.message : 'Could not generate the report. Please try again.');
+      setBusy(false);
+    }
+  };
+  return { busy, error, run };
+}
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busy) onClose(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [busy, onClose]);
+const rangePresets = (extra: Preset[] = []): Preset[] => [
+  { key: 'month', label: 'This month', range: () => { const n = new Date(); return [iso(new Date(n.getFullYear(), n.getMonth(), 1)), iso(n)]; } },
+  { key: 'last', label: 'Last month', range: () => { const n = new Date(); return [iso(new Date(n.getFullYear(), n.getMonth() - 1, 1)), iso(new Date(n.getFullYear(), n.getMonth(), 0))]; } },
+  { key: 'three', label: 'Last 3 months', range: () => { const n = new Date(); return [iso(new Date(n.getFullYear(), n.getMonth() - 2, 1)), iso(n)]; } },
+  ...extra,
+  { key: 'all', label: 'All time', range: () => ['', ''] },
+];
+
+const teamSuffix = (team: ReportTeam) => (team === 'web' ? '' : ` · ${TEAM_LABELS[team].team}`);
+const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+
+// ─── Productivity Meter popup ────────────────────────────────────────────────
+function ProductivityDialog({ format, team, roster, people, data, headers, onClose }: DialogProps & { data: SheetData[]; headers: string[] }) {
+  const teamName = TEAM_LABELS[team].team;
+  const now = new Date();
+  const [from, setFrom] = useState(iso(new Date(now.getFullYear(), now.getMonth(), 1)));
+  const [to, setTo] = useState(iso(now));
+  const [dateBy, setDateBy] = useState<'created' | 'deadline'>('created');
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(people));
+  const g = useGenerate(onClose);
 
   const fromDate = fromIso(from);
   const toDate = fromIso(to);
@@ -147,161 +195,208 @@ function ProductivityDialog({ format, data, headers, team, onClose }: {
     all.forEach(t => map.set(t.person, (map.get(t.person) ?? 0) + 1));
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, headers, from, to, dateBy, people]);
+  }, [data, headers, from, to, dateBy, people, team]);
 
-  const totalSelectedTasks = people.filter(p => selected.has(p)).reduce((s, p) => s + (counts.get(p) ?? 0), 0);
-  const canGenerate = !busy && !rangeInvalid && selected.size > 0 && totalSelectedTasks > 0;
+  const total = people.filter(p => selected.has(p)).reduce((s, p) => s + (counts.get(p) ?? 0), 0);
+  const canGenerate = !g.busy && !rangeInvalid && selected.size > 0 && total > 0;
 
-  const preset = (kind: 'month' | 'last' | 'three' | 'all') => {
-    const now = new Date();
-    if (kind === 'month') { setFrom(iso(new Date(now.getFullYear(), now.getMonth(), 1))); setTo(iso(now)); }
-    if (kind === 'last') { setFrom(iso(new Date(now.getFullYear(), now.getMonth() - 1, 1))); setTo(iso(new Date(now.getFullYear(), now.getMonth(), 0))); }
-    if (kind === 'three') { setFrom(iso(new Date(now.getFullYear(), now.getMonth() - 2, 1))); setTo(iso(now)); }
-    if (kind === 'all') { setFrom(''); setTo(''); }
-  };
-
-  const toggle = (name: string) =>
-    setSelected(prev => { const n = new Set(prev); if (n.has(name)) n.delete(name); else n.add(name); return n; });
-
-  const generate = async () => {
-    setError('');
+  const generate = () => g.run(async () => {
     const tasks = buildProductivityTasks(data, headers, { from: fromDate, to: toDate, dateBy, people: selected, team });
     const summaries = summarise(tasks, roster);
-    if (!summaries.length) { setError('No tasks found for these resources in that date range.'); return; }
+    if (!summaries.length) throw new Error('No tasks found for these resources in that date range.');
     const rangeLabel = formatRange(fromDate, toDate, dateBy);
     const stamp = `${team === 'web' ? '' : `${teamName}-`}${from || 'start'}_to_${to || 'now'}`;
-    setBusy(true);
-    try {
-      if (format === 'pdf') await downloadProductivityPdf({ summaries, rangeLabel, fileName: `Productivity-Meter-${stamp}.pdf`, team });
-      else await downloadProductivityExcel({ summaries, rangeLabel, fileName: `Productivity-Meter-${stamp}.xlsx`, team });
-      onClose();
-    } catch {
-      setError('Could not generate the report. Please try again.');
-      setBusy(false);
-    }
-  };
+    if (format === 'pdf') await downloadProductivityPdf({ summaries, rangeLabel, fileName: `Productivity-Meter-${stamp}.pdf`, team });
+    else await downloadProductivityExcel({ summaries, rangeLabel, fileName: `Productivity-Meter-${stamp}.xlsx`, team });
+  });
 
-  const inputStyle = { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', borderColor: 'var(--cn-border)' };
-  const chip = 'px-2.5 py-1 rounded-full text-[11px] font-semibold cursor-pointer transition-all border';
-
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => { if (!busy) onClose(); }}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Productivity Meter report - ${teamName}`}
-        className="rounded-xl w-full flex flex-col"
-        style={{ background: 'var(--cn-bg-card)', maxWidth: 560, maxHeight: '92vh', border: '1px solid var(--cn-border)' }}
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
-          <div>
-            <h2 className="font-semibold text-base" style={{ color: 'var(--cn-text-primary)' }}>
-              Productivity Meter{team === 'web' ? '' : ` · ${teamName}`} — {format === 'pdf' ? 'PDF' : 'Excel'}
-            </h2>
-            <p className="text-xs mt-1" style={{ color: 'var(--cn-text-muted)' }}>
-              Choose the dates and the resources. Each task is flagged green when it took no longer than its estimate, red when it ran over.
-            </p>
-          </div>
-          <button onClick={onClose} disabled={busy} title="Close"
-            className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer shrink-0 disabled:opacity-50"
-            style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}>
-            <X className="w-4 h-4" />
-          </button>
+  return (
+    <DialogFrame
+      title={`Productivity Meter${teamSuffix(team)}`}
+      intro="Choose the dates and the resources. Each task is flagged green when it took no longer than its estimate, red when it ran over."
+      format={format} busy={g.busy} error={g.error} canGenerate={canGenerate} onClose={onClose} onGenerate={generate}
+      footer={`${plural(selected.size, 'resource')} · ${plural(total, 'task')}`}
+    >
+      <DateRangeSection from={from} to={to} setFrom={setFrom} setTo={setTo} presets={rangePresets()} invalid={rangeInvalid}>
+        <div className="flex items-center gap-2 mt-2">
+          <span className="text-xs" style={{ color: 'var(--cn-text-muted)' }}>Count tasks by</span>
+          {([['created', 'Date created'], ['deadline', 'Deadline']] as const).map(([k, label]) => (
+            <button key={k} onClick={() => setDateBy(k)} aria-pressed={dateBy === k} className={chipClass} style={chipStyle(dateBy === k)}>{label}</button>
+          ))}
         </div>
+      </DateRangeSection>
+      <ResourceSection people={people} selected={selected} setSelected={setSelected} countOf={p => counts.get(p) ?? 0} unit="task" />
+      {!rangeInvalid && selected.size > 0 && total === 0 && (
+        <Hint>No tasks fall in this date range for the selected resources — try &ldquo;Last 3 months&rdquo; or &ldquo;All time&rdquo;.</Hint>
+      )}
+    </DialogFrame>
+  );
+}
 
-        <div className="px-5 pb-4 overflow-y-auto overscroll-contain space-y-5">
-          {/* Date range */}
-          <section>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>Date range</h3>
-              <div className="flex flex-wrap gap-1.5">
-                {([['month', 'This month'], ['last', 'Last month'], ['three', 'Last 3 months'], ['all', 'All time']] as const).map(([k, label]) => (
-                  <button key={k} onClick={() => preset(k)} className={chip}
-                    style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-secondary)', borderColor: 'var(--cn-border)' }}>{label}</button>
-                ))}
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <input type="date" value={from} max={to || undefined} onChange={e => setFrom(e.target.value)} aria-label="From date"
-                className="flex-1 text-sm rounded-lg px-2.5 py-2 border focus:outline-none focus:ring-1 focus:ring-[#FE4A23]" style={inputStyle} />
-              <span className="text-xs" style={{ color: 'var(--cn-text-muted)' }}>to</span>
-              <input type="date" value={to} min={from || undefined} onChange={e => setTo(e.target.value)} aria-label="To date"
-                className="flex-1 text-sm rounded-lg px-2.5 py-2 border focus:outline-none focus:ring-1 focus:ring-[#FE4A23]" style={inputStyle} />
-            </div>
-            <div className="flex items-center gap-2 mt-2">
-              <span className="text-xs" style={{ color: 'var(--cn-text-muted)' }}>Count tasks by</span>
-              {([['created', 'Date created'], ['deadline', 'Deadline']] as const).map(([k, label]) => (
-                <button key={k} onClick={() => setDateBy(k)} aria-pressed={dateBy === k} className={chip}
-                  style={dateBy === k
-                    ? { background: 'var(--cn-accent)', color: '#fff', borderColor: 'var(--cn-accent)' }
-                    : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-secondary)', borderColor: 'var(--cn-border)' }}>{label}</button>
-              ))}
-            </div>
-            {rangeInvalid && <p className="text-xs mt-2" style={{ color: '#ef4444' }}>The start date is after the end date.</p>}
-          </section>
+// ─── Deadline Tracker popup ──────────────────────────────────────────────────
+const WINDOWS: { key: string; label: string; days: number | null }[] = [
+  { key: '3', label: 'Next 3 days', days: 3 },
+  { key: '7', label: 'Next 7 days', days: 7 },
+  { key: '14', label: 'Next 14 days', days: 14 },
+  { key: '30', label: 'Next 30 days', days: 30 },
+  { key: 'all', label: 'All open tasks', days: null },
+];
 
-          {/* Resources */}
-          <section>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--cn-text-muted)' }}>Resources</h3>
-              <div className="flex items-center gap-3 text-xs font-semibold">
-                <button onClick={() => setSelected(new Set(people))} className="cursor-pointer hover:opacity-80" style={{ color: 'var(--cn-accent)' }}>Select all</button>
-                <span style={{ color: 'var(--cn-border)' }}>·</span>
-                <button onClick={() => setSelected(new Set())} className="cursor-pointer hover:opacity-80" style={{ color: 'var(--cn-text-muted)' }}>Clear</button>
-              </div>
-            </div>
-            {people.length === 0 ? (
-              <p className="text-sm py-4 text-center" style={{ color: 'var(--cn-text-muted)' }}>No resources found in the task data.</p>
-            ) : (
-              <div className="rounded-lg border divide-y" style={{ borderColor: 'var(--cn-border)' }}>
-                {people.map(p => {
-                  const n = counts.get(p) ?? 0;
-                  return (
-                    <label key={p} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-[var(--cn-bg-hover)] text-sm" style={{ borderColor: 'var(--cn-border)' }}>
-                      <input type="checkbox" checked={selected.has(p)} onChange={() => toggle(p)} className="accent-[#FE4A23] cursor-pointer" />
-                      <span className="flex-1" style={{ color: 'var(--cn-text-primary)' }}>{p}</span>
-                      <span className="text-xs tabular-nums" style={{ color: n ? 'var(--cn-text-secondary)' : 'var(--cn-text-faint)' }}>
-                        {n} task{n === 1 ? '' : 's'}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+function DeadlineDialog({ format, team, roster, tasks, people, onClose }: DialogProps) {
+  const [windowKey, setWindowKey] = useState('7');
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(people));
+  const g = useGenerate(onClose);
+  const windowDays = WINDOWS.find(w => w.key === windowKey)?.days ?? null;
+  const today = useMemo(() => today0(), []);
 
-          {!rangeInvalid && selected.size > 0 && totalSelectedTasks === 0 && (
-            <p className="text-xs flex items-start gap-1.5" style={{ color: 'var(--cn-text-muted)' }}>
-              <AlertCircle className="w-3.5 h-3.5 mt-px shrink-0" />
-              No tasks fall in this date range for the selected resources — try &ldquo;Last 3 months&rdquo; or &ldquo;All time&rdquo;.
-            </p>
-          )}
-          {error && <p className="text-xs" style={{ color: '#ef4444' }}>{error}</p>}
+  const all = useMemo(() => buildDeadlines(tasks, { people: new Set(people), windowDays, today }), [tasks, people, windowDays, today]);
+  const byPerson = useMemo(() => new Map(all.map(p => [p.person, p])), [all]);
+  const chosen = all.filter(p => selected.has(p.person));
+  const listed = chosen.reduce((s, p) => s + p.tasks.length, 0);
+  const overdue = chosen.reduce((s, p) => s + p.overdue, 0);
+  const canGenerate = !g.busy && chosen.length > 0;
+
+  const generate = () => g.run(async () => {
+    if (!chosen.length) throw new Error('None of the selected resources have tasks.');
+    await exportDoc(buildDeadlineDoc(chosen, { team, order: roster, windowDays, today }), format);
+  });
+
+  return (
+    <DialogFrame
+      title={`Deadline Tracker${teamSuffix(team)}`}
+      intro="Lists the tasks that are overdue plus those due soon, for each resource. Tasks that are closed or already submitted to the PM are left out."
+      format={format} busy={g.busy} error={g.error} canGenerate={canGenerate} onClose={onClose} onGenerate={generate}
+      footer={`${plural(chosen.length, 'resource')} · ${plural(listed, 'task')} listed · ${overdue} overdue`}
+    >
+      <section>
+        <div className="mb-2"><SectionLabel>Show deadlines</SectionLabel></div>
+        <div className="flex flex-wrap gap-1.5">
+          {WINDOWS.map(w => (
+            <button key={w.key} onClick={() => setWindowKey(w.key)} aria-pressed={windowKey === w.key} className={chipClass} style={chipStyle(windowKey === w.key)}>{w.label}</button>
+          ))}
         </div>
+        <p className="text-xs mt-2" style={{ color: 'var(--cn-text-muted)' }}>Overdue tasks are always included.</p>
+      </section>
+      <ResourceSection people={people} selected={selected} setSelected={setSelected} countOf={p => byPerson.get(p)?.tasks.length ?? 0} unit="task" />
+    </DialogFrame>
+  );
+}
 
-        <div className="flex items-center justify-between gap-2 px-5 py-4 border-t" style={{ borderColor: 'var(--cn-border)' }}>
-          <span className="text-xs" style={{ color: 'var(--cn-text-muted)' }}>
-            {selected.size} resource{selected.size === 1 ? '' : 's'} · {totalSelectedTasks} task{totalSelectedTasks === 1 ? '' : 's'}
-          </span>
-          <div className="flex items-center gap-2">
-            <button onClick={onClose} disabled={busy}
-              className="px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all disabled:opacity-50"
-              style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>
-              Cancel
-            </button>
-            <button onClick={generate} disabled={!canGenerate}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }}>
-              {busy
-                ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                : format === 'pdf' ? <FileText className="w-4 h-4" /> : <FileSpreadsheet className="w-4 h-4" />}
-              {busy ? 'Generating…' : format === 'pdf' ? 'Generate PDF' : 'Generate Excel'}
-            </button>
-          </div>
+// ─── Workload Balance popup ──────────────────────────────────────────────────
+const dayMonth = (e: Date) => e.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+const HORIZONS: { key: string; label: string; end: (t: Date) => Date }[] = [
+  { key: '7', label: 'Next 7 days', end: t => new Date(t.getFullYear(), t.getMonth(), t.getDate() + 7) },
+  { key: '14', label: 'Next 14 days', end: t => new Date(t.getFullYear(), t.getMonth(), t.getDate() + 14) },
+  { key: 'month', label: 'Until end of month', end: t => new Date(t.getFullYear(), t.getMonth() + 1, 0) },
+];
+
+function WorkloadDialog({ format, team, roster, tasks, people, deptOf, onClose }: DialogProps) {
+  const [horizonKey, setHorizonKey] = useState('7');
+  const [hours, setHours] = useState('8');
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(people));
+  const g = useGenerate(onClose);
+  const today = useMemo(() => today0(), []);
+  const horizon = HORIZONS.find(h => h.key === horizonKey) ?? HORIZONS[0];
+  const endDate = useMemo(() => horizon.end(today), [horizon, today]);
+  const hoursPerDay = Math.min(Math.max(parseFloat(hours) || 0, 0), 24);
+  const days = workingDays(today, endDate);
+
+  const all = useMemo(
+    () => buildWorkload(tasks, { people: new Set(people), endDate, hoursPerDay: hoursPerDay || 8, today, deptOf }),
+    [tasks, people, endDate, hoursPerDay, today, deptOf],
+  );
+  const byPerson = useMemo(() => new Map(all.map(p => [p.person, p])), [all]);
+  const chosen = all.filter(p => selected.has(p.person));
+  const openTotal = chosen.reduce((s, p) => s + p.tasks.length, 0);
+  const missingEst = chosen.reduce((s, p) => s + p.noEstimate, 0);
+  const canGenerate = !g.busy && chosen.length > 0 && hoursPerDay > 0;
+
+  const generate = () => g.run(async () => {
+    if (!chosen.length) throw new Error('None of the selected resources have tasks.');
+    await exportDoc(buildWorkloadDoc(chosen, { team, order: roster, endDate, endLabel: dayMonth(endDate), hoursPerDay, today }), format);
+  });
+
+  return (
+    <DialogFrame
+      title={`Workload Balance${teamSuffix(team)}`}
+      intro="Compares each person's open work with the working hours they have left, and suggests tasks to move from people who are over capacity."
+      format={format} busy={g.busy} error={g.error} canGenerate={canGenerate} onClose={onClose} onGenerate={generate}
+      footer={`${plural(chosen.length, 'resource')} · ${plural(openTotal, 'open task')} · ${plural(days, 'working day')}`}
+    >
+      <section>
+        <div className="mb-2"><SectionLabel>Look ahead</SectionLabel></div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {HORIZONS.map(h => (
+            <button key={h.key} onClick={() => setHorizonKey(h.key)} aria-pressed={horizonKey === h.key} className={chipClass} style={chipStyle(horizonKey === h.key)}>{h.label}</button>
+          ))}
         </div>
-      </div>
-    </div>,
-    document.body
+        <div className="flex items-center gap-2 mt-3">
+          <label htmlFor="wl-hours" className="text-xs" style={{ color: 'var(--cn-text-muted)' }}>Working hours per day</label>
+          <input id="wl-hours" type="number" min={1} max={24} step={0.5} value={hours} onChange={e => setHours(e.target.value)}
+            className="w-20 text-sm rounded-lg px-2.5 py-1.5 border focus:outline-none focus:ring-1 focus:ring-[#FE4A23]" style={inputStyle} />
+        </div>
+        {!hoursPerDay && <p className="text-xs mt-2" style={{ color: '#ef4444' }}>Enter the working hours per day.</p>}
+      </section>
+      <ResourceSection people={people} selected={selected} setSelected={setSelected} countOf={p => byPerson.get(p)?.tasks.length ?? 0} unit="open task" />
+      {missingEst > 0 && (
+        <Hint tone="warn">{plural(missingEst, 'open task')} {missingEst === 1 ? 'has' : 'have'} no estimate, so {missingEst === 1 ? 'its' : 'their'} work can&rsquo;t be measured. Add the estimate in the sheet for a fuller picture.</Hint>
+      )}
+    </DialogFrame>
+  );
+}
+
+// ─── Estimation Accuracy popup ───────────────────────────────────────────────
+function EstimationDialog({ format, team, roster, tasks, people, onClose }: DialogProps) {
+  const now = new Date();
+  const [from, setFrom] = useState(iso(new Date(now.getFullYear(), now.getMonth() - 2, 1)));
+  const [to, setTo] = useState(iso(now));
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(people));
+  const g = useGenerate(onClose);
+  const fromDate = fromIso(from);
+  const toDate = fromIso(to);
+  const rangeInvalid = !!fromDate && !!toDate && fromDate > toDate;
+
+  const compared = useMemo(
+    () => comparableTasks(tasks, { people: new Set(people), from: fromDate, to: toDate }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tasks, people, from, to],
+  );
+  const counts = useMemo(() => {
+    const m = new Map<string, number>();
+    compared.forEach(t => m.set(t.person, (m.get(t.person) ?? 0) + 1));
+    return m;
+  }, [compared]);
+  const chosenTasks = compared.filter(t => selected.has(t.person));
+  const identicalPct = chosenTasks.length ? Math.round((chosenTasks.filter(t => t.totalMin === t.estMin).length / chosenTasks.length) * 100) : 0;
+  const canGenerate = !g.busy && !rangeInvalid && chosenTasks.length > 0;
+
+  const presets = rangePresets([{ key: 'six', label: 'Last 6 months', range: () => { const n = new Date(); return [iso(new Date(n.getFullYear(), n.getMonth() - 5, 1)), iso(n)]; } }]);
+  const long = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+  const generate = () => g.run(async () => {
+    const built = buildEstimation(chosenTasks);
+    if (!built.length) throw new Error('No tasks with both an estimate and logged time in that range.');
+    const rangeLabel = fromDate || toDate ? `Created: ${fromDate ? long(fromDate) : 'start'} - ${toDate ? long(toDate) : 'now'}` : 'Created: all dates';
+    await exportDoc(buildEstimationDoc(built, { team, order: roster, rangeLabel, today: new Date() }), format);
+  });
+
+  return (
+    <DialogFrame
+      title={`Estimation Accuracy${teamSuffix(team)}`}
+      intro="Shows how close each person's estimates are to the time the work really took, and whether they tend to run over or finish early."
+      format={format} busy={g.busy} error={g.error} canGenerate={canGenerate} onClose={onClose} onGenerate={generate}
+      footer={`${plural(selected.size, 'resource')} · ${plural(chosenTasks.length, 'task')} compared`}
+    >
+      <DateRangeSection from={from} to={to} setFrom={setFrom} setTo={setTo} presets={presets} invalid={rangeInvalid}>
+        <p className="text-xs mt-2" style={{ color: 'var(--cn-text-muted)' }}>Tasks are picked by the date they were created. Only tasks with both an estimate and logged time can be compared.</p>
+      </DateRangeSection>
+      <ResourceSection people={people} selected={selected} setSelected={setSelected} countOf={p => counts.get(p) ?? 0} unit="task" />
+      {!rangeInvalid && chosenTasks.length === 0 && selected.size > 0 && (
+        <Hint>No tasks with both an estimate and logged time fall in this range — try &ldquo;Last 6 months&rdquo; or &ldquo;All time&rdquo;.</Hint>
+      )}
+      {identicalPct >= 50 && chosenTasks.length >= 3 && (
+        <Hint tone="warn">{identicalPct}% of these tasks show a time exactly equal to the estimate. That usually means the time was copied from the estimate, so the accuracy will look better than it really is.</Hint>
+      )}
+    </DialogFrame>
   );
 }

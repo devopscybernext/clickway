@@ -41,6 +41,11 @@ export async function downloadProductivityPdf(opts: {
   const strip = () => { doc.setFillColor(...ORANGE); doc.rect(0, 0, PAGE_W, 4, 'F'); };
   const pageNo = () => doc.getNumberOfPages();
 
+  // autotable redraws a row that lands on a page break with index -1; the first
+  // column holds the row number (the per-resource tables) so it can be recovered
+  const rowIndex = (row: { index: number; raw: unknown }) =>
+    row.index >= 0 ? row.index : Number((row.raw as Record<number, string>)[0]) - 1;
+
   // ── Overview ─────────────────────────────────────────────────────────────
   strip();
   let y = 15;
@@ -111,21 +116,24 @@ export async function downloadProductivityPdf(opts: {
     didParseCell: d => {
       if (d.section !== 'body') return;
       const p = summaries[d.row.index];
+      if (!p) return;
       if (d.column.index === 7) { d.cell.styles.textColor = rgb(FLAG_STYLE[p.verdict.kind].text); d.cell.styles.fontStyle = 'bold'; }
     },
     didDrawCell: d => {
       if (d.section !== 'body') return;
-      const geo = { index: d.row.index, page: d.doc.getNumberOfPages(), x: d.cell.x, y: d.cell.y, w: d.cell.width, h: d.cell.height };
+      const oi = d.row.index >= 0 ? d.row.index : summaries.findIndex(s => clean(s.person) === (d.row.raw as Record<number, string>)[0]);
+      if (oi < 0) return;
+      const geo = { index: oi, page: d.doc.getNumberOfPages(), x: d.cell.x, y: d.cell.y, w: d.cell.width, h: d.cell.height };
       if (d.column.index === 0) nameLinks.push(geo);
       if (d.column.index === COL_PAGE) pageLinks.push(geo);
       // The meter: a bar from 0 to 150% with a tick at 100% (on plan)
       if (d.column.index === COL_EFF) {
-        const pct = summaries[d.row.index].efficiencyPct;
+        const pct = summaries[oi].efficiencyPct;
         const bx = d.cell.x + 2.5, bw = d.cell.width - 5, by = d.cell.y + d.cell.height - 3.4;
         d.doc.setFillColor(...rgb('#e5e7eb'));
         d.doc.roundedRect(bx, by, bw, 1.8, 0.9, 0.9, 'F');
         if (pct !== null) {
-          const kind = summaries[d.row.index].verdict.kind;
+          const kind = summaries[oi].verdict.kind;
           d.doc.setFillColor(...rgb(kind === 'over' ? '#ef4444' : '#22c55e'));
           d.doc.roundedRect(bx, by, Math.max(1.8, (bw * Math.min(pct, 150)) / 150), 1.8, 0.9, 0.9, 'F');
           d.doc.setDrawColor(...INK); d.doc.setLineWidth(0.25);
@@ -217,6 +225,7 @@ export async function downloadProductivityPdf(opts: {
       didParseCell: c => {
         if (c.section !== 'body') return;
         const t = p.tasks[c.row.index];
+        if (!t) return;
         if (c.column.index === 9) {
           const st = FLAG_STYLE[t.flag.kind];
           c.cell.styles.fillColor = rgb(st.fill);
@@ -227,8 +236,9 @@ export async function downloadProductivityPdf(opts: {
       },
       didDrawCell: c => {
         if (c.section === 'body' && c.column.index === 3) {
-          const t = p.tasks[c.row.index];
-          if (t.url) urlCells.push({ index: c.row.index, page: c.doc.getNumberOfPages(), x: c.cell.x, y: c.cell.y, w: c.cell.width, h: c.cell.height });
+          const idx = rowIndex(c.row);
+          const t = p.tasks[idx];
+          if (t?.url) urlCells.push({ index: idx, page: c.doc.getNumberOfPages(), x: c.cell.x, y: c.cell.y, w: c.cell.width, h: c.cell.height });
         }
       },
     });

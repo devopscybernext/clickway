@@ -120,6 +120,7 @@ export interface TaskFilter {
 export interface WebColumns {
   person?: string; project?: string; task?: string; url?: string; est?: string; total?: string;
   deadline?: string; taskStatus?: string; pmStatus?: string; created?: string;
+  priority?: string; department?: string;
 }
 
 export function findWebColumns(headers: string[], team: ReportTeam = 'web'): WebColumns {
@@ -137,6 +138,8 @@ export function findWebColumns(headers: string[], team: ReportTeam = 'web'): Web
     taskStatus: find(l => l.includes('status updation')),
     pmStatus: find(l => l.includes('pm status')),
     created: find(l => l.includes('timestamp')),
+    priority: find(l => l === 'task priority'),
+    department: find(l => l === 'department'),
   };
 }
 
