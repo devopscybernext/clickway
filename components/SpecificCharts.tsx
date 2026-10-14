@@ -651,6 +651,14 @@ export function hhmmToDecimalHours(val: string): number {
   const { h, m } = parseHHMM(val);
   return h + m / 60;
 }
+// "Push to Admin": the Total Time/Hours cell after adding the time logged on AC,
+// written back as HH.MM ("02.15 Hours") like every other time cell. Adding
+// whole minutes avoids decimal-hours values such as "2.25 Hours", which the
+// HH.MM reader would take as 2h25m.
+export function addLoggedToTotal(totalRaw: string, loggedRaw: string): string {
+  const total = Math.round(parseHours(totalRaw) * 60) + Math.round(hhmmToDecimalHours(loggedRaw) * 60);
+  return formatHHMM(Math.floor(total / 60), total % 60);
+}
 // H/M pair for display — tries the strict HH.MM read first, falls back to
 // converting a legacy decimal-hours value (e.g. "1.5 Hour" -> 1h30m).
 export function toHM(val: string): { h: number; m: number } {
@@ -845,10 +853,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
     setPushing(true);
     try {
       for (const t of pushableTasks) {
-        const logged = hhmmToDecimalHours(t.timeLogged);
-        const existing = parseHours(t.totalHoursVal);
-        const sum = Math.round((existing + logged) * 100) / 100;
-        await onStatusChange(t._raw, totalHoursColName, `${sum} Hours`);
+        await onStatusChange(t._raw, totalHoursColName, addLoggedToTotal(t.totalHoursVal, t.timeLogged));
         await onStatusChange(t._raw, timeLoggedColName, '');
       }
     } finally {

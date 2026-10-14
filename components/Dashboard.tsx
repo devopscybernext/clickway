@@ -913,7 +913,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 defaultPersonFilter={isIndividual ? user.displayName : undefined}
                 editPersonBucket={isAdmin || isPmTier || isTeamAdmin}
                 editProjectTask={isAdmin || isPmTier || isTeamAdmin}
-                hiddenCols={(tasksAssignedTeam === 'web' ? bandwidthHeaders : marketingTeamHeaders).filter(h => h.toLowerCase().includes('time logged'))}
+                allowPushToAdmin={isAdmin || isPmTier || isTeamAdmin}
                 showCopy={isAdmin}
                 rowCopy={isAdmin}
               />

@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronDown as ChevDown, ChevronLeft, ChevronRight, Copy, Check, Pencil } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronDown as ChevDown, ChevronLeft, ChevronRight, Copy, Check, Pencil, Send } from 'lucide-react';
 import { SheetData } from '@/lib/googleSheets';
 import { totalTimeRow, totalRowHtml, totalRowText } from '@/lib/copyTotals';
-import { STATUS_COLORS, formatHHMM, toHM, DURATION_HOUR_OPTIONS, DURATION_MINUTE_OPTIONS } from './SpecificCharts';
+import { STATUS_COLORS, formatHHMM, toHM, DURATION_HOUR_OPTIONS, DURATION_MINUTE_OPTIONS, hhmmToDecimalHours, addLoggedToTotal } from './SpecificCharts';
 
 const PAGE_SIZE = 30;
 
@@ -668,6 +668,9 @@ interface Props {
   statusOptions?: string[];
   todayBucketSetOptions?: string[];
   assignedPersonOptions?: string[];
+  // Shows a "Push to Admin" button that moves the Time Logged On AC of the
+  // listed tasks onto Total Time/Hours (same action as a resource's own card).
+  allowPushToAdmin?: boolean;
 }
 
 const BUCKET_OPTIONS = ['Today', 'Tomorrow', 'Day After Tomorrow', 'Everyday', 'No Action Taken', 'Submitted', 'To Be Expected'];
@@ -694,7 +697,7 @@ function parseTimestamp(v: string): number {
   return new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s)).getTime();
 }
 
-export default function FilteredDataTable({ data, headers, sheetNum, onStatusChange, readOnlyStatus, readOnlyPmStatus, showCopy, defaultPersonFilter, editPersonBucket, readOnlyBucket, readOnlyAssigned, rowCopy, restrictToBucketEdit, editStatusUpdation, editProjectTask, hiddenCols, onlyColTerms, hiddenFilterTerms, statusOptions, todayBucketSetOptions, assignedPersonOptions }: Props) {
+export default function FilteredDataTable({ data, headers, sheetNum, onStatusChange, readOnlyStatus, readOnlyPmStatus, showCopy, defaultPersonFilter, editPersonBucket, readOnlyBucket, readOnlyAssigned, rowCopy, restrictToBucketEdit, editStatusUpdation, editProjectTask, hiddenCols, onlyColTerms, hiddenFilterTerms, statusOptions, todayBucketSetOptions, assignedPersonOptions, allowPushToAdmin }: Props) {
   const [copiedRow, setCopiedRow] = useState<string | null>(null);
   const effectiveStatusOptions = statusOptions ?? STATUS_OPTIONS;
   const effectiveStatusOptionsLower = effectiveStatusOptions.map(s => s.toLowerCase());
@@ -953,6 +956,43 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
 
   const [copied, setCopied] = useState(false);
 
+  // ─── Push to Admin — Time Logged On AC -> Total Time/Hours ─────────────────
+  // Acts on the rows currently listed (after the filters), like a resource's
+  // own Push to Admin acts on that resource's tasks. Like there, the button
+  // only shows once Edit Task is off, so logging hours and pushing them stay
+  // two separate steps.
+  const timeLoggedCol = headers.find(h => h.toLowerCase().includes('time logged'));
+  const totalHoursCol = headers.find(h => {
+    const l = h.toLowerCase();
+    return l.includes('total hours') || (l.includes('total time') && !l.includes('est'));
+  });
+  const pushableRows = (allowPushToAdmin && onStatusChange && timeLoggedCol && totalHoursCol)
+    ? sorted.filter(r => hhmmToDecimalHours(String(r[timeLoggedCol] ?? '')) > 0)
+    : [];
+  const pushTotalHours = timeLoggedCol
+    ? pushableRows.reduce((s, r) => s + hhmmToDecimalHours(String(r[timeLoggedCol] ?? '')), 0)
+    : 0;
+  const [showPushConfirm, setShowPushConfirm] = useState(false);
+  const [pushing, setPushing] = useState(false);
+  const [pushError, setPushError] = useState('');
+
+  const handlePushToAdmin = async () => {
+    if (!onStatusChange || !timeLoggedCol || !totalHoursCol) return;
+    setPushing(true);
+    setPushError('');
+    try {
+      for (const r of pushableRows) {
+        await onStatusChange(r, totalHoursCol, addLoggedToTotal(String(r[totalHoursCol] ?? ''), String(r[timeLoggedCol] ?? '')));
+        await onStatusChange(r, timeLoggedCol, '');
+      }
+      setShowPushConfirm(false);
+    } catch {
+      setPushError('Could not push every task. The ones already pushed are saved; check the table and try again.');
+    } finally {
+      setPushing(false);
+    }
+  };
+
   // Fixed set of columns to include when copying the table, regardless of selected/visible columns
   const COPY_COL_TERMS = ['project name', 'task name', 'task url', 'time estimation', 'time logged on ac', 'task status'];
   const copyCols = useMemo(
@@ -1071,6 +1111,17 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
               {editMode ? 'Done Editing' : 'Edit Task'}
             </button>
           )}
+          {!editMode && pushableRows.length > 0 && (
+            <button
+              onClick={() => { setPushError(''); setShowPushConfirm(true); }}
+              title="Push logged hours to Total Time"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg cursor-pointer transition-all text-xs font-semibold"
+              style={{ background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }}
+            >
+              <Send className="w-3.5 h-3.5" />
+              Push to Admin ({pushableRows.length})
+            </button>
+          )}
           {showCopy && (
             <button
               onClick={copyTable}
@@ -1085,6 +1136,41 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
           )}
         </div>
       </div>
+
+      {/* Push to Admin confirmation bar — summary on the left, Yes/No on the right */}
+      {showPushConfirm && (
+        <div
+          className="flex items-center justify-between gap-3 px-4 py-2.5 flex-wrap rounded-lg border"
+          style={{ borderColor: 'var(--cn-border)', background: 'var(--cn-accent)' + '0d' }}
+        >
+          <div>
+            <p className="text-xs leading-snug" style={{ color: 'var(--cn-text-primary)' }}>
+              Are you sure you want to push to admin? This adds{' '}
+              <span className="font-semibold">{Math.round(pushTotalHours * 100) / 100}h</span>{' '}
+              across {pushableRows.length} task{pushableRows.length === 1 ? '' : 's'} onto Total Time, and clears Time Logged On Ac.
+            </p>
+            {pushError && <p className="text-xs mt-1" style={{ color: '#ef4444' }}>{pushError}</p>}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setShowPushConfirm(false)}
+              disabled={pushing}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg cursor-pointer transition-colors disabled:opacity-50"
+              style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}
+            >
+              No
+            </button>
+            <button
+              onClick={handlePushToAdmin}
+              disabled={pushing}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg cursor-pointer transition-colors disabled:opacity-50"
+              style={{ background: 'var(--cn-accent)', color: '#fff' }}
+            >
+              {pushing ? 'Pushing…' : 'Yes'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       <div style={{ borderColor: 'var(--cn-border)' }} className="overflow-x-auto rounded-md border">
