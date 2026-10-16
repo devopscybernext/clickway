@@ -116,10 +116,10 @@ function StatusPill({ status }: { status: string }) {
   return (
     <span
       className="shrink-0 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold mt-0.5"
-      style={live ? { background: '#1db210', color: '#fff' } : { background: '#d62b2b', color: '#fff' }}
+      style={live ? { background: '#1db210', color: '#fff' } : { background: '#d81010', color: '#fff' }}
       title={status}
     >
-      <span className="w-2.5 h-2.5 rounded-full" style={{ background: live ? '#44ff2a' : '#ff8a8a' }} />
+      <span className="w-2.5 h-2.5 rounded-full" style={{ background: live ? '#44ff2a' : '#ff5c5c' }} />
       {status}
     </span>
   );
