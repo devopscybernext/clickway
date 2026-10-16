@@ -1,0 +1,203 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { ExternalLink, Search, FileText, AlertCircle } from 'lucide-react';
+
+export type InHouseSubTab = 'websites' | 'case-studies';
+
+interface Row { [key: string]: string | number }
+interface TabData { headers: string[]; data: Row[] }
+
+const str = (v: unknown) => String(v ?? '').trim();
+
+// Pick a cell by its header, ignoring case and stray spaces
+const cell = (row: Row, headers: string[], name: string) => {
+  const h = headers.find(x => x.trim().toLowerCase() === name);
+  return h ? str(row[h]) : '';
+};
+
+// Links come from a sheet, so only real web addresses become buttons. A bare
+// domain ("example.com") is given https://.
+function safeUrl(raw: string): string | null {
+  const v = raw.trim();
+  if (!v) return null;
+  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(v) ? v : `https://${v}`;
+  try {
+    const u = new URL(withScheme);
+    return u.protocol === 'http:' || u.protocol === 'https:' ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+// Tags that say nothing are left out
+const meaningful = (v: string) => !!v && !/^(n\/?a|none|-+)$/i.test(v);
+
+function Tag({ children }: { children: string }) {
+  return (
+    <span
+      className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium"
+      style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-secondary)', border: '1px solid var(--cn-border)' }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function LinkButton({ href, label, primary, icon }: { href: string | null; label: string; primary?: boolean; icon: 'site' | 'case' }) {
+  const Icon = icon === 'site' ? ExternalLink : FileText;
+  if (!href) {
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold opacity-50 cursor-not-allowed"
+        style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)', border: '1px solid var(--cn-border)' }}
+        title="No link in the sheet"
+      >
+        <Icon className="w-3.5 h-3.5" />
+        {label}
+      </span>
+    );
+  }
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all hover:opacity-90"
+      style={primary
+        ? { background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }
+        : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}
+    >
+      <Icon className="w-3.5 h-3.5" />
+      {label}
+    </a>
+  );
+}
+
+const cardClass = 'rounded-xl border p-5 flex flex-col gap-3 transition-shadow hover:shadow-lg';
+const cardStyle = { background: 'var(--cn-bg-row-even)', borderColor: 'var(--cn-border)' };
+
+function WebsiteCard({ row, headers }: { row: Row; headers: string[] }) {
+  const name = cell(row, headers, 'website name');
+  const status = cell(row, headers, 'status');
+  const live = status.toLowerCase() === 'live';
+  const tags = [cell(row, headers, 'platform'), cell(row, headers, 'industry')].filter(meaningful);
+  return (
+    <article className={cardClass} style={cardStyle}>
+      <div className="flex items-start justify-between gap-3">
+        <h3 className="font-semibold text-lg leading-snug break-words" style={{ color: 'var(--cn-text-primary)' }}>{name}</h3>
+        {status && (
+          <span className="shrink-0 inline-flex items-center gap-1.5 text-[11px] font-semibold mt-1" style={{ color: 'var(--cn-text-secondary)' }} title={status}>
+            <span className="w-2 h-2 rounded-full" style={{ background: live ? '#22c55e' : '#ef4444' }} />
+            {status}
+          </span>
+        )}
+      </div>
+      {tags.length > 0 && <div className="flex flex-wrap gap-1.5">{tags.map((t, i) => <Tag key={`${t}-${i}`}>{t}</Tag>)}</div>}
+      <div className="flex flex-wrap gap-2 pt-1 mt-auto">
+        <LinkButton href={safeUrl(cell(row, headers, 'website link'))} label="Visit Website" primary icon="site" />
+      </div>
+    </article>
+  );
+}
+
+function CaseStudyCard({ row, headers }: { row: Row; headers: string[] }) {
+  const name = cell(row, headers, 'website name');
+  const tags = [cell(row, headers, 'platform'), cell(row, headers, 'category'), cell(row, headers, 'industry')].filter(meaningful);
+  return (
+    <article className={cardClass} style={cardStyle}>
+      <h3 className="font-semibold text-lg leading-snug break-words" style={{ color: 'var(--cn-text-primary)' }}>{name}</h3>
+      {tags.length > 0 && <div className="flex flex-wrap gap-1.5">{tags.map((t, i) => <Tag key={`${t}-${i}`}>{t}</Tag>)}</div>}
+      <div className="flex flex-wrap gap-2 pt-1 mt-auto">
+        <LinkButton href={safeUrl(cell(row, headers, 'website link'))} label="Visit Website" icon="site" />
+        <LinkButton href={safeUrl(cell(row, headers, 'url'))} label="Case Study" primary icon="case" />
+      </div>
+    </article>
+  );
+}
+
+interface Props {
+  subTab: InHouseSubTab;
+  /** Changes when the dashboard's Refresh button is pressed */
+  refreshKey?: string;
+}
+
+// Cybernext InHouse: our own websites and case studies as cards, three per row.
+export default function InHouse({ subTab, refreshKey }: Props) {
+  const [websites, setWebsites] = useState<TabData | null>(null);
+  const [caseStudies, setCaseStudies] = useState<TabData | null>(null);
+  const [error, setError] = useState('');
+  const [query, setQuery] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/inhouse')
+      .then(res => res.json())
+      .then(json => {
+        if (cancelled) return;
+        if (!json.success) { setError(json.error || 'Could not load the portfolio.'); return; }
+        setError('');
+        setWebsites(json.websites);
+        setCaseStudies(json.caseStudies);
+      })
+      .catch(() => { if (!cancelled) setError('Could not load the portfolio.'); });
+    return () => { cancelled = true; };
+  }, [refreshKey]);
+
+  const tab = subTab === 'websites' ? websites : caseStudies;
+  const rows = useMemo(() => {
+    if (!tab) return [];
+    const q = query.trim().toLowerCase();
+    if (!q) return tab.data;
+    return tab.data.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
+  }, [tab, query]);
+
+  const title = subTab === 'websites' ? 'Websites' : 'Case Studies';
+  const blurb = subTab === 'websites'
+    ? 'Every website Cybernext has built or manages.'
+    : 'Our live portfolio, with the website and the case study page for each.';
+
+  return (
+    <div className="p-3 sm:p-6">
+      <div className="flex flex-wrap items-end justify-between gap-3 mb-5">
+        <div>
+          <h2 className="font-semibold text-base" style={{ color: 'var(--cn-text-primary)' }}>{title}</h2>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>
+            {blurb}{tab ? ` ${tab.data.length} in total.` : ''}
+          </p>
+        </div>
+        <div className="relative w-full sm:w-72">
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--cn-text-muted)' }} />
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder={`Search ${title.toLowerCase()}…`}
+            aria-label={`Search ${title.toLowerCase()}`}
+            className="w-full text-sm rounded-lg pl-9 pr-3 py-2 border focus:outline-none focus:ring-1 focus:ring-[#FE4A23]"
+            style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', borderColor: 'var(--cn-border)' }}
+          />
+        </div>
+      </div>
+
+      {error ? (
+        <p className="text-sm flex items-center gap-2 py-10 justify-center" style={{ color: '#ef4444' }}>
+          <AlertCircle className="w-4 h-4" /> {error}
+        </p>
+      ) : !tab ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-pulse">
+          {Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-36 rounded-xl" style={{ background: 'var(--cn-bg-input)' }} />)}
+        </div>
+      ) : rows.length === 0 ? (
+        <p className="text-sm text-center py-12" style={{ color: 'var(--cn-text-muted)' }}>
+          {query ? 'Nothing matches your search.' : `No ${title.toLowerCase()} in the sheet yet.`}
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {rows.map((r, i) => subTab === 'websites'
+            ? <WebsiteCard key={`${cell(r, tab.headers, 'website name')}-${i}`} row={r} headers={tab.headers} />
+            : <CaseStudyCard key={`${cell(r, tab.headers, 'website name')}-${i}`} row={r} headers={tab.headers} />)}
+        </div>
+      )}
+    </div>
+  );
+}

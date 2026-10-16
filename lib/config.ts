@@ -127,3 +127,10 @@ export const MARKETING_STATUS_OPTIONS = [
 ];
 // Today Bucket Set for Marketing includes "No Action Taken" as an explicit option
 export const MARKETING_TODAY_BUCKET_SET_OPTIONS = ['No Action Taken', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'URGENT'];
+
+// "Cybernext InHouse" — Cybernext's own portfolio, in a separate spreadsheet.
+// "Websites Details" (Website Name, Website Link, Platform, Status, Industry) feeds
+// the Websites sub-tab; "Live Portfolio links" (Website Name, Website Link, Platform,
+// Category, URL = the case study page, Industry) feeds Case Studies. /api/inhouse
+// finds each tab by a word in its name, so a small rename doesn't break it.
+export const INHOUSE_SHEET_ID = '1pKYK4-YdDFn-lr81v0xdrCEDo8nvLHefZ0ig1hJ9sZQ';
