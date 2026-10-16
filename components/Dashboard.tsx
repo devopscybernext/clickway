@@ -742,6 +742,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           user={user}
           onLogout={onLogout}
           isAdmin={isAdmin}
+          onOpenAdminPortal={() => handleSheetChange({ id: '15' })}
         />
 
         <main className="flex-1 px-4 sm:px-6 xl:px-8 pt-6 pb-8 space-y-5">

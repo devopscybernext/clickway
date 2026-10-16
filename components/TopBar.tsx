@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { RefreshCw, Calendar, ChevronDown, LogOut } from 'lucide-react';
+import { RefreshCw, Calendar, ChevronDown, LogOut, ShieldCheck } from 'lucide-react';
 import { SheetId, AuthUser, getSheetLabel } from '@/lib/auth';
 import { memberPhoto } from '@/lib/memberColors';
 import ThemeToggle from './ThemeToggle';
@@ -40,9 +40,11 @@ interface TopBarProps {
   user: AuthUser;
   onLogout: () => void;
   isAdmin?: boolean;
+  /** Opens the Admin Portal — shown in the profile menu to admins (HM / Admin / Mod) */
+  onOpenAdminPortal?: () => void;
 }
 
-export default function TopBar({ lastUpdated, loading, selectedSheet, onRefresh, user, onLogout, isAdmin }: TopBarProps) {
+export default function TopBar({ lastUpdated, loading, selectedSheet, onRefresh, user, onLogout, isAdmin, onOpenAdminPortal }: TopBarProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
 
@@ -166,8 +168,22 @@ export default function TopBar({ lastUpdated, loading, selectedSheet, onRefresh,
                 </div>
               </div>
 
-              {/* Sign out button */}
               <div className="p-1.5">
+                {/* Admin Portal — admins only */}
+                {isAdmin && onOpenAdminPortal && (
+                  <button
+                    onClick={() => { setDropdownOpen(false); onOpenAdminPortal(); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg transition-colors cursor-pointer text-left"
+                    style={{ color: 'var(--cn-text-primary)', background: selectedSheet === '15' ? 'var(--cn-bg-hover)' : '' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--cn-bg-hover)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = selectedSheet === '15' ? 'var(--cn-bg-hover)' : '')}
+                  >
+                    <ShieldCheck className="w-4 h-4 shrink-0" style={{ color: 'var(--cn-accent)' }} />
+                    <span>Admin Portal</span>
+                  </button>
+                )}
+
+                {/* Sign out button */}
                 <button
                   onClick={() => { setDropdownOpen(false); onLogout(); }}
                   className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg transition-colors cursor-pointer text-left"
