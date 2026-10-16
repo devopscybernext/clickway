@@ -140,7 +140,7 @@ function LinkButton({ href, label, primary }: { href: string | null; label: stri
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className={`${base} cursor-pointer hover:opacity-90`}
+      className={`${base} cursor-pointer hover:shadow-md`}
       style={primary
         ? { background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }
         : { background: 'transparent', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-text-primary)' }}
