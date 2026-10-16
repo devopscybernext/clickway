@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ExternalLink, Search, FileText, AlertCircle, X } from 'lucide-react';
+import { Search, AlertCircle, X } from 'lucide-react';
 import { MultiSelect } from './FilteredDataTable';
 
 export type InHouseSubTab = 'websites' | 'case-studies' | 'brand-kit' | 'documentations';
@@ -37,39 +37,100 @@ const FILTERS: Partial<Record<InHouseSubTab, { label: string; column: string }[]
     { label: 'Name', column: 'website name' },
     { label: 'Platform', column: 'platform' },
     { label: 'Industry', column: 'industry' },
+    { label: 'Status', column: 'status' },
   ],
   'case-studies': [
     { label: 'Name', column: 'website name' },
     { label: 'Platform', column: 'platform' },
     { label: 'Category', column: 'category' },
     { label: 'Industry', column: 'industry' },
+    { label: 'Status', column: 'status' },
   ],
 };
 
 // Tags that say nothing are left out
 const meaningful = (v: string) => !!v && !/^(n\/?a|none|-+)$/i.test(v);
 
+// ── The short paragraph on each card, written from the sheet's own data ──────
+const tidy = (v: string) => v.replace(/\(\s+/g, '(').replace(/\s+\)/g, ')').replace(/\s+/g, ' ').trim();
+const article = (w: string) => (/^[aeiou]/i.test(w) ? 'an' : 'a');
+
+function statusSentence(status: string): string {
+  const s = status.trim().toLowerCase();
+  if (!s) return '';
+  if (s === 'live') return 'It is live right now.';
+  if (s === 'not working') return 'It is not working at the moment and needs a look.';
+  if (s === 'development server') return 'It is still on a development server, so it is not public yet.';
+  if (s === 'review') return 'It is currently in review.';
+  if (s === 'expired') return 'It has expired.';
+  return `Its status is ${status.trim().toLowerCase()}.`;
+}
+
+function websiteBlurb(row: Row, headers: string[]): string {
+  const name = cell(row, headers, 'website name');
+  const platform = cell(row, headers, 'platform');
+  const industry = cell(row, headers, 'industry');
+  const kind = meaningful(platform) ? `${article(platform)} ${tidy(platform)} website` : 'a website';
+  const field = meaningful(industry) ? ` in the ${tidy(industry)} space` : '';
+  return [`${name} is ${kind}${field}.`, statusSentence(cell(row, headers, 'status'))].filter(Boolean).join(' ');
+}
+
+function caseStudyBlurb(row: Row, headers: string[]): string {
+  const name = cell(row, headers, 'website name');
+  const platform = cell(row, headers, 'platform');
+  const industry = cell(row, headers, 'industry');
+  const category = cell(row, headers, 'category');
+  const kind = meaningful(platform) ? `${article(platform)} ${tidy(platform)} project` : 'a project';
+  const field = meaningful(industry) ? ` in the ${tidy(industry)} space` : '';
+  const work = meaningful(category) ? `, delivered as part of our ${tidy(category)} work` : '';
+  return [`${name} is ${kind}${field}${work}.`, statusSentence(cell(row, headers, 'status')), 'The website and the full case study are linked below.'].filter(Boolean).join(' ');
+}
+
+function linkBlurb(row: Row, headers: string[], what: string): string {
+  const name = cell(row, headers, 'name');
+  const destination = cell(row, headers, 'destination');
+  return `${name} for ${what}, shared as ${meaningful(destination) ? `${article(destination)} ${tidy(destination)}` : 'a link'}.`;
+}
+
+function Blurb({ children }: { children: string }) {
+  return <p className="text-sm leading-relaxed" style={{ color: 'var(--cn-text-secondary)' }}>{children}</p>;
+}
+
+// Small grey pill with an orange dot — Platform, Category, Industry
 function Tag({ children }: { children: string }) {
   return (
     <span
-      className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium"
-      style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-secondary)', border: '1px solid var(--cn-border)' }}
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold"
+      style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)' }}
     >
+      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: 'var(--cn-accent)' }} />
       {children}
     </span>
   );
 }
 
-function LinkButton({ href, label, primary, icon }: { href: string | null; label: string; primary?: boolean; icon: 'site' | 'case' }) {
-  const Icon = icon === 'site' ? ExternalLink : FileText;
+// Status pill, top right: green for Live, red for anything else
+function StatusPill({ status }: { status: string }) {
+  if (!status) return null;
+  const live = status.toLowerCase() === 'live';
+  return (
+    <span
+      className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold mt-1"
+      style={live ? { background: '#4ade80', color: '#052e16' } : { background: '#f87171', color: '#450a0a' }}
+      title={status}
+    >
+      <span className="w-1.5 h-1.5 rounded-full" style={{ background: live ? '#052e16' : '#450a0a' }} />
+      {status}
+    </span>
+  );
+}
+
+// Rounded pill buttons: filled orange for the main action, outlined for the other
+function LinkButton({ href, label, primary }: { href: string | null; label: string; primary?: boolean }) {
+  const base = 'inline-flex items-center px-5 py-2.5 rounded-full text-xs font-semibold transition-all';
   if (!href) {
     return (
-      <span
-        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold opacity-50 cursor-not-allowed"
-        style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)', border: '1px solid var(--cn-border)' }}
-        title="No link in the sheet"
-      >
-        <Icon className="w-3.5 h-3.5" />
+      <span className={`${base} opacity-50 cursor-not-allowed`} style={{ border: '1px solid var(--cn-border)', color: 'var(--cn-text-muted)' }} title="No link in the sheet">
         {label}
       </span>
     );
@@ -79,70 +140,76 @@ function LinkButton({ href, label, primary, icon }: { href: string | null; label
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all hover:opacity-90"
+      className={`${base} cursor-pointer hover:opacity-90`}
       style={primary
         ? { background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }
-        : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}
+        : { background: 'transparent', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-text-primary)' }}
     >
-      <Icon className="w-3.5 h-3.5" />
       {label}
     </a>
   );
 }
 
-const cardClass = 'rounded-xl border p-5 flex flex-col gap-3 transition-shadow hover:shadow-lg';
-const cardStyle = { background: 'var(--cn-bg-row-even)', borderColor: 'var(--cn-border)' };
+const cardClass = 'rounded-3xl border p-7 flex flex-col gap-5 transition-shadow hover:shadow-lg';
+const cardStyle = { background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' };
 
-function WebsiteCard({ row, headers }: { row: Row; headers: string[] }) {
-  const name = cell(row, headers, 'website name');
-  const status = cell(row, headers, 'status');
-  const live = status.toLowerCase() === 'live';
-  const tags = [cell(row, headers, 'platform'), cell(row, headers, 'industry')].filter(meaningful);
+// name (big) and, optionally, the status on the right
+function CardTop({ name, status }: { name: string; status?: string }) {
   return (
-    <article className={cardClass} style={cardStyle}>
-      <div className="flex items-start justify-between gap-3">
-        <h3 className="font-semibold text-lg leading-snug break-words" style={{ color: 'var(--cn-text-primary)' }}>{name}</h3>
-        {status && (
-          <span className="shrink-0 inline-flex items-center gap-1.5 text-[11px] font-semibold mt-1" style={{ color: 'var(--cn-text-secondary)' }} title={status}>
-            <span className="w-2 h-2 rounded-full" style={{ background: live ? '#22c55e' : '#ef4444' }} />
-            {status}
-          </span>
-        )}
-      </div>
-      {tags.length > 0 && <div className="flex flex-wrap gap-1.5">{tags.map((t, i) => <Tag key={`${t}-${i}`}>{t}</Tag>)}</div>}
-      <div className="flex flex-wrap gap-2 pt-1 mt-auto">
-        <LinkButton href={safeUrl(cell(row, headers, 'website link'))} label="Visit Website" primary icon="site" />
-      </div>
-    </article>
+    <div className="flex items-start justify-between gap-3">
+      <h3 className="font-bold text-2xl leading-tight tracking-tight break-words" style={{ color: 'var(--cn-text-primary)' }}>{name}</h3>
+      {status ? <StatusPill status={status} /> : null}
+    </div>
   );
 }
 
-// Brand Kit and Documentations: a name, where the link goes, and one Open button
-function LinkCardItem({ row, headers }: { row: Row; headers: string[] }) {
-  const name = cell(row, headers, 'name');
-  const destination = cell(row, headers, 'destination');
+// divider, then the tags
+function CardTags({ tags }: { tags: string[] }) {
+  if (tags.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-2 pt-5 mt-auto" style={{ borderTop: '1px solid var(--cn-border)' }}>
+      {tags.map((t, i) => <Tag key={`${t}-${i}`}>{t}</Tag>)}
+    </div>
+  );
+}
+
+function WebsiteCard({ row, headers }: { row: Row; headers: string[] }) {
   return (
     <article className={cardClass} style={cardStyle}>
-      <h3 className="font-semibold text-lg leading-snug break-words" style={{ color: 'var(--cn-text-primary)' }}>{name}</h3>
-      {meaningful(destination) && <div className="flex flex-wrap gap-1.5"><Tag>{destination}</Tag></div>}
-      <div className="flex flex-wrap gap-2 pt-1 mt-auto">
-        <LinkButton href={safeUrl(cell(row, headers, 'url'))} label="Open Link" primary icon="site" />
+      <CardTop name={cell(row, headers, 'website name')} status={cell(row, headers, 'status')} />
+      <Blurb>{websiteBlurb(row, headers)}</Blurb>
+      <div className="flex flex-wrap gap-2">
+        <LinkButton href={safeUrl(cell(row, headers, 'website link'))} label="Visit Website" primary />
       </div>
+      <CardTags tags={[cell(row, headers, 'platform'), cell(row, headers, 'industry')].filter(meaningful)} />
     </article>
   );
 }
 
 function CaseStudyCard({ row, headers }: { row: Row; headers: string[] }) {
-  const name = cell(row, headers, 'website name');
-  const tags = [cell(row, headers, 'platform'), cell(row, headers, 'category'), cell(row, headers, 'industry')].filter(meaningful);
   return (
     <article className={cardClass} style={cardStyle}>
-      <h3 className="font-semibold text-lg leading-snug break-words" style={{ color: 'var(--cn-text-primary)' }}>{name}</h3>
-      {tags.length > 0 && <div className="flex flex-wrap gap-1.5">{tags.map((t, i) => <Tag key={`${t}-${i}`}>{t}</Tag>)}</div>}
-      <div className="flex flex-wrap gap-2 pt-1 mt-auto">
-        <LinkButton href={safeUrl(cell(row, headers, 'website link'))} label="Visit Website" icon="site" />
-        <LinkButton href={safeUrl(cell(row, headers, 'url'))} label="Case Study" primary icon="case" />
+      <CardTop name={cell(row, headers, 'website name')} status={cell(row, headers, 'status')} />
+      <Blurb>{caseStudyBlurb(row, headers)}</Blurb>
+      <div className="flex flex-wrap gap-2">
+        <LinkButton href={safeUrl(cell(row, headers, 'website link'))} label="Visit Website" primary />
+        <LinkButton href={safeUrl(cell(row, headers, 'url'))} label="Case Study" />
       </div>
+      <CardTags tags={[cell(row, headers, 'platform'), cell(row, headers, 'category'), cell(row, headers, 'industry')].filter(meaningful)} />
+    </article>
+  );
+}
+
+// Brand Kit and Documentations: a name, where the link goes, and one Open button
+function LinkCardItem({ row, headers, what }: { row: Row; headers: string[]; what: string }) {
+  return (
+    <article className={cardClass} style={cardStyle}>
+      <CardTop name={cell(row, headers, 'name')} />
+      <Blurb>{linkBlurb(row, headers, what)}</Blurb>
+      <div className="flex flex-wrap gap-2">
+        <LinkButton href={safeUrl(cell(row, headers, 'url'))} label="Open Link" primary />
+      </div>
+      <CardTags tags={[cell(row, headers, 'destination')].filter(meaningful)} />
     </article>
   );
 }
@@ -272,7 +339,7 @@ export default function InHouse({ subTab, refreshKey }: Props) {
         </p>
       ) : !tab ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-pulse">
-          {Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-36 rounded-xl" style={{ background: 'var(--cn-bg-input)' }} />)}
+          {Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-44 rounded-3xl" style={{ background: 'var(--cn-bg-input)' }} />)}
         </div>
       ) : rows.length === 0 ? (
         <p className="text-sm text-center py-12" style={{ color: 'var(--cn-text-muted)' }}>
@@ -284,7 +351,7 @@ export default function InHouse({ subTab, refreshKey }: Props) {
             const key = `${cell(r, tab.headers, 'website name') || cell(r, tab.headers, 'name')}-${i}`;
             return subTab === 'websites' ? <WebsiteCard key={key} row={r} headers={tab.headers} />
               : subTab === 'case-studies' ? <CaseStudyCard key={key} row={r} headers={tab.headers} />
-              : <LinkCardItem key={key} row={r} headers={tab.headers} />;
+              : <LinkCardItem key={key} row={r} headers={tab.headers} what={subTab === 'brand-kit' ? 'the Cybernext brand kit' : 'the team documentation'} />;
           })}
         </div>
       )}

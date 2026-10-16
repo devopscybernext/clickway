@@ -1044,14 +1044,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
             </section>
           )}
 
-          {/* ── Cybernext InHouse: our websites and case studies as cards ── */}
+          {/* ── Cybernext InHouse: our websites and case studies as cards (no panel behind them) ── */}
           {isInHouse && (inHouseSubTab !== 'documentations' || isAdmin) && (
-            <section
-              className="cn-card rounded-lg border transition-colors"
-              style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
-            >
-              <InHouse subTab={inHouseSubTab} refreshKey={lastUpdated} />
-            </section>
+            <InHouse subTab={inHouseSubTab} refreshKey={lastUpdated} />
           )}
 
           {isAdminPortal && (
