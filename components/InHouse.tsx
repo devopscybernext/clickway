@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ExternalLink, Search, FileText, AlertCircle } from 'lucide-react';
 
-export type InHouseSubTab = 'websites' | 'case-studies';
+export type InHouseSubTab = 'websites' | 'case-studies' | 'brand-kit' | 'documentations';
 
 interface Row { [key: string]: string | number }
 interface TabData { headers: string[]; data: Row[] }
@@ -101,6 +101,21 @@ function WebsiteCard({ row, headers }: { row: Row; headers: string[] }) {
   );
 }
 
+// Brand Kit and Documentations: a name, where the link goes, and one Open button
+function LinkCardItem({ row, headers }: { row: Row; headers: string[] }) {
+  const name = cell(row, headers, 'name');
+  const destination = cell(row, headers, 'destination');
+  return (
+    <article className={cardClass} style={cardStyle}>
+      <h3 className="font-semibold text-lg leading-snug break-words" style={{ color: 'var(--cn-text-primary)' }}>{name}</h3>
+      {meaningful(destination) && <div className="flex flex-wrap gap-1.5"><Tag>{destination}</Tag></div>}
+      <div className="flex flex-wrap gap-2 pt-1 mt-auto">
+        <LinkButton href={safeUrl(cell(row, headers, 'url'))} label="Open Link" primary icon="site" />
+      </div>
+    </article>
+  );
+}
+
 function CaseStudyCard({ row, headers }: { row: Row; headers: string[] }) {
   const name = cell(row, headers, 'website name');
   const tags = [cell(row, headers, 'platform'), cell(row, headers, 'category'), cell(row, headers, 'industry')].filter(meaningful);
@@ -126,6 +141,8 @@ interface Props {
 export default function InHouse({ subTab, refreshKey }: Props) {
   const [websites, setWebsites] = useState<TabData | null>(null);
   const [caseStudies, setCaseStudies] = useState<TabData | null>(null);
+  const [brandKit, setBrandKit] = useState<TabData | null>(null);
+  const [documentations, setDocumentations] = useState<TabData | null>(null);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
 
@@ -139,12 +156,14 @@ export default function InHouse({ subTab, refreshKey }: Props) {
         setError('');
         setWebsites(json.websites);
         setCaseStudies(json.caseStudies);
+        setBrandKit(json.brandKit ?? { headers: [], data: [] });
+        setDocumentations(json.documentations ?? { headers: [], data: [] });
       })
       .catch(() => { if (!cancelled) setError('Could not load the portfolio.'); });
     return () => { cancelled = true; };
   }, [refreshKey]);
 
-  const tab = subTab === 'websites' ? websites : caseStudies;
+  const tab = { 'websites': websites, 'case-studies': caseStudies, 'brand-kit': brandKit, 'documentations': documentations }[subTab];
   const rows = useMemo(() => {
     if (!tab) return [];
     const q = query.trim().toLowerCase();
@@ -152,10 +171,13 @@ export default function InHouse({ subTab, refreshKey }: Props) {
     return tab.data.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
   }, [tab, query]);
 
-  const title = subTab === 'websites' ? 'Websites' : 'Case Studies';
-  const blurb = subTab === 'websites'
-    ? 'Every website Cybernext has built or manages.'
-    : 'Our live portfolio, with the website and the case study page for each.';
+  const COPY: Record<InHouseSubTab, { title: string; blurb: string }> = {
+    'websites': { title: 'Websites', blurb: 'Every website Cybernext has built or manages.' },
+    'case-studies': { title: 'Case Studies', blurb: 'Our live portfolio, with the website and the case study page for each.' },
+    'brand-kit': { title: 'Brand Kit', blurb: 'Logos, fonts, colours and the other brand files.' },
+    'documentations': { title: 'Documentations', blurb: 'Company documents and research.' },
+  };
+  const { title, blurb } = COPY[subTab];
 
   return (
     <div className="p-3 sm:p-6">
@@ -193,9 +215,12 @@ export default function InHouse({ subTab, refreshKey }: Props) {
         </p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {rows.map((r, i) => subTab === 'websites'
-            ? <WebsiteCard key={`${cell(r, tab.headers, 'website name')}-${i}`} row={r} headers={tab.headers} />
-            : <CaseStudyCard key={`${cell(r, tab.headers, 'website name')}-${i}`} row={r} headers={tab.headers} />)}
+          {rows.map((r, i) => {
+            const key = `${cell(r, tab.headers, 'website name') || cell(r, tab.headers, 'name')}-${i}`;
+            return subTab === 'websites' ? <WebsiteCard key={key} row={r} headers={tab.headers} />
+              : subTab === 'case-studies' ? <CaseStudyCard key={key} row={r} headers={tab.headers} />
+              : <LinkCardItem key={key} row={r} headers={tab.headers} />;
+          })}
         </div>
       )}
     </div>

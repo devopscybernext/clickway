@@ -8,6 +8,7 @@ import { AuthUser, SheetId, Team, NavLeaf, getFirstNavLeaf, isAdminTierRole, isP
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import InHouse, { type InHouseSubTab } from './InHouse';
+import NextBot from './NextBot';
 import SpecificCharts, { ResourceOverview, PmStatusOverview, KpiCards, ResourceStatusGrid, TeamWorkloadCards, MyWorkloadSummary, InsightCards, PmStatusChart, ResourceBandwidthChips, SubDept } from './SpecificCharts';
 import FilteredDataTable from './FilteredDataTable';
 import SearchFilter from './SearchFilter';
@@ -604,6 +605,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const isAdminPortal       = selectedSheet === '15';
   const isReport            = selectedSheet === '16';
   const isInHouse           = selectedSheet === '17';
+  const isNextBot           = selectedSheet === '18';
 
   // "Add New Project" form — single shared form, only shown to PM-tier users
   const myProjectFormUrl = isPmTier ? PM_PROJECT_FORM_URL : undefined;
@@ -1043,12 +1045,22 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           )}
 
           {/* ── Cybernext InHouse: our websites and case studies as cards ── */}
-          {isInHouse && (
+          {isInHouse && (inHouseSubTab !== 'documentations' || isAdmin) && (
             <section
               className="cn-card rounded-lg border transition-colors"
               style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
             >
               <InHouse subTab={inHouseSubTab} refreshKey={lastUpdated} />
+            </section>
+          )}
+
+          {/* ── NextBot: coming soon ── */}
+          {isNextBot && (
+            <section
+              className="cn-card rounded-lg border transition-colors"
+              style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
+            >
+              <NextBot />
             </section>
           )}
 

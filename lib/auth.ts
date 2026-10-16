@@ -1,4 +1,4 @@
-export type SheetId = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | '11' | '12' | '14' | '15' | '16' | '17';
+export type SheetId = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | '11' | '12' | '14' | '15' | '16' | '17' | '18';
 
 // New role taxonomy (2026 rollout) — kept alongside legacy role slugs so
 // accounts that haven't been migrated in the UserDetails sheet keep working
@@ -168,8 +168,16 @@ const TOOLS_CHILDREN: NavLeaf[] = [
 const INHOUSE_CHILDREN: NavLeaf[] = [
   { id: '17', subTab: 'websites', label: 'Websites' },
   { id: '17', subTab: 'case-studies', label: 'Case Studies' },
+  { id: '17', subTab: 'brand-kit', label: 'Brand Kit' },
+];
+// Documentations is for HM / Admin / Mod only (the API also withholds it from everyone else)
+const INHOUSE_ADMIN_CHILDREN: NavLeaf[] = [
+  ...INHOUSE_CHILDREN,
+  { id: '17', subTab: 'documentations', label: 'Documentations' },
 ];
 const LEAVE_STATUS: NavLeaf = { id: '2' };
+// NextBot — a standalone page for every role (a "coming soon" placeholder for now)
+const NEXTBOT: NavLeaf = { id: '18' };
 // User Details (Username/Role/Display Name/Email) editor — HM/Admin/Mod
 // (and their legacy aliases) only, never PM-tier/team-admin/individual
 // roles, since it can change anyone's access level.
@@ -181,7 +189,8 @@ const ADMIN_NAV: NavItem[] = [
   { label: 'Marketing', children: MARKETING_FULL },
   { label: 'PM Projects', children: PM_PROJECTS_ADMIN },
   LEAVE_STATUS,
-  { label: 'Cybernext InHouse', children: INHOUSE_CHILDREN },
+  { label: 'Cybernext InHouse', children: INHOUSE_ADMIN_CHILDREN },
+  NEXTBOT,
   { label: 'Tools', children: TOOLS_CHILDREN },
   ADMIN_PORTAL,
 ];
@@ -194,6 +203,7 @@ const PM_WEB_ADMIN_NAV: NavItem[] = [
   { label: 'PM Projects', children: PM_PROJECTS_FULL },
   LEAVE_STATUS,
   { label: 'Cybernext InHouse', children: INHOUSE_CHILDREN },
+  NEXTBOT,
   { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 const PM_MARKETING_ADMIN_NAV: NavItem[] = [
@@ -202,6 +212,7 @@ const PM_MARKETING_ADMIN_NAV: NavItem[] = [
   { label: 'PM Projects', children: PM_PROJECTS_FULL },
   LEAVE_STATUS,
   { label: 'Cybernext InHouse', children: INHOUSE_CHILDREN },
+  NEXTBOT,
   { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 // legacy "pm" — like ADMIN_NAV but no Tasks Assigned at all, plus "My Projects"
@@ -211,6 +222,7 @@ const PM_LEGACY_NAV: NavItem[] = [
   { label: 'PM Projects', children: PM_PROJECTS_FULL },
   LEAVE_STATUS,
   { label: 'Cybernext InHouse', children: INHOUSE_CHILDREN },
+  NEXTBOT,
   { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 // WebAdmin — no Leave Status, no PM Projects; otherwise Web-only, except
@@ -220,12 +232,14 @@ const WEB_ADMIN_NAV: NavItem[] = [
   { label: 'Web', children: WEB_FULL },
   { label: 'Marketing', children: MARKETING_TASKS_OVERVIEW_ONLY },
   { label: 'Cybernext InHouse', children: INHOUSE_CHILDREN },
+  NEXTBOT,
   { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 // WebTeam / legacy "resource" — individual contributor, own team
 const WEB_TEAM_NAV: NavItem[] = [
   { label: 'Web', children: WEB_INDIVIDUAL },
   { label: 'Cybernext InHouse', children: INHOUSE_CHILDREN },
+  NEXTBOT,
   { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 // MarketingAdmin — no Leave Status, no PM Projects; otherwise
@@ -235,12 +249,14 @@ const MARKETING_ADMIN_NAV: NavItem[] = [
   { label: 'Marketing', children: MARKETING_FULL },
   { label: 'Web', children: WEB_TASKS_OVERVIEW_ONLY },
   { label: 'Cybernext InHouse', children: INHOUSE_CHILDREN },
+  NEXTBOT,
   { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 // MarketingTeam — individual contributor, own team
 const MARKETING_TEAM_NAV: NavItem[] = [
   { label: 'Marketing', children: MARKETING_INDIVIDUAL },
   { label: 'Cybernext InHouse', children: INHOUSE_CHILDREN },
+  NEXTBOT,
   { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 
@@ -283,6 +299,7 @@ export const SHEET_LABELS: Record<SheetId, string> = {
   '15': 'Admin Portal',
   '16': 'Report',
   '17': 'Cybernext InHouse',
+  '18': 'NextBot',
 };
 
 export function getSheetLabel(id: SheetId, role: Role): string {
