@@ -303,7 +303,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [tableKey, setTableKey] = useState(0);
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [analysisSubTab, setAnalysisSubTab] = useState<'resources' | 'pm'>('resources');
-  const [toolsSubTab, setToolsSubTab] = useState<'clock' | 'holiday' | 'ai'>('clock');
+  const [toolsSubTab, setToolsSubTab] = useState<'clock' | 'holiday' | 'ai' | 'nextbot'>('clock');
   const [inHouseSubTab, setInHouseSubTab] = useState<InHouseSubTab>('websites');
   const [pmBandwidthSubTab, setPmBandwidthSubTab] = useState<'current' | 'archive' | 'mine' | 'closed'>('current');
   const [showAddProjectForm, setShowAddProjectForm] = useState(false);
@@ -581,7 +581,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     setSelectedSheet(leaf.id);
     if (leaf.team) { setNavTeam(leaf.team); setAnalyticsSubDept('all'); }
     if (leaf.id === '11' && leaf.subTab) setPmBandwidthSubTab(leaf.subTab as 'current' | 'archive' | 'mine' | 'closed');
-    if (leaf.id === '14' && leaf.subTab) setToolsSubTab(leaf.subTab as 'clock' | 'holiday' | 'ai');
+    if (leaf.id === '14' && leaf.subTab) setToolsSubTab(leaf.subTab as 'clock' | 'holiday' | 'ai' | 'nextbot');
     if (leaf.id === '17' && leaf.subTab) setInHouseSubTab(leaf.subTab as InHouseSubTab);
     setSearchTerm('');
     // tableKey intentionally NOT incremented here so filters persist across tab switches
@@ -605,7 +605,6 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const isAdminPortal       = selectedSheet === '15';
   const isReport            = selectedSheet === '16';
   const isInHouse           = selectedSheet === '17';
-  const isNextBot           = selectedSheet === '18';
 
   // "Add New Project" form — single shared form, only shown to PM-tier users
   const myProjectFormUrl = isPmTier ? PM_PROJECT_FORM_URL : undefined;
@@ -1014,6 +1013,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 {toolsSubTab === 'holiday' && (
                   <HolidayCalendar data={holidayData} headers={Object.keys(holidayData[0] ?? {})} />
                 )}
+                {toolsSubTab === 'nextbot' && <NextBot />}
                 {toolsSubTab === 'ai' && (
                   <>
                     <NewsTicker data={newsData} />
@@ -1051,16 +1051,6 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
             >
               <InHouse subTab={inHouseSubTab} refreshKey={lastUpdated} />
-            </section>
-          )}
-
-          {/* ── NextBot: coming soon ── */}
-          {isNextBot && (
-            <section
-              className="cn-card rounded-lg border transition-colors"
-              style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
-            >
-              <NextBot />
             </section>
           )}
 
