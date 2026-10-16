@@ -176,7 +176,7 @@ const INHOUSE_ADMIN_CHILDREN: NavLeaf[] = [
   { id: '17', subTab: 'documentations', label: 'Documentations' },
 ];
 const LEAVE_STATUS: NavLeaf = { id: '2' };
-// NextBot — a standalone page for every role (a "coming soon" placeholder for now)
+// NextBot — a standalone page for every role, always the last tab (a "coming soon" placeholder for now)
 const NEXTBOT: NavLeaf = { id: '18' };
 // User Details (Username/Role/Display Name/Email) editor — HM/Admin/Mod
 // (and their legacy aliases) only, never PM-tier/team-admin/individual
@@ -190,9 +190,9 @@ const ADMIN_NAV: NavItem[] = [
   { label: 'PM Projects', children: PM_PROJECTS_ADMIN },
   LEAVE_STATUS,
   { label: 'Cybernext InHouse', children: INHOUSE_ADMIN_CHILDREN },
-  NEXTBOT,
   { label: 'Tools', children: TOOLS_CHILDREN },
   ADMIN_PORTAL,
+  NEXTBOT,
 ];
 // PMWebAdmin / PMMarketingAdmin — full access everywhere except Tasks
 // Assigned, which stays pinned to their own team (see old
@@ -203,8 +203,8 @@ const PM_WEB_ADMIN_NAV: NavItem[] = [
   { label: 'PM Projects', children: PM_PROJECTS_FULL },
   LEAVE_STATUS,
   { label: 'Cybernext InHouse', children: INHOUSE_CHILDREN },
-  NEXTBOT,
   { label: 'Tools', children: TOOLS_CHILDREN },
+  NEXTBOT,
 ];
 const PM_MARKETING_ADMIN_NAV: NavItem[] = [
   { label: 'Web', children: WEB_NO_TASKS_ASSIGNED },
@@ -212,8 +212,8 @@ const PM_MARKETING_ADMIN_NAV: NavItem[] = [
   { label: 'PM Projects', children: PM_PROJECTS_FULL },
   LEAVE_STATUS,
   { label: 'Cybernext InHouse', children: INHOUSE_CHILDREN },
-  NEXTBOT,
   { label: 'Tools', children: TOOLS_CHILDREN },
+  NEXTBOT,
 ];
 // legacy "pm" — like ADMIN_NAV but no Tasks Assigned at all, plus "My Projects"
 const PM_LEGACY_NAV: NavItem[] = [
@@ -222,8 +222,8 @@ const PM_LEGACY_NAV: NavItem[] = [
   { label: 'PM Projects', children: PM_PROJECTS_FULL },
   LEAVE_STATUS,
   { label: 'Cybernext InHouse', children: INHOUSE_CHILDREN },
-  NEXTBOT,
   { label: 'Tools', children: TOOLS_CHILDREN },
+  NEXTBOT,
 ];
 // WebAdmin — no Leave Status, no PM Projects; otherwise Web-only, except
 // Tasks Overview also carries a lone cross-team peek at Marketing's (a
@@ -232,15 +232,15 @@ const WEB_ADMIN_NAV: NavItem[] = [
   { label: 'Web', children: WEB_FULL },
   { label: 'Marketing', children: MARKETING_TASKS_OVERVIEW_ONLY },
   { label: 'Cybernext InHouse', children: INHOUSE_CHILDREN },
-  NEXTBOT,
   { label: 'Tools', children: TOOLS_CHILDREN },
+  NEXTBOT,
 ];
 // WebTeam / legacy "resource" — individual contributor, own team
 const WEB_TEAM_NAV: NavItem[] = [
   { label: 'Web', children: WEB_INDIVIDUAL },
   { label: 'Cybernext InHouse', children: INHOUSE_CHILDREN },
-  NEXTBOT,
   { label: 'Tools', children: TOOLS_CHILDREN },
+  NEXTBOT,
 ];
 // MarketingAdmin — no Leave Status, no PM Projects; otherwise
 // Marketing-only, except Tasks Overview also peeks at Web's (mirrors the
@@ -249,15 +249,15 @@ const MARKETING_ADMIN_NAV: NavItem[] = [
   { label: 'Marketing', children: MARKETING_FULL },
   { label: 'Web', children: WEB_TASKS_OVERVIEW_ONLY },
   { label: 'Cybernext InHouse', children: INHOUSE_CHILDREN },
-  NEXTBOT,
   { label: 'Tools', children: TOOLS_CHILDREN },
+  NEXTBOT,
 ];
 // MarketingTeam — individual contributor, own team
 const MARKETING_TEAM_NAV: NavItem[] = [
   { label: 'Marketing', children: MARKETING_INDIVIDUAL },
   { label: 'Cybernext InHouse', children: INHOUSE_CHILDREN },
-  NEXTBOT,
   { label: 'Tools', children: TOOLS_CHILDREN },
+  NEXTBOT,
 ];
 
 export const ROLE_NAV: Record<Role, NavItem[]> = {
