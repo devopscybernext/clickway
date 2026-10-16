@@ -204,7 +204,7 @@ function CaseStudyCard({ row, headers }: { row: Row; headers: string[] }) {
 function LinkCardItem({ row, headers, what }: { row: Row; headers: string[]; what: string }) {
   return (
     <article className={cardClass} style={cardStyle}>
-      <CardTop name={cell(row, headers, 'name')} />
+      <CardTop name={cell(row, headers, 'name')} status={cell(row, headers, 'status')} />
       <Blurb>{linkBlurb(row, headers, what)}</Blurb>
       <div className="flex flex-wrap gap-2">
         <LinkButton href={safeUrl(cell(row, headers, 'url'))} label="Open Link" primary />
