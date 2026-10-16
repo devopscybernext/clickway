@@ -8,6 +8,7 @@ import { AuthUser, SheetId, Team, NavLeaf, getFirstNavLeaf, isAdminTierRole, isP
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import InHouse, { type InHouseSubTab } from './InHouse';
+import NextBot from './NextBot';
 import SpecificCharts, { ResourceOverview, PmStatusOverview, KpiCards, ResourceStatusGrid, TeamWorkloadCards, MyWorkloadSummary, InsightCards, PmStatusChart, ResourceBandwidthChips, SubDept } from './SpecificCharts';
 import FilteredDataTable from './FilteredDataTable';
 import SearchFilter from './SearchFilter';
@@ -303,7 +304,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [analysisSubTab, setAnalysisSubTab] = useState<'resources' | 'pm'>('resources');
   const [toolsSubTab, setToolsSubTab] = useState<'clock' | 'holiday' | 'ai'>('clock');
-  const [inHouseSubTab, setInHouseSubTab] = useState<InHouseSubTab>('websites');
+  const [inHouseSubTab, setInHouseSubTab] = useState<InHouseSubTab | 'nextbot'>('websites');
   const [pmBandwidthSubTab, setPmBandwidthSubTab] = useState<'current' | 'archive' | 'mine' | 'closed'>('current');
   const [showAddProjectForm, setShowAddProjectForm] = useState(false);
   // Freeze the page behind the Add New Project popup.
@@ -581,7 +582,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     if (leaf.team) { setNavTeam(leaf.team); setAnalyticsSubDept('all'); }
     if (leaf.id === '11' && leaf.subTab) setPmBandwidthSubTab(leaf.subTab as 'current' | 'archive' | 'mine' | 'closed');
     if (leaf.id === '14' && leaf.subTab) setToolsSubTab(leaf.subTab as 'clock' | 'holiday' | 'ai');
-    if (leaf.id === '17' && leaf.subTab) setInHouseSubTab(leaf.subTab as InHouseSubTab);
+    if (leaf.id === '17' && leaf.subTab) setInHouseSubTab(leaf.subTab as InHouseSubTab | 'nextbot');
     setSearchTerm('');
     // tableKey intentionally NOT incremented here so filters persist across tab switches
     if (leaf.id === '6') { iframeLoadCount.current = 0; setFormSubmitted(false); }
@@ -1044,7 +1045,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
           {/* ── Cybernext InHouse: our websites and case studies as cards (no panel behind them) ── */}
           {isInHouse && canSeeInHouse(user.role) && (inHouseSubTab !== 'documentations' || isAdmin) && (
-            <InHouse subTab={inHouseSubTab} refreshKey={lastUpdated} />
+            inHouseSubTab === 'nextbot'
+              ? <section className="cn-card rounded-lg border transition-colors" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}><NextBot /></section>
+              : <InHouse subTab={inHouseSubTab} refreshKey={lastUpdated} />
           )}
 
           {isAdminPortal && (

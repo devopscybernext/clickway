@@ -170,15 +170,19 @@ const TOOLS_CHILDREN: NavLeaf[] = [
 // Cybernext's own portfolio: websites we built / manage, and our case studies.
 // Read-only. For admins, PMs and team admins only — not for the Web / Marketing
 // team members (see canSeeInHouse, which the API and the page also use).
-const INHOUSE_CHILDREN: NavLeaf[] = [
+// NextBot ("coming soon" for now) is always the last sub-tab.
+const INHOUSE_BASE: NavLeaf[] = [
   { id: '17', subTab: 'websites', label: 'Websites' },
   { id: '17', subTab: 'case-studies', label: 'Case Studies' },
   { id: '17', subTab: 'brand-kit', label: 'Brand Kit' },
 ];
+const INHOUSE_NEXTBOT: NavLeaf = { id: '17', subTab: 'nextbot', label: 'NextBot' };
+const INHOUSE_CHILDREN: NavLeaf[] = [...INHOUSE_BASE, INHOUSE_NEXTBOT];
 // Documentations is for HM / Admin / Mod only (the API also withholds it from everyone else)
 const INHOUSE_ADMIN_CHILDREN: NavLeaf[] = [
-  ...INHOUSE_CHILDREN,
+  ...INHOUSE_BASE,
   { id: '17', subTab: 'documentations', label: 'Documentations' },
+  INHOUSE_NEXTBOT,
 ];
 const LEAVE_STATUS: NavLeaf = { id: '2' };
 // User Details (Username/Role/Display Name/Email) editor — HM/Admin/Mod
