@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ExternalLink, Search, FileText, AlertCircle } from 'lucide-react';
+import { ExternalLink, Search, FileText, AlertCircle, X } from 'lucide-react';
+import { MultiSelect } from './FilteredDataTable';
 
 export type InHouseSubTab = 'websites' | 'case-studies' | 'brand-kit' | 'documentations';
 
@@ -29,6 +30,21 @@ function safeUrl(raw: string): string | null {
     return null;
   }
 }
+
+// The filters each sub-tab offers: label shown, and the sheet column it reads
+const FILTERS: Partial<Record<InHouseSubTab, { label: string; column: string }[]>> = {
+  'websites': [
+    { label: 'Name', column: 'website name' },
+    { label: 'Platform', column: 'platform' },
+    { label: 'Industry', column: 'industry' },
+  ],
+  'case-studies': [
+    { label: 'Name', column: 'website name' },
+    { label: 'Platform', column: 'platform' },
+    { label: 'Category', column: 'category' },
+    { label: 'Industry', column: 'industry' },
+  ],
+};
 
 // Tags that say nothing are left out
 const meaningful = (v: string) => !!v && !/^(n\/?a|none|-+)$/i.test(v);
@@ -145,6 +161,8 @@ export default function InHouse({ subTab, refreshKey }: Props) {
   const [documentations, setDocumentations] = useState<TabData | null>(null);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
+  // chosen values per filter, remembered separately for each sub-tab
+  const [chosen, setChosen] = useState<Partial<Record<InHouseSubTab, Record<string, string[]>>>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -164,12 +182,34 @@ export default function InHouse({ subTab, refreshKey }: Props) {
   }, [refreshKey]);
 
   const tab = { 'websites': websites, 'case-studies': caseStudies, 'brand-kit': brandKit, 'documentations': documentations }[subTab];
+  const filters = FILTERS[subTab] ?? [];
+  const picked = chosen[subTab] ?? {};
+  const setPicked = (column: string, values: string[]) => setChosen(prev => ({ ...prev, [subTab]: { ...(prev[subTab] ?? {}), [column]: values } }));
+  const activeFilters = filters.filter(f => (picked[f.column]?.length ?? 0) > 0).length;
+
+  // every value in the sheet for each filter, so the lists don't shrink as you pick
+  const options = useMemo(() => {
+    const out: Record<string, string[]> = {};
+    if (!tab) return out;
+    filters.forEach(f => {
+      out[f.column] = [...new Set(tab.data.map(r => cell(r, tab.headers, f.column)).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    });
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, subTab]);
+
   const rows = useMemo(() => {
     if (!tab) return [];
     const q = query.trim().toLowerCase();
-    if (!q) return tab.data;
-    return tab.data.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
-  }, [tab, query]);
+    return tab.data.filter(r => {
+      for (const f of filters) {
+        const sel = picked[f.column];
+        if (sel && sel.length > 0 && !sel.includes(cell(r, tab.headers, f.column))) return false;
+      }
+      return !q || Object.values(r).some(v => String(v).toLowerCase().includes(q));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, query, chosen, subTab]);
 
   const COPY: Record<InHouseSubTab, { title: string; blurb: string }> = {
     'websites': { title: 'Websites', blurb: 'Every website Cybernext has built or manages.' },
@@ -185,7 +225,7 @@ export default function InHouse({ subTab, refreshKey }: Props) {
         <div>
           <h2 className="font-semibold text-base" style={{ color: 'var(--cn-text-primary)' }}>{title}</h2>
           <p className="text-xs mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>
-            {blurb}{tab ? ` ${tab.data.length} in total.` : ''}
+            {blurb}{tab ? ` Showing ${rows.length} of ${tab.data.length}.` : ''}
           </p>
         </div>
         <div className="relative w-full sm:w-72">
@@ -201,6 +241,31 @@ export default function InHouse({ subTab, refreshKey }: Props) {
         </div>
       </div>
 
+      {tab && filters.length > 0 && (
+        <div className="flex flex-wrap items-end gap-3 mb-5">
+          {filters.map(f => (
+            <MultiSelect
+              key={f.column}
+              label={f.label}
+              options={options[f.column] ?? []}
+              selected={picked[f.column] ?? []}
+              onChange={values => setPicked(f.column, values)}
+            />
+          ))}
+          {activeFilters > 0 && (
+            <button
+              onClick={() => setChosen(prev => ({ ...prev, [subTab]: {} }))}
+              title={`Clear all ${activeFilters} filter${activeFilters === 1 ? '' : 's'}`}
+              className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg cursor-pointer transition-all text-xs font-medium"
+              style={{ background: 'var(--cn-bg-input)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }}
+            >
+              <X className="w-3.5 h-3.5" />
+              Clear all ({activeFilters})
+            </button>
+          )}
+        </div>
+      )}
+
       {error ? (
         <p className="text-sm flex items-center gap-2 py-10 justify-center" style={{ color: '#ef4444' }}>
           <AlertCircle className="w-4 h-4" /> {error}
@@ -211,7 +276,7 @@ export default function InHouse({ subTab, refreshKey }: Props) {
         </div>
       ) : rows.length === 0 ? (
         <p className="text-sm text-center py-12" style={{ color: 'var(--cn-text-muted)' }}>
-          {query ? 'Nothing matches your search.' : `No ${title.toLowerCase()} in the sheet yet.`}
+          {query || activeFilters > 0 ? 'Nothing matches your search and filters.' : `No ${title.toLowerCase()} in the sheet yet.`}
         </p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
