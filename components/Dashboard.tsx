@@ -1051,7 +1051,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               : <InHouse subTab={inHouseSubTab} refreshKey={lastUpdated} />
           )}
 
-          {isAdminPortal && (
+          {isAdminPortal && isAdmin && (
             <section
               className="cn-card rounded-lg border transition-colors"
               style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}

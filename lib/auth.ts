@@ -187,8 +187,8 @@ const INHOUSE_ADMIN_CHILDREN: NavLeaf[] = [
 const LEAVE_STATUS: NavLeaf = { id: '2' };
 // User Details (Username/Role/Display Name/Email) editor — HM/Admin/Mod
 // (and their legacy aliases) only, never PM-tier/team-admin/individual
-// roles, since it can change anyone's access level.
-const ADMIN_PORTAL: NavLeaf = { id: '15' };
+// roles, since it can change anyone's access level. It has no sidebar entry any
+// more: admins open it from the Admin Portal item in the profile menu (TopBar).
 
 // HM / Admin / Mod — full access, both teams in full
 const ADMIN_NAV: NavItem[] = [
@@ -198,7 +198,6 @@ const ADMIN_NAV: NavItem[] = [
   LEAVE_STATUS,
   { label: 'Cybernext InHouse', children: INHOUSE_ADMIN_CHILDREN },
   { label: 'Tools', children: TOOLS_CHILDREN },
-  ADMIN_PORTAL,
 ];
 // PMWebAdmin / PMMarketingAdmin — full access everywhere except Tasks
 // Assigned, which stays pinned to their own team (see old
