@@ -192,8 +192,8 @@ function CaseStudyCard({ row, headers }: { row: Row; headers: string[] }) {
       <CardTop name={cell(row, headers, 'website name')} status={cell(row, headers, 'status')} />
       <Blurb>{caseStudyBlurb(row, headers)}</Blurb>
       <div className="flex flex-wrap gap-2">
-        <LinkButton href={safeUrl(cell(row, headers, 'website link'))} label="Visit Website" primary />
-        <LinkButton href={safeUrl(cell(row, headers, 'url'))} label="Case Study" />
+        <LinkButton href={safeUrl(cell(row, headers, 'url'))} label="Case Study" primary />
+        <LinkButton href={safeUrl(cell(row, headers, 'website link'))} label="Visit Website" />
       </div>
       <CardTags tags={[cell(row, headers, 'platform'), cell(row, headers, 'category'), cell(row, headers, 'industry')].filter(meaningful)} />
     </article>
