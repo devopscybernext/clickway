@@ -115,11 +115,11 @@ function StatusPill({ status }: { status: string }) {
   const live = status.toLowerCase() === 'live';
   return (
     <span
-      className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold mt-1"
-      style={live ? { background: '#4ade80', color: '#052e16' } : { background: '#f87171', color: '#450a0a' }}
+      className="shrink-0 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold mt-0.5"
+      style={live ? { background: '#1db210', color: '#fff' } : { background: '#d62b2b', color: '#fff' }}
       title={status}
     >
-      <span className="w-1.5 h-1.5 rounded-full" style={{ background: live ? '#052e16' : '#450a0a' }} />
+      <span className="w-2.5 h-2.5 rounded-full" style={{ background: live ? '#44ff2a' : '#ff8a8a' }} />
       {status}
     </span>
   );
