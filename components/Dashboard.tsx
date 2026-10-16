@@ -4,11 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { SheetData } from '@/lib/googleSheets';
 import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, PM_BANDWIDTH_ALL_DATA_SHEET_ID, PM_PROJECT_FORM_URL, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, MARKETING_ASSIGNED_PERSONS, WEB_TEAM, TAB_BANDWIDTH, LEAVE_SHEET_ID, TAB_LEAVE, RANGE_LEAVE, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
 
-import { AuthUser, SheetId, Team, NavLeaf, getFirstNavLeaf, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam } from '@/lib/auth';
+import { AuthUser, SheetId, Team, NavLeaf, getFirstNavLeaf, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, canSeeInHouse } from '@/lib/auth';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import InHouse, { type InHouseSubTab } from './InHouse';
-import NextBot from './NextBot';
 import SpecificCharts, { ResourceOverview, PmStatusOverview, KpiCards, ResourceStatusGrid, TeamWorkloadCards, MyWorkloadSummary, InsightCards, PmStatusChart, ResourceBandwidthChips, SubDept } from './SpecificCharts';
 import FilteredDataTable from './FilteredDataTable';
 import SearchFilter from './SearchFilter';
@@ -605,7 +604,6 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const isAdminPortal       = selectedSheet === '15';
   const isReport            = selectedSheet === '16';
   const isInHouse           = selectedSheet === '17';
-  const isNextBot           = selectedSheet === '18';
 
   // "Add New Project" form — single shared form, only shown to PM-tier users
   const myProjectFormUrl = isPmTier ? PM_PROJECT_FORM_URL : undefined;
@@ -1045,18 +1043,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           )}
 
           {/* ── Cybernext InHouse: our websites and case studies as cards (no panel behind them) ── */}
-          {isInHouse && (inHouseSubTab !== 'documentations' || isAdmin) && (
+          {isInHouse && canSeeInHouse(user.role) && (inHouseSubTab !== 'documentations' || isAdmin) && (
             <InHouse subTab={inHouseSubTab} refreshKey={lastUpdated} />
-          )}
-
-          {/* ── NextBot: coming soon ── */}
-          {isNextBot && (
-            <section
-              className="cn-card rounded-lg border transition-colors"
-              style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
-            >
-              <NextBot />
-            </section>
           )}
 
           {isAdminPortal && (

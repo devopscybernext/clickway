@@ -2,18 +2,23 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifySession, COOKIE_NAME } from '@/lib/session';
 import { fetchSheetData, fetchSheetTabNames } from '@/lib/googleSheets';
 import { INHOUSE_SHEET_ID } from '@/lib/config';
-import { isAdminTierRole } from '@/lib/auth';
+import { isAdminTierRole, canSeeInHouse } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 
 // Cybernext InHouse: Websites, Case Studies, Brand Kit and Documentations, each
-// from its own tab of the portfolio spreadsheet. Read-only. Any logged-in user
-// gets the first three; Documentations is for admin-tier roles (HM, Admin, Mod)
+// from its own tab of the portfolio spreadsheet. Read-only. Admins, PMs and team
+// admins get the first three; Documentations is for admin-tier roles (HM, Admin, Mod)
 // only, so it is left out of the response for everyone else, not just hidden.
 export async function GET(req: NextRequest) {
   const user = verifySession(req.cookies.get(COOKIE_NAME)?.value);
   if (!user) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Not for the Web / Marketing team members, only admins, PMs and team admins
+  if (!canSeeInHouse(user.role)) {
+    return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
   }
 
   try {
