@@ -54,7 +54,8 @@ export async function GET(req: NextRequest) {
         tabData.forEach((row, idx) => {
           const email = emailCol ? String(row[emailCol] ?? '').trim().toLowerCase() : '';
           const pm = emailToName.get(email) ?? (email || '');
-          data.push({ ...row, __pm: pm, __sheetTab: tab, __sheetId: sheetId, __id: `${tag}:${tab}:${idx}`, __row: idx + 2 });
+          // __row (write-back handle) comes from the data source
+          data.push({ ...row, __pm: pm, __sheetTab: tab, __sheetId: sheetId, __id: `${tag}:${tab}:${idx}` });
         });
       });
     }

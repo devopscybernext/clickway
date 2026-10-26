@@ -42,9 +42,11 @@ async function fetchSheet(
     throw new Error(json.error ?? `HTTP ${res.status}`);
   }
   const headers: string[] = json.headers ?? [];
+  // __row is the write-back handle the server attaches (sheet row number, or
+  // MySQL id); the index-based fallback only covers an older server.
   const data: SheetData[] = (json.data ?? []).map((row: SheetData, idx: number) => ({
     ...row,
-    __row: idx + headerRow + 1,
+    __row: typeof row.__row === 'number' ? row.__row : idx + headerRow + 1,
   }));
   return { data, headers };
 }

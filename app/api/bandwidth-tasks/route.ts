@@ -35,9 +35,10 @@ export async function GET(req: NextRequest) {
       const { data: tabData, headers: tabHeaders } = results[i];
       if (tabHeaders.length > headers.length) headers = tabHeaders;
       const tsCol = tabHeaders.find(h => h.toLowerCase().includes('timestamp'));
-      tabData.forEach((row, idx) => {
+      tabData.forEach(row => {
         if (tsCol && String(row[tsCol] ?? '').trim() === '') return; // skip blank rows
-        data.push({ ...row, __sheet: tab, __id: `${tab}::${idx + 2}`, __row: idx + 2 });
+        // __row (write-back handle) comes from the data source
+        data.push({ ...row, __sheet: tab, __id: `${tab}::${row.__row}` });
       });
     });
 
