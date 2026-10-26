@@ -63,7 +63,7 @@ export default function LoginScreen({ onLogin }: Props) {
           </div>
           <div className="text-center">
             <h1 className="text-xl font-bold" style={{ color: 'var(--cn-text-primary)' }}>
-              Bandwidth Allocation Dashboard
+              Bandwidth Allocation
             </h1>
             <a
               href="https://www.cybernext.io"
