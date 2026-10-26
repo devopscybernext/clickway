@@ -99,6 +99,10 @@ google-sheets-dashboard/
 | `NEXT_PUBLIC_SHEET_ID_2` | Google Sheets ID for Sheet 2 |
 | `NEXT_PUBLIC_GOOGLE_API_KEY` | Google API key with Sheets API enabled |
 
+## Data storage: Google Sheets or MySQL
+
+The data source is chosen with `DATA_SOURCE` in `.env.local`: `sheets` (default) or `mysql`. Setup, the import from Google Sheets, Google Forms intake and the Cloudways go-live steps are in [docs/mysql-migration.md](docs/mysql-migration.md).
+
 ## Switching to Different Sheets
 
 Update the Sheet IDs in `.env.local` (locally) and in Vercel's Environment Variables (production). No code changes required.

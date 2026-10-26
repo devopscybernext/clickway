@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchSheetData } from '@/lib/googleSheets';
 import { verifySession, COOKIE_NAME } from '@/lib/session';
-import { TAB_USERS, USER_DETAILS_SHEET_ID } from '@/lib/config';
+import { isReadableRange } from '@/lib/sheetAccess';
 import { isDirectBrowserNavigation } from '@/lib/blockDirectAccess';
 
 export const runtime = 'nodejs';
@@ -26,12 +26,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'sheetId is required' }, { status: 400 });
   }
 
-  // The Users tab holds password hashes — never serve it through this generic
-  // proxy, only through the narrow, server-only routes that strip it out.
-  // Scoped to the actual credentials spreadsheet (not just the tab name)
-  // since other spreadsheets — e.g. the Leave sheet — happen to reuse
-  // "UserDetails" as a tab name for unrelated data.
-  if (sheetId === USER_DETAILS_SHEET_ID && range.toLowerCase().includes(TAB_USERS.toLowerCase())) {
+  // Only the exact ranges the dashboard reads — credentials (the UserDetails
+  // spreadsheet, and the Sheet2 password tabs) never go through this proxy.
+  if (!isReadableRange(sheetId, range)) {
     return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
   }
 

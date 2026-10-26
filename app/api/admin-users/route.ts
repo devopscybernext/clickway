@@ -1,7 +1,6 @@
-import { google } from 'googleapis';
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySession, COOKIE_NAME } from '@/lib/session';
-import { fetchSheetData, invalidateSheetCache } from '@/lib/googleSheets';
+import { fetchSheetData, updateSheetCell, dataSource, DataError } from '@/lib/googleSheets';
 import { USER_DETAILS_SHEET_ID, RANGE_USERS, TAB_USERS } from '@/lib/config';
 import { isAdminTierRole } from '@/lib/auth';
 import { isDirectBrowserNavigation } from '@/lib/blockDirectAccess';
@@ -16,17 +15,6 @@ import { isDirectBrowserNavigation } from '@/lib/blockDirectAccess';
 // Only these two columns are ever writable through this route.
 const EDITABLE_FIELDS = ['Role', 'Display Name'] as const;
 type EditableField = typeof EDITABLE_FIELDS[number];
-
-function colToLetter(idx: number): string {
-  let letter = '';
-  let n = idx + 1;
-  while (n > 0) {
-    const rem = (n - 1) % 26;
-    letter = String.fromCharCode(65 + rem) + letter;
-    n = Math.floor((n - 1) / 26);
-  }
-  return letter;
-}
 
 export async function GET(req: NextRequest) {
   if (isDirectBrowserNavigation(req)) {
@@ -44,12 +32,11 @@ export async function GET(req: NextRequest) {
   const displayNameCol = headers.find(h => h.toLowerCase() === 'display name');
   const emailCol = headers.find(h => h.toLowerCase() === 'email');
 
-  // Row number mirrors every other sheet-backed list in this app (idx + 2:
-  // 1 for the header row, 1 to convert 0-based to 1-based) — needed so an
-  // edit here can be written back to the exact right row.
+  // row is the user's write-back handle (__row — the sheet row number, or the
+  // MySQL id) — needed so an edit here lands on exactly the right user.
   const users = data
-    .map((r, idx) => ({
-      row: idx + 2,
+    .map(r => ({
+      row: Number(r.__row),
       username: usernameCol ? String(r[usernameCol] ?? '').trim() : '',
       role: roleCol ? String(r[roleCol] ?? '').trim() : '',
       displayName: displayNameCol ? String(r[displayNameCol] ?? '').trim() : '',
@@ -67,7 +54,9 @@ export async function POST(req: NextRequest) {
   }
 
   const { row, field, value } = await req.json() as { row?: number; field?: string; value?: string };
-  if (!row || row < 2 || !field || value === undefined) {
+  // In Sheets, row 1 is the header row; MySQL ids start at 1.
+  const minRow = dataSource() === 'sheets' ? 2 : 1;
+  if (!row || row < minRow || !field || value === undefined) {
     return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
   }
   if (!EDITABLE_FIELDS.includes(field as EditableField)) {
@@ -80,31 +69,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Column not found' }, { status: 400 });
   }
 
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
-  const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-  if (!privateKey || !clientEmail) {
-    return NextResponse.json({ success: false, error: 'Server misconfigured — missing credentials' }, { status: 500 });
-  }
-
-  const auth = new google.auth.GoogleAuth({
-    credentials: { client_email: clientEmail, private_key: privateKey },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-  const sheets = google.sheets({ version: 'v4', auth });
-
   try {
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: USER_DETAILS_SHEET_ID,
-      range: `'${TAB_USERS}'!${colToLetter(colIndex)}${row}`,
-      valueInputOption: 'RAW',
-      requestBody: { values: [[value]] },
-    });
-    invalidateSheetCache(USER_DETAILS_SHEET_ID);
+    await updateSheetCell(USER_DETAILS_SHEET_ID, TAB_USERS, Number(row), colIndex, String(value), user.username);
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
     return NextResponse.json(
       { success: false, error: err instanceof Error ? err.message : 'Unknown error' },
-      { status: 500 }
+      { status: err instanceof DataError ? err.status : 500 }
     );
   }
 }
