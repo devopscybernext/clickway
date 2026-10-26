@@ -10,7 +10,9 @@ export default function DisableDevTools() {
     const blockContextMenu = (e: MouseEvent) => e.preventDefault();
 
     const blockKeys = (e: KeyboardEvent) => {
-      const k = e.key.toLowerCase();
+      // Synthetic keydowns (e.g. browser autofill) can arrive without a key.
+      const k = e.key?.toLowerCase();
+      if (!k) return;
       if (
         k === 'f12' ||
         (e.ctrlKey && e.shiftKey && (k === 'i' || k === 'j' || k === 'c')) ||
