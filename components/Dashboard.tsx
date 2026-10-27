@@ -892,7 +892,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           >
             <div>
               <h2 className="font-semibold text-base" style={{ color: 'var(--cn-text-primary)' }}>Tasks Assigned</h2>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>Hello</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>Active task assignments across all team members and projects</p>
             </div>
             <ResourceBandwidthChips
               sheet1Data={tasksAssignedTeamData}
