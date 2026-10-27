@@ -2,54 +2,15 @@ import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { insertRow } from '@/lib/data/mysql';
 import { findDataset } from '@/lib/data/datasets';
-import {
-  SHEET_IDS, MARKETING_TEAM_SHEET_ID, PM_BANDWIDTH_SHEET_ID, TAB_BANDWIDTH, TAB_MARKETING_TASKS, TAB_LEADERBOARD,
-} from '@/lib/config';
+import { INTAKE_TARGETS, formatAnswer, formatTimestamp } from '@/lib/forms';
 
 export const runtime = 'nodejs';
 
-// Google Forms → MySQL. The dashboard no longer reads the forms' linked
-// spreadsheets, so an Apps Script on each form posts every new response here
-// (docs/mysql-migration.md has the script). The row is
-// stored exactly as the form's linked sheet would have shown it: same
+// Google Forms → MySQL. For forms that are still Google Forms, an Apps Script
+// on the form posts every new response here (docs/mysql-migration.md has the
+// script). The dashboard's own entry forms post to /api/forms instead. The
+// row is stored exactly as the form's linked sheet would have shown it: same
 // columns, same timestamp/date format, checkbox answers joined with ", ".
-
-type DateOrder = 'dmy' | 'mdy';
-
-// The PM spreadsheet's current-month tab (single tab, see lib/config.ts).
-const TAB_PM_CURRENT = 'CurrentMonth';
-
-const FORMS: Record<string, { sheetId: string; tab: string; order: DateOrder; emailHeader: string }> = {
-  'web-task':       { sheetId: SHEET_IDS['1'],          tab: TAB_BANDWIDTH,       order: 'dmy', emailHeader: 'Email address' },
-  'leaderboard':    { sheetId: SHEET_IDS['1'],          tab: TAB_LEADERBOARD,     order: 'dmy', emailHeader: 'Email address' },
-  'marketing-task': { sheetId: MARKETING_TEAM_SHEET_ID, tab: TAB_MARKETING_TASKS, order: 'mdy', emailHeader: 'Email Address' },
-  'pm-project':     { sheetId: PM_BANDWIDTH_SHEET_ID,   tab: TAB_PM_CURRENT,      order: 'mdy', emailHeader: 'Email Address' },
-};
-
-// The format each linked sheet used: Web Team Sheet is day-first with padded
-// fields ("26/10/2026 14:05:09"), the Marketing and PM sheets are US style
-// ("10/26/2026 14:05:09").
-function parts(date: Date) {
-  const timeZone = process.env.FORM_TIMEZONE || 'Asia/Kolkata';
-  const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
-    timeZone, year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
-  }).formatToParts(date).map(x => [x.type, x.value]));
-  return { y: p.year, m: Number(p.month), d: Number(p.day), h: Number(p.hour), mi: p.minute, s: p.second };
-}
-const pad = (n: number) => String(n).padStart(2, '0');
-
-function formatTimestamp(date: Date, order: DateOrder): string {
-  const { y, m, d, h, mi, s } = parts(date);
-  return order === 'dmy' ? `${pad(d)}/${pad(m)}/${y} ${pad(h)}:${mi}:${s}` : `${m}/${d}/${y} ${h}:${mi}:${s}`;
-}
-
-// Forms sends date questions as 2026-10-26; the sheets showed them in their own order.
-function formatAnswer(value: string, order: DateOrder): string {
-  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return value;
-  const [, y, mo, d] = m;
-  return order === 'dmy' ? `${d}/${mo}/${y}` : `${Number(mo)}/${Number(d)}/${y}`;
-}
 
 function secretMatches(header: string | null): boolean {
   const secret = process.env.INTAKE_SECRET;
@@ -63,6 +24,7 @@ export async function POST(req: NextRequest) {
   if (!secretMatches(req.headers.get('authorization'))) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }
+
   let body: { form?: string; responseId?: string; submittedAt?: string; email?: string; answers?: Record<string, unknown> };
   try {
     body = await req.json();
@@ -70,9 +32,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Body must be JSON' }, { status: 400 });
   }
 
-  const form = body.form ? FORMS[body.form] : undefined;
+  const form = body.form ? INTAKE_TARGETS[body.form] : undefined;
   if (!form) {
-    return NextResponse.json({ success: false, error: `Unknown form "${body.form}". Expected one of: ${Object.keys(FORMS).join(', ')}` }, { status: 400 });
+    return NextResponse.json({ success: false, error: `Unknown form "${body.form}". Expected one of: ${Object.keys(INTAKE_TARGETS).join(', ')}` }, { status: 400 });
   }
   const submittedAt = new Date(body.submittedAt ?? '');
   if (isNaN(submittedAt.getTime()) || !body.responseId || !body.answers || typeof body.answers !== 'object') {
@@ -101,7 +63,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: `No column for: ${unknown.join(' | ')}` }, { status: 422 });
   }
 
-  values['Timestamp'] = formatTimestamp(submittedAt, form.order);
+  values['Timestamp'] = formatTimestamp(submittedAt, form.order, process.env.FORM_TIMEZONE || 'Asia/Kolkata');
   if (body.email) values[form.emailHeader] = String(body.email);
 
   try {

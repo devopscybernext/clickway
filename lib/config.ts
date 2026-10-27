@@ -34,11 +34,6 @@ export const PM_BANDWIDTH_SHEET_ID = '1WBzXb7xfCtzlzeVzxYB6ZtkSCyN4FUzz1Eg9McgPb
 // never match).
 export const PM_BANDWIDTH_ALL_DATA_SHEET_ID = '1QjLPmyVrzWpWIYoKKSsntwYAYFNGDRUyowvz9N8U25s';
 
-// "Add New Project" intake form — a single shared Google Form every PM
-// uses (the old one-form-per-PM setup was retired; those forms are now
-// trashed/closed).
-export const PM_PROJECT_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSfPmN8478aHnHljROGhnmgwg5PoEcCozIWi0jHir5Lyp99xKQ/viewform';
-
 // Tab names inside the Sheet 1 spreadsheet. The original "Bandwidth
 // Allocation" tab was renamed to "Current Month Tasks" and a new "All Web
 // Tasks Tab" was added alongside it for prior months' rows — /api/bandwidth-tasks
