@@ -53,9 +53,11 @@ const INDIVIDUAL_TIER_ROLES: Role[] = ['resource', 'WebTeam', 'MarketingTeam', '
 export function isAdminTierRole(role: Role): boolean {
   return ADMIN_TIER_ROLES.includes(role);
 }
-// Cybernext InHouse: everyone except the individual team members
+// Cybernext InHouse: Super Admin (Admin), Mod and High Management (HM) only — the
+// admin tier. Not for PMs, team admins or team members. The menu, the page and
+// /api/inhouse all use this one check.
 export function canSeeInHouse(role: Role): boolean {
-  return isAdminTierRole(role) || isPmTierRole(role) || isTeamAdminTierRole(role);
+  return isAdminTierRole(role);
 }
 export function isPmTierRole(role: Role): boolean {
   return PM_TIER_ROLES.includes(role);
@@ -168,8 +170,7 @@ const TOOLS_CHILDREN: NavLeaf[] = [
   { id: '14', subTab: 'ai', label: 'AI Tools' },
 ];
 // Cybernext's own portfolio: websites we built / manage, and our case studies.
-// Read-only. For admins, PMs and team admins only — not for the Web / Marketing
-// team members (see canSeeInHouse, which the API and the page also use).
+// Read-only. HM / Admin / Mod only (see canSeeInHouse, which the API and the page also use).
 // NextBot ("coming soon" for now) is always the last sub-tab.
 const INHOUSE_BASE: NavLeaf[] = [
   { id: '17', subTab: 'websites', label: 'Websites' },
@@ -177,8 +178,6 @@ const INHOUSE_BASE: NavLeaf[] = [
   { id: '17', subTab: 'brand-kit', label: 'Brand Kit' },
 ];
 const INHOUSE_NEXTBOT: NavLeaf = { id: '17', subTab: 'nextbot', label: 'NextBot' };
-const INHOUSE_CHILDREN: NavLeaf[] = [...INHOUSE_BASE, INHOUSE_NEXTBOT];
-// Documentations is for HM / Admin / Mod only (the API also withholds it from everyone else)
 const INHOUSE_ADMIN_CHILDREN: NavLeaf[] = [
   ...INHOUSE_BASE,
   { id: '17', subTab: 'documentations', label: 'Documentations' },
@@ -207,7 +206,6 @@ const PM_WEB_ADMIN_NAV: NavItem[] = [
   { label: 'Marketing', children: MARKETING_NO_TASKS_ASSIGNED },
   { label: 'PM Projects', children: PM_PROJECTS_FULL },
   LEAVE_STATUS,
-  { label: 'Cybernext InHouse', children: INHOUSE_CHILDREN },
   { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 const PM_MARKETING_ADMIN_NAV: NavItem[] = [
@@ -215,7 +213,6 @@ const PM_MARKETING_ADMIN_NAV: NavItem[] = [
   { label: 'Marketing', children: MARKETING_FULL },
   { label: 'PM Projects', children: PM_PROJECTS_FULL },
   LEAVE_STATUS,
-  { label: 'Cybernext InHouse', children: INHOUSE_CHILDREN },
   { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 // legacy "pm" — like ADMIN_NAV but no Tasks Assigned at all, plus "My Projects"
@@ -224,7 +221,6 @@ const PM_LEGACY_NAV: NavItem[] = [
   { label: 'Marketing', children: MARKETING_NO_TASKS_ASSIGNED },
   { label: 'PM Projects', children: PM_PROJECTS_FULL },
   LEAVE_STATUS,
-  { label: 'Cybernext InHouse', children: INHOUSE_CHILDREN },
   { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 // WebAdmin — no Leave Status, no PM Projects; otherwise Web-only, except
@@ -233,7 +229,6 @@ const PM_LEGACY_NAV: NavItem[] = [
 const WEB_ADMIN_NAV: NavItem[] = [
   { label: 'Web', children: WEB_FULL },
   { label: 'Marketing', children: MARKETING_TASKS_OVERVIEW_ONLY },
-  { label: 'Cybernext InHouse', children: INHOUSE_CHILDREN },
   { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 // WebTeam / legacy "resource" — individual contributor, own team
@@ -247,7 +242,6 @@ const WEB_TEAM_NAV: NavItem[] = [
 const MARKETING_ADMIN_NAV: NavItem[] = [
   { label: 'Marketing', children: MARKETING_FULL },
   { label: 'Web', children: WEB_TASKS_OVERVIEW_ONLY },
-  { label: 'Cybernext InHouse', children: INHOUSE_CHILDREN },
   { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 // MarketingTeam — individual contributor, own team

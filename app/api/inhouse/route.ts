@@ -7,16 +7,15 @@ import { isAdminTierRole, canSeeInHouse } from '@/lib/auth';
 export const runtime = 'nodejs';
 
 // Cybernext InHouse: Websites, Case Studies, Brand Kit and Documentations, each
-// from its own tab of the portfolio spreadsheet. Read-only. Admins, PMs and team
-// admins get the first three; Documentations is for admin-tier roles (HM, Admin, Mod)
-// only, so it is left out of the response for everyone else, not just hidden.
+// from its own tab of the portfolio spreadsheet. Read-only, and only for the admin
+// tier (HM, Admin, Mod): everyone else gets a 403 (see canSeeInHouse).
 export async function GET(req: NextRequest) {
   const user = verifySession(req.cookies.get(COOKIE_NAME)?.value);
   if (!user) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Not for the Web / Marketing team members, only admins, PMs and team admins
+  // HM / Admin / Mod only
   if (!canSeeInHouse(user.role)) {
     return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
   }
