@@ -8,8 +8,6 @@
     "start": "next start",
     "lint": "eslint",
     "db:migrate": "tsx scripts/db/migrate.ts",
-    "db:import": "tsx scripts/db/import-from-sheets.ts",
-    "db:verify": "tsx scripts/db/verify.ts",
     "db:set-password": "tsx scripts/db/set-password.ts",
     "test:e2e": "playwright test"
   },
@@ -37,7 +35,6 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
-    "googleapis": "^171.4.0",
     "tailwindcss": "^4",
     "tsx": "^4.19.2",
     "typescript": "^5"

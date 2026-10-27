@@ -28,7 +28,7 @@ export interface Dataset {
   headers: string[];
 }
 
-// Tabs never imported or served: the old password tabs and notes.
+// Tab names never served: the old password tabs and notes from the sheets.
 export const IGNORED_TABS = new Set(['Sheet2', 'Sheet3', TAB_AVAILABILITY]);
 
 export const DATASETS: Dataset[] = [

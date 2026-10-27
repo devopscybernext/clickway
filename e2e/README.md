@@ -6,7 +6,7 @@ Browser tests that log in to the dashboard and use it the way people do, checkin
 
 ## Run
 
-1. Start the local database (WAMP's MySQL; the WAMP tray icon must be green). `.env.local` must point at it, with `npm run db:migrate` and `npm run db:import -- --yes` done once.
+1. Start the local database (WAMP's MySQL; the WAMP tray icon must be green). `.env.local` must point at it, with `npm run db:migrate` run and a copy of the live data loaded (see [docs/mysql-migration.md](../docs/mysql-migration.md#local-setup)); some checks expect real data, such as hundreds of tasks.
 2. Run the tests:
 
    ```bash
@@ -35,4 +35,4 @@ Useful options: `npx playwright test e2e/forms.spec.ts` (one file), `-g "Leave S
 | `forms.spec.ts` | Web and Marketing "Add Task", PM "Add New Project" and Leaderboard "Add Feedback": required questions enforced, "Other" answers and points grids, rows saved in each sheet's format, new tasks listed in Tasks Assigned, new projects in My Projects, feedback read back by the Leaderboard |
 | `editing.spec.ts` | Assigning a new task and changing its status in Tasks Assigned; Leave Status edit; Admin Portal name and role edits; each saved, logged in `change_log` and kept after reload |
 | `roles.spec.ts` | Team members, PMs and admins see only their own pages; the server refuses the rest |
-| `api.spec.ts` | Logged-out requests refused; old password tabs and the users table unreachable; form validation and once-only saving; Google Forms intake (Leaderboard) |
+| `api.spec.ts` | Logged-out requests refused; old password tabs and the users table unreachable; form validation and once-only saving; the retired Google Forms endpoint is gone |

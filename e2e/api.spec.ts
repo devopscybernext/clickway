@@ -62,26 +62,7 @@ test('entry forms validate answers and store a submission only once', async ({ r
   expect(Number(rows[0].n)).toBe(1);
 });
 
-test('Google Forms intake (Leaderboard form) stores responses once, in the sheet format', async ({ request }) => {
-  const secret = process.env.INTAKE_SECRET;
-  test.skip(!secret, 'INTAKE_SECRET is not set in .env.local');
-  const post = (body: object, key = secret) =>
-    request.post('/api/intake', { data: body, headers: { authorization: `Bearer ${key}` } });
-
-  expect((await post({}, 'wrong-secret')).status()).toBe(401);
-
-  const responseId = `e2e-lb-${randomUUID().slice(0, 8)}`;
-  const body = {
-    form: 'leaderboard', responseId, submittedAt: '2026-10-27T09:05:07Z', email: 'e2e-intake@example.invalid',
-    answers: { 'Select Resource': 'E2E Intake', 'Positive Feedback [Delivered before the deadline]': 'P10' },
-  };
-  expect(await (await post(body)).json()).toMatchObject({ success: true, duplicate: false });
-  expect(await (await post(body)).json()).toMatchObject({ success: true, duplicate: true });
-  const rows = await query<Record<string, string>[]>('SELECT * FROM leaderboard_feedback WHERE source_ref = ?', [`leaderboard:${responseId}`]);
-  expect(rows).toHaveLength(1);
-  expect(rows[0].timestamp).toBe('27/10/2026 14:35:07');
-  expect(rows[0].positive_feedback_delivered_before_the_deadline).toBe('P10');
-
-  const unknown = await post({ ...body, responseId: `${responseId}-x`, answers: { 'Renamed Question': 'x' } });
-  expect(unknown.status()).toBe(422);
+test('the retired Google Forms endpoint no longer accepts anything', async ({ request }) => {
+  const res = await request.post('/api/intake', { data: { form: 'leaderboard' }, headers: { authorization: 'Bearer x' } });
+  expect(res.status()).toBe(404);
 });

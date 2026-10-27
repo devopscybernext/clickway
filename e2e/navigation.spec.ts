@@ -17,6 +17,11 @@ const ADMIN_PAGES: [string, string?][] = [
 test('every admin page loads without errors', async ({ page }) => {
   const failures: string[] = [];
   page.on('pageerror', err => failures.push(`script error: ${err.message}`));
+  // React reports hydration and markup problems through console.error.
+  // Failed requests are already caught below.
+  page.on('console', msg => {
+    if (msg.type() === 'error' && !msg.text().startsWith('Failed to load resource')) failures.push(`console error: ${msg.text()}`);
+  });
   page.on('response', res => {
     if (res.url().includes('/api/') && res.status() >= 400) failures.push(`${res.status()} ${new URL(res.url()).pathname}`);
   });
