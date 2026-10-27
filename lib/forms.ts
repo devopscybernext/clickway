@@ -15,15 +15,20 @@ export type FieldType =
   | 'checkboxes'  // pick any number; allowOther adds "Other: ___"
   | 'text'        // one line
   | 'paragraph'   // several lines
-  | 'date';
+  | 'date'
+  | 'grid';       // one choice per row; each row is its own column, "Header [Row]"
 
 export interface FormField {
-  header: string;            // question title = column header in the table
+  header: string;            // question title = column header in the table (grid: the prefix)
   type: FieldType;
   required?: boolean;
-  options?: string[];
+  options?: string[];        // grid: the column choices
+  rows?: string[];           // grid only
   allowOther?: boolean;
 }
+
+// Column a grid row is stored in — the same name Google Forms gave it.
+export const gridKey = (header: string, row: string) => `${header} [${row}]`;
 
 export type DateOrder = 'dmy' | 'mdy';
 
@@ -48,7 +53,7 @@ const NEW_TASK_VALUES = {
   'Today Bucket Set': 'No Action Taken',
 };
 
-export type FormKey = 'web-task' | 'marketing-task' | 'pm-project';
+export type FormKey = 'web-task' | 'marketing-task' | 'pm-project' | 'leaderboard';
 
 // The PM spreadsheet's current-month tab (single tab, see lib/config.ts).
 export const TAB_PM_CURRENT = 'CurrentMonth';
@@ -151,15 +156,40 @@ export const ENTRY_FORMS: Record<FormKey, EntryFormDef> = {
       { header: 'Comments', type: 'paragraph' },
     ],
   },
+  // "Web Special Points" — manual points for the Leaderboard (P = plus,
+  // M = minus; see components/Leaderboard.tsx). The resource list is the
+  // current Web team: the Google Form's list misspelt Dhruv as "Dhurv" (so
+  // those points never counted) and still had members who have left.
+  'leaderboard': {
+    key: 'leaderboard',
+    title: 'Leaderboard Feedback',
+    sheetId: SHEET_IDS['1'],
+    tab: TAB_LEADERBOARD,
+    order: 'dmy',
+    emailHeader: 'Email address',
+    fields: [
+      { header: 'Select Resource', type: 'dropdown', required: true, options: ['Shubham', 'Lovepreet', 'Robin', 'Pawan', 'Dhruv', 'Akash'] },
+      { header: 'Project Name', type: 'text', required: true },
+      { header: 'Task Name/Topic', type: 'text' },
+      { header: 'Positive Feedback', type: 'grid', options: ['P5', 'P10', 'P15', 'P20', 'P25', 'P30'], rows: [
+        'Client gave positive feedback', 'Zero revisions needed on delivery', 'Delivered before the deadline',
+        'Helped team member/knowledge sharing', 'Took an urgent task outside the scope', 'Other Feedback'] },
+      { header: 'Negative Feedback', type: 'grid', options: ['M5', 'M10', 'M15', 'M20', 'M25', 'M30'], rows: [
+        'The client complained about the quality', 'Multiple revisions (poor quality)',
+        'Missed the deadline without communication', 'Task reassigned due to errors', 'Other Feedback'] },
+      { header: 'Keka Objectives Points', type: 'text' },
+      { header: 'Other Feedback ( Positive or Negative )', type: 'text' },
+    ],
+  },
 };
 
-// Google Forms targets still fed by Apps Script → /api/intake (the
-// Leaderboard feedback form has no dashboard form yet).
+// Google Forms that may still post through Apps Script → /api/intake while
+// they're being retired (every form now has a dashboard version).
 export const INTAKE_TARGETS: Record<string, { sheetId: string; tab: string; order: DateOrder; emailHeader: string; initialValues?: Record<string, string> }> = {
   'web-task':       ENTRY_FORMS['web-task'],
   'marketing-task': ENTRY_FORMS['marketing-task'],
   'pm-project':     ENTRY_FORMS['pm-project'],
-  'leaderboard':    { sheetId: SHEET_IDS['1'], tab: TAB_LEADERBOARD, order: 'dmy', emailHeader: 'Email address' },
+  'leaderboard':    ENTRY_FORMS['leaderboard'],
 };
 
 export type Answers = Record<string, string | string[]>;
@@ -167,14 +197,24 @@ export type Answers = Record<string, string | string[]>;
 const MAX_TEXT = 5000;
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-// Returns a message per field that needs fixing (empty object = valid).
+// The questions as stored: each grid row becomes its own single-choice
+// question keyed by its column name.
+function storedFields(def: EntryFormDef): FormField[] {
+  return def.fields.flatMap(f => f.type === 'grid'
+    ? (f.rows ?? []).map(row => ({ header: gridKey(f.header, row), type: 'dropdown' as const, options: f.options }))
+    : [f]);
+}
+
+// Returns a message per question that needs fixing (empty object = valid),
+// keyed by the stored question (grid rows by their own column name).
 // "Other" answers arrive as plain text that isn't one of the options.
 export function validateAnswers(def: EntryFormDef, answers: Answers): Record<string, string> {
   const errors: Record<string, string> = {};
+  const fields = storedFields(def);
   for (const key of Object.keys(answers)) {
-    if (!def.fields.some(f => f.header === key)) errors[key] = 'Unknown question';
+    if (!fields.some(f => f.header === key)) errors[key] = 'Unknown question';
   }
-  for (const f of def.fields) {
+  for (const f of fields) {
     const raw = answers[f.header];
     const values = (Array.isArray(raw) ? raw : raw === undefined ? [] : [raw]).map(v => String(v).trim()).filter(Boolean);
     if (values.length === 0) {
@@ -221,10 +261,10 @@ export function formatAnswer(value: string, order: DateOrder): string {
 }
 
 // Answers → cells: checkbox answers joined with ", " (as Google Sheets did),
-// dates in the sheet's order.
+// dates in the sheet's order, grid rows in their own columns.
 export function answersToValues(def: EntryFormDef, answers: Answers): Record<string, string> {
   const values: Record<string, string> = {};
-  for (const f of def.fields) {
+  for (const f of storedFields(def)) {
     const raw = answers[f.header];
     if (raw === undefined) continue;
     const list = (Array.isArray(raw) ? raw : [raw]).map(v => String(v).trim()).filter(Boolean);

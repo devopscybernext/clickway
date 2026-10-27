@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySession, COOKIE_NAME } from '@/lib/session';
 import { insertRow } from '@/lib/data/mysql';
-import { AuthUser, getNavItems, isNavParent, isPmTierRole } from '@/lib/auth';
+import { AuthUser, getNavItems, isNavParent, isPmTierRole, isIndividualTierRole } from '@/lib/auth';
 import { ENTRY_FORMS, FormKey, Answers, validateAnswers, answersToValues, formatTimestamp } from '@/lib/forms';
 
 export const runtime = 'nodejs';
@@ -11,13 +11,15 @@ export const runtime = 'nodejs';
 // sheet produced: timestamp in the sheet's format, the submitter's email.
 
 // Same rule as the sidebar: "Add Task" for a team only for users who have
-// that team's Add Task page; "Add New Project" only for PMs.
+// that team's Add Task page; "Add New Project" only for PMs; Leaderboard
+// feedback for users who see the Leaderboard, except individual team members
+// (so nobody awards themselves points).
 function canUseForm(user: AuthUser, key: FormKey): boolean {
   if (key === 'pm-project') return isPmTierRole(user.role);
+  const leaves = getNavItems(user).flatMap(item => (isNavParent(item) ? item.children : [item]));
+  if (key === 'leaderboard') return !isIndividualTierRole(user.role) && leaves.some(leaf => leaf.id === '7');
   const team = key === 'web-task' ? 'web' : 'marketing';
-  return getNavItems(user)
-    .flatMap(item => (isNavParent(item) ? item.children : [item]))
-    .some(leaf => leaf.id === '6' && leaf.team === team);
+  return leaves.some(leaf => leaf.id === '6' && leaf.team === team);
 }
 
 export async function POST(req: NextRequest) {

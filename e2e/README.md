@@ -32,7 +32,7 @@ Useful options: `npx playwright test e2e/forms.spec.ts` (one file), `-g "Leave S
 |---|---|
 | `auth.spec.ts` | Wrong password and unknown user refused; admins log in by username, others by email; session survives reload; sign out |
 | `navigation.spec.ts` | Every admin page (Web, Marketing, PM Projects, Leave Status, InHouse, Tools, Admin Portal) loads with no failed request and no script error; lists show database data; Refresh works |
-| `forms.spec.ts` | Web and Marketing "Add Task" and PM "Add New Project": required questions enforced, "Other" answers, rows saved in each sheet's format, new tasks listed in Tasks Assigned, new projects in My Projects |
+| `forms.spec.ts` | Web and Marketing "Add Task", PM "Add New Project" and Leaderboard "Add Feedback": required questions enforced, "Other" answers and points grids, rows saved in each sheet's format, new tasks listed in Tasks Assigned, new projects in My Projects, feedback read back by the Leaderboard |
 | `editing.spec.ts` | Assigning a new task and changing its status in Tasks Assigned; Leave Status edit; Admin Portal name and role edits; each saved, logged in `change_log` and kept after reload |
 | `roles.spec.ts` | Team members, PMs and admins see only their own pages; the server refuses the rest |
 | `api.spec.ts` | Logged-out requests refused; old password tabs and the users table unreachable; form validation and once-only saving; Google Forms intake (Leaderboard) |

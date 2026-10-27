@@ -151,7 +151,7 @@ Any MySQL 5.7+ or MariaDB 10.3+ works. WAMP includes both: **MySQL 8.3 on port 3
 
 ### Automated browser tests (Playwright)
 
-`npm run test:e2e` runs 21 browser tests against the local dashboard and database: login, every page for each role, all three entry forms, assigning and editing tasks, Leave Status, the Admin Portal, and the server's access rules. They clean up after themselves. See [e2e/README.md](../e2e/README.md). Run them before every deploy.
+`npm run test:e2e` runs 22 browser tests against the local dashboard and database: login, every page for each role, all four entry forms, assigning and editing tasks, Leave Status, the Admin Portal, and the server's access rules. They clean up after themselves. See [e2e/README.md](../e2e/README.md). Run them before every deploy.
 
 ### Manual checklist (in the browser)
 
@@ -169,13 +169,16 @@ Any MySQL 5.7+ or MariaDB 10.3+ works. WAMP includes both: **MySQL 8.3 on port 3
 
 ### Dashboard forms (replace the Google Forms)
 
-"Add Task" (Web and Marketing) and "Add New Project" are the dashboard's own forms. They save straight to MySQL through `/api/forms`, under the logged-in user's email. The questions, options, "Other" choices and required flags were copied from the Google Forms (`lib/forms.ts`). Each answer is stored in the column, and the date format, the Google Form's linked sheet used, so every screen reads the rows exactly as before.
+All four entry forms are the dashboard's own: "Add Task" (Web and Marketing), "Add New Project", and Leaderboard "Add Feedback". They save straight to MySQL through `/api/forms`, under the logged-in user's email. The questions, options, "Other" choices, grids and required flags were copied from the Google Forms (`lib/forms.ts`). Each answer is stored in the column, and the date format, the Google Form's linked sheet used, so every screen reads the rows exactly as before.
 
 | Form | Who can use it | Stored in |
 |---|---|---|
 | Web "Add Task" | Users whose menu has Web → Add Task | `web_tasks`, tab *Current Month Tasks* |
 | Marketing "Add Task" | Users whose menu has Marketing → Add Task | `marketing_tasks`, tab *Current Month Tasks* |
 | "Add New Project" (PM Projects) | PMs | `pm_projects`, tab *CurrentMonth* |
+| Leaderboard "+ Add Feedback" ("Web Special Points") | Users who see the Leaderboard, except individual team members (no self-awarded points) | `leaderboard_feedback`; each grid row (e.g. *Positive Feedback [Delivered before the deadline]*) is its own column, as before |
+
+The Leaderboard form's resource list is the current Web team (Shubham, Lovepreet, Robin, Pawan, Dhruv, Akash). The Google Form misspelt Dhruv as "Dhurv", so points given to "Dhurv" never counted, and it still listed Manpreet and Vinay, who have left.
 
 The server checks the same permissions as the menu, rejects missing required answers and values outside a dropdown's options, and stores a submission once even if the button is clicked twice.
 
@@ -185,18 +188,18 @@ The server checks the same permissions as the menu, rejects missing required ans
 
 **To change a form's questions or options** (for example, a new project name), edit that form in `lib/forms.ts`. The question title must stay equal to the table column's header. A new question needs its column added in `lib/data/datasets.ts`, then `npm run db:migrate`.
 
-Once these forms are live, the three Google Forms below (web, marketing, PM) are no longer used and can be deleted.
+**No Google Form is needed any more.** All four can be deleted; see [Deleting the Google Sheets and Google Forms](#d-deleting-the-google-sheets-and-google-forms).
 
-### Google Forms still in use: Leaderboard feedback
+### Retired: Google Forms → `/api/intake` (Apps Script)
 
-The Leaderboard feedback form has no dashboard version yet. Until it does, it sends responses to MySQL through a small Apps Script that posts to `/api/intake`. The script also works for the other three forms while they're still in use. The response is stored exactly as the form's linked sheet would have shown it: same columns, the sheet's own timestamp and date format, checkbox answers joined with `, `, and grid questions as `Question [Row]`.
+While the Google Forms were being replaced, an Apps Script on each form could send responses to MySQL through `/api/intake`. Nothing needs it now. Remove any Apps Script triggers you added, and once the forms are deleted, `/api/intake` and `INTAKE_SECRET` can be removed too. The details below are kept for reference until then.
 
 | Form | Form ID | `FORM_KEY` | Stored in |
 |---|---|---|---|
-| Leaderboard feedback | not linked in the code: open the Web Team Sheet → **Form → Go to live form** | `leaderboard` | `leaderboard_feedback` |
-| Web team "Add task" (being replaced) | `1FAIpQLSfBDYMZ6trWVeDVRhqz2AGUpcAfzlItvHTQLhUu8Ooly9h7YA` | `web-task` | `web_tasks`, tab *Current Month Tasks* |
-| Marketing "Add task" (being replaced) | `1FAIpQLSdja_uZyhdM9hBSyjQjQ_ZB0ahKzF3JwRdXIAEofxM9RTnFeA` | `marketing-task` | `marketing_tasks`, tab *Current Month Tasks* |
-| PM "Add New Project" (being replaced) | `1FAIpQLSfPmN8478aHnHljROGhnmgwg5PoEcCozIWi0jHir5Lyp99xKQ` | `pm-project` | `pm_projects`, tab *CurrentMonth* |
+| Leaderboard feedback ("Web Special Points") | `1FAIpQLScIrsQLe83p7OSVWesD2Ky_uv-39YxCBPufGlGzP92YU-5pKw` | `leaderboard` | `leaderboard_feedback` |
+| Web team "Add task" | `1FAIpQLSfBDYMZ6trWVeDVRhqz2AGUpcAfzlItvHTQLhUu8Ooly9h7YA` | `web-task` | `web_tasks`, tab *Current Month Tasks* |
+| Marketing "Add task" | `1FAIpQLSdja_uZyhdM9hBSyjQjQ_ZB0ahKzF3JwRdXIAEofxM9RTnFeA` | `marketing-task` | `marketing_tasks`, tab *Current Month Tasks* |
+| PM "Add New Project" | `1FAIpQLSfPmN8478aHnHljROGhnmgwg5PoEcCozIWi0jHir5Lyp99xKQ` | `pm-project` | `pm_projects`, tab *CurrentMonth* |
 
 Safety:
 - The endpoint requires `INTAKE_SECRET`.
@@ -273,7 +276,7 @@ function send_(response) {
 Already done on the server: `MYSQL_*` settings, `db:migrate` and a trial import.
 
 1. Check that the server's `.env.local` has a non-empty `INTAKE_SECRET`, and keep `GOOGLE_PRIVATE_KEY` there until step B.2 is done.
-2. Install the Apps Script on all 4 forms (see [Google Forms still in use](#google-forms-still-in-use-leaderboard-feedback)), without the trigger.
+2. Install the Apps Script on all 4 forms (see [Retired: Google Forms → `/api/intake`](#retired-google-forms--apiintake-apps-script); only needed during the move), without the trigger.
 
 ### B. Switch (pick a quiet time, about 15 minutes)
 
@@ -302,11 +305,11 @@ Already done on the server: `MYSQL_*` settings, `db:migrate` and a trial import.
 
 ### D. Deleting the Google Sheets and Google Forms
 
-Nothing in the dashboard reads Google Sheets, and the dashboard's own forms replace the web, marketing and PM Google Forms. Before deleting:
+Nothing in the dashboard reads Google Sheets, and the dashboard's own forms replace all four Google Forms. Before deleting:
 
-1. **Download a backup** of each of the 8 spreadsheets (**File → Download → Microsoft Excel**), and of each form's responses. Keep them somewhere safe; once Google's trash is emptied they can't be recovered.
-2. **Keep the Leaderboard feedback form**, and the *Leaderboard* tab its responses also go to, until that form has a dashboard version. Deleting it now would stop new feedback.
-3. Delete the spreadsheets and the web, marketing and PM forms in Google Drive. Leave them in the trash for about 30 days.
+1. **Turn off *Accepting responses*** on all four Google Forms, and check each form's **Responses** for anything submitted after the final import. Those exist only in Google; re-enter them through the dashboard.
+2. **Download a backup** of each of the 8 spreadsheets (**File → Download → Microsoft Excel**), and of each form's responses. Keep them somewhere safe; once Google's trash is emptied they can't be recovered.
+3. Delete the 8 spreadsheets and the 4 forms in Google Drive. Leave them in the trash for about 30 days.
 4. Delete the Google service account in Google Cloud Console, and remove `GOOGLE_*` from the server and Vercel settings. After that, `npm run db:import` and `db:verify` no longer work, which is expected; they were only for the move.
 
 ### Rollback

@@ -315,6 +315,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [showAddProjectForm, setShowAddProjectForm] = useState(false);
   // Freeze the page behind the Add New Project popup.
   useBodyScrollLock(showAddProjectForm);
+  const [showFeedbackForm, setShowFeedbackForm] = useState(false);
+  useBodyScrollLock(showFeedbackForm);
   // My Projects has two views: the full table, and the report-filling table.
   const [myProjectsView, setMyProjectsView] = useState<'all' | 'report'>('all');
   const [teamBandwidthSubTab, setTeamBandwidthSubTab] = useState<Team>(lockedTeamBandwidthTeam ?? 'web');
@@ -1408,6 +1410,18 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               className="cn-card rounded-lg p-4 sm:p-8 border transition-colors"
               style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
             >
+              {/* Manual points — everyone but individual team members (no self-awarded points) */}
+              {!isIndividual && (
+                <div className="flex justify-end mb-4">
+                  <button
+                    onClick={() => setShowFeedbackForm(true)}
+                    className="px-4 py-2 text-sm font-semibold rounded-lg cursor-pointer transition-colors"
+                    style={{ background: 'var(--cn-accent)', color: '#fff' }}
+                  >
+                    + Add Feedback
+                  </button>
+                </div>
+              )}
               <Leaderboard
                 bandwidthData={activeBandwidthData}
                 bandwidthHeaders={bandwidthHeaders}
@@ -1417,6 +1431,40 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 lbLoading={lbLoading}
               />
             </section>
+          )}
+
+          {/* ── Leaderboard feedback popup ── */}
+          {isLeaderboard && showFeedbackForm && !isIndividual && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              style={{ background: 'rgba(0,0,0,0.6)' }}
+              onClick={() => setShowFeedbackForm(false)}
+            >
+              <div
+                className="rounded-lg w-full flex flex-col"
+                style={{ background: 'var(--cn-bg-card)', maxWidth: 760, height: '85vh' }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between px-5 py-3 border-b" style={{ borderColor: 'var(--cn-border)' }}>
+                  <h2 className="font-semibold text-base" style={{ color: 'var(--cn-text-primary)' }}>Leaderboard Feedback</h2>
+                  <button
+                    onClick={() => setShowFeedbackForm(false)}
+                    aria-label="Close"
+                    className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors hover:opacity-80"
+                    style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 sm:p-5">
+                  <EntryForm
+                    formKey="leaderboard"
+                    compact
+                    onSubmitted={() => { fetchLb(); setTimeout(() => setShowFeedbackForm(false), 1500); }}
+                  />
+                </div>
+              </div>
+            </div>
           )}
         </main>
       </div>
