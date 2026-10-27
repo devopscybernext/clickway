@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { SheetData } from '@/lib/dataStore';
 import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, PM_BANDWIDTH_ALL_DATA_SHEET_ID, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, MARKETING_ASSIGNED_PERSONS, WEB_TEAM, TAB_BANDWIDTH, LEAVE_SHEET_ID, TAB_LEAVE, RANGE_LEAVE, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
 
-import { AuthUser, SheetId, Team, NavLeaf, getFirstNavLeaf, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, canSeeInHouse } from '@/lib/auth';
+import { AuthUser, SheetId, Team, NavLeaf, getFirstNavLeaf, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, canSeeInHouse, canAddLeaderboardFeedback } from '@/lib/auth';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import InHouse, { type InHouseSubTab } from './InHouse';
@@ -1410,8 +1410,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               className="cn-card rounded-lg p-4 sm:p-8 border transition-colors"
               style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
             >
-              {/* Manual points — everyone but individual team members (no self-awarded points) */}
-              {!isIndividual && (
+              {/* Manual points — Admin / HM / Mod, PMs and the Web Admin only */}
+              {canAddLeaderboardFeedback(user.role) && (
                 <div className="flex justify-end mb-4">
                   <button
                     onClick={() => setShowFeedbackForm(true)}
@@ -1434,7 +1434,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           )}
 
           {/* ── Leaderboard feedback popup ── */}
-          {isLeaderboard && showFeedbackForm && !isIndividual && (
+          {isLeaderboard && showFeedbackForm && canAddLeaderboardFeedback(user.role) && (
             <div
               className="fixed inset-0 z-50 flex items-center justify-center p-4"
               style={{ background: 'rgba(0,0,0,0.6)' }}

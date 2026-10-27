@@ -62,6 +62,13 @@ export function canSeeInHouse(role: Role): boolean {
 export function isPmTierRole(role: Role): boolean {
   return PM_TIER_ROLES.includes(role);
 }
+// Leaderboard "Add Feedback" (manual points): Admin / HM / Mod (and their legacy
+// aliases), the project managers (pm, PMWebAdmin, PMMarketingAdmin) and the Web
+// Admin. Not for the Marketing Admin or the team members. The button, the popup
+// and /api/forms all use this one check.
+export function canAddLeaderboardFeedback(role: Role): boolean {
+  return isAdminTierRole(role) || isPmTierRole(role) || role === 'WebAdmin';
+}
 export function isTeamAdminTierRole(role: Role): boolean {
   return TEAM_ADMIN_TIER_ROLES.includes(role);
 }
