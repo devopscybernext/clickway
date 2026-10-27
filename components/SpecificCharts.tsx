@@ -1072,21 +1072,21 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
             <div className="overflow-x-auto">
           <table className="text-xs table-fixed" style={{ width: '100%', minWidth: cardTableMinWidth }}>
             <colgroup>
-              {canCopy && <col style={{ width: '40px' }} />}  {/* Copy */}
-              {!groupByProject && <col style={{ width: '140px' }} />}  {/* Project — redundant when already shown as the group header */}
-              <col style={{ width: showMarketingCols ? '160px' : '220px' }} />  {/* Task */}
-              <col style={{ width: '70px' }} />   {/* Link */}
-              <col style={{ width: '70px' }} />   {/* Est. */}
-              {showTotalHours && <col style={{ width: '90px' }} />}  {/* Total Hours */}
-              <col style={{ width: '120px' }} />  {/* Task Daily Bucket */}
-              <col style={{ width: '150px' }} />  {/* Bucket Set */}
-              {showMarketingCols && <col style={{ width: '140px' }} />}  {/* Action Taken Today */}
-              {showMarketingCols && <col style={{ width: '160px' }} />}  {/* Performance Signal/Insights */}
-              {showMarketingCols && <col style={{ width: '110px' }} />}  {/* Blocker */}
-              {showMarketingCols && <col style={{ width: '110px' }} />}  {/* Next Steps */}
-              {showTimeLogged && <col style={{ width: '110px' }} />}  {/* Time Logged On AC */}
-              <col style={{ width: '140px' }} />  {/* Status */}
-              <col style={{ width: '160px' }} />  {/* PM Status */}
+              {canCopy && <col style={{ width: '40px' }} />}{/* Copy */}
+              {!groupByProject && <col style={{ width: '140px' }} />}{/* Project — redundant when already shown as the group header */}
+              <col style={{ width: showMarketingCols ? '160px' : '220px' }} />{/* Task */}
+              <col style={{ width: '70px' }} />{/* Link */}
+              <col style={{ width: '70px' }} />{/* Est. */}
+              {showTotalHours && <col style={{ width: '90px' }} />}{/* Total Hours */}
+              <col style={{ width: '120px' }} />{/* Task Daily Bucket */}
+              <col style={{ width: '150px' }} />{/* Bucket Set */}
+              {showMarketingCols && <col style={{ width: '140px' }} />}{/* Action Taken Today */}
+              {showMarketingCols && <col style={{ width: '160px' }} />}{/* Performance Signal/Insights */}
+              {showMarketingCols && <col style={{ width: '110px' }} />}{/* Blocker */}
+              {showMarketingCols && <col style={{ width: '110px' }} />}{/* Next Steps */}
+              {showTimeLogged && <col style={{ width: '110px' }} />}{/* Time Logged On AC */}
+              <col style={{ width: '140px' }} />{/* Status */}
+              <col style={{ width: '160px' }} />{/* PM Status */}
             </colgroup>
             <thead>
               <tr style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}>
