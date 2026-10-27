@@ -1259,8 +1259,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     currentUserEmail={user.email}
                     showFilter={isPmTier || isAdmin || isTeamAdmin}
                     canEditPmStatus={!isIndividual}
-                    canEditStatus={isIndividual}
-                    canCopy={isIndividual}
+                    canEditStatus={isIndividual || isTeamAdmin}
+                    canCopy={isIndividual || isTeamAdmin}
                     defaultFilter="me"
                     restrictPmStatusToOwn={isPmTier}
                     vinayQaMode={isVinay}
@@ -1286,8 +1286,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     currentUserEmail={user.email}
                     showFilter={isPmTier || isAdmin || isTeamAdmin}
                     canEditPmStatus={!isIndividual}
-                    canEditStatus={isIndividual}
-                    canCopy={isIndividual}
+                    canEditStatus={isIndividual || isTeamAdmin}
+                    canCopy={isIndividual || isTeamAdmin}
                     defaultFilter="me"
                     restrictPmStatusToOwn={isPmTier}
                   />
