@@ -349,7 +349,10 @@ function AssignedPersonSelect({ value, options, row, col, onStatusChange }: Omit
     <div className="flex items-center gap-1.5 min-w-0">
       {/* Avatar + name display */}
       <div className="relative flex items-center gap-1.5 min-w-0">
-        {current && <PersonCell name={current} />}
+        {current ? <PersonCell name={current} /> : (
+          // Unassigned (a new task): gives the invisible select something to sit over
+          <span className="text-xs font-medium whitespace-nowrap" style={{ color: 'var(--cn-accent)' }}>Assign…</span>
+        )}
         {/* Invisible select overlay so clicking the avatar opens it */}
         <select
           value={current}
@@ -359,6 +362,7 @@ function AssignedPersonSelect({ value, options, row, col, onStatusChange }: Omit
           className="absolute inset-0 opacity-0 cursor-pointer w-full disabled:cursor-not-allowed"
           style={{ zIndex: 1 }}
         >
+          {!current && <option value="" disabled>Assign…</option>}
           {options.map(opt => (
             <option key={opt} value={opt}>{opt}</option>
           ))}

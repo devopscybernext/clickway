@@ -643,8 +643,13 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const analyticsAvailHeaders = availHeaders;
   const analyticsOnStatusChange = analyticsTeam === 'web' ? handleBandwidthStatusChange : handleMarketingTeamChange;
 
-  // Tasks Assigned — same sort/search pipeline as searchFiltered, scoped to the selected team
-  const tasksAssignedTeamData = tasksAssignedTeam === 'web' ? webBandwidthData : marketingTeamData;
+  // Tasks Assigned — same sort/search pipeline as searchFiltered, scoped to the selected team.
+  // Web also lists tasks nobody is assigned to yet (new form submissions), so
+  // admins/PMs can assign them here — that step used to happen in the Google Sheet.
+  const webUnassignedData = resourceCol
+    ? activeBandwidthData.filter(r => String(r[resourceCol] ?? '').trim() === '')
+    : [];
+  const tasksAssignedTeamData = tasksAssignedTeam === 'web' ? [...webBandwidthData, ...webUnassignedData] : marketingTeamData;
   const tasksAssignedHeadersForSort = tasksAssignedTeam === 'web' ? bandwidthHeaders : marketingTeamHeaders;
   const tasksAssignedAvailData = tasksAssignedTeam === 'web' ? webAvailData : marketingAvailData;
   const tasksAssignedAvailHeaders = availHeaders;
@@ -918,7 +923,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 onStatusChange={tasksAssignedTeam === 'web' ? handleBandwidthStatusChange : handleMarketingTeamChange}
                 statusOptions={tasksAssignedTeam === 'marketing' ? MARKETING_STATUS_OPTIONS : undefined}
                 todayBucketSetOptions={tasksAssignedTeam === 'marketing' ? MARKETING_TODAY_BUCKET_SET_OPTIONS : undefined}
-                assignedPersonOptions={tasksAssignedTeam === 'marketing' ? MARKETING_ASSIGNED_PERSONS : undefined}
+                assignedPersonOptions={tasksAssignedTeam === 'marketing' ? MARKETING_ASSIGNED_PERSONS : WEB_TEAM}
                 readOnlyStatus
                 readOnlyPmStatus={isIndividual}
                 defaultPersonFilter={isIndividual ? user.displayName : undefined}

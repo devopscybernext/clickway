@@ -35,7 +35,18 @@ export interface EntryFormDef {
   order: DateOrder;          // the linked sheet's date format
   emailHeader: string;       // column that records who submitted
   fields: FormField[];
+  // Columns the form doesn't ask about but a new row starts with. Tasks
+  // start as "No Action Taken" (what the team set by hand in the sheet), so
+  // they pass Tasks Assigned's default filters and show up right away.
+  initialValues?: Record<string, string>;
 }
+
+const NEW_TASK_VALUES = {
+  'Task Status Updation': 'No Action Taken',
+  'Task Daily Bucket': 'No Action Taken',
+  'PM Status': 'No Action Taken',
+  'Today Bucket Set': 'No Action Taken',
+};
 
 export type FormKey = 'web-task' | 'marketing-task' | 'pm-project';
 
@@ -52,6 +63,7 @@ export const ENTRY_FORMS: Record<FormKey, EntryFormDef> = {
     tab: TAB_BANDWIDTH,
     order: 'dmy',
     emailHeader: 'Email address',
+    initialValues: NEW_TASK_VALUES,
     fields: [
       { header: 'Project Name', type: 'choice', required: true, allowOther: true, options: [
         'Cybernext', 'Vigora Bloom', 'IHE', 'YDB', 'Strongsuit', 'Sean Doyle Windows', 'KataZoom', 'Studio Amelia',
@@ -76,6 +88,7 @@ export const ENTRY_FORMS: Record<FormKey, EntryFormDef> = {
     tab: TAB_MARKETING_TASKS,
     order: 'mdy',
     emailHeader: 'Email Address',
+    initialValues: NEW_TASK_VALUES,
     fields: [
       { header: 'Project Name', type: 'choice', required: true, allowOther: true, options: [
         'Cybernext', 'Vigora Bloom', 'HEM Ankle Rehab', 'Steen Schotten', 'Lagant Google and LinkedIn Ads', 'YDB',
@@ -142,7 +155,7 @@ export const ENTRY_FORMS: Record<FormKey, EntryFormDef> = {
 
 // Google Forms targets still fed by Apps Script → /api/intake (the
 // Leaderboard feedback form has no dashboard form yet).
-export const INTAKE_TARGETS: Record<string, { sheetId: string; tab: string; order: DateOrder; emailHeader: string }> = {
+export const INTAKE_TARGETS: Record<string, { sheetId: string; tab: string; order: DateOrder; emailHeader: string; initialValues?: Record<string, string> }> = {
   'web-task':       ENTRY_FORMS['web-task'],
   'marketing-task': ENTRY_FORMS['marketing-task'],
   'pm-project':     ENTRY_FORMS['pm-project'],

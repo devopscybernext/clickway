@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Some answers need fixing', errors }, { status: 422 });
   }
 
-  const values = answersToValues(def, answers);
+  const values = { ...def.initialValues, ...answersToValues(def, answers) };
   values['Timestamp'] = formatTimestamp(new Date(), def.order, process.env.FORM_TIMEZONE || 'Asia/Kolkata');
   values[def.emailHeader] = user.email ?? '';
 
