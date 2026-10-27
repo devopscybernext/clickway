@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ENTRY_FORMS, FormKey, FormField, Answers, validateAnswers } from '@/lib/forms';
+import { ENTRY_FORMS, FormKey, FormField, Answers, validateAnswers, gridKey } from '@/lib/forms';
 
 // One of the dashboard's entry forms (lib/forms.ts) — replaces the embedded
 // Google Form. Submits to /api/forms, which stores the row in MySQL.
@@ -23,16 +23,25 @@ interface FieldState {
   value: string;      // choice/dropdown/text/paragraph/date ("__other__" when Other is picked)
   checked: string[];  // checkboxes
   other: string;      // the "Other: ___" text
+  grid: Record<string, string>; // grid: row → chosen column
 }
 
 const emptyState = (fields: FormField[]): Record<string, FieldState> =>
-  Object.fromEntries(fields.map(f => [f.header, { value: '', checked: [], other: '' }]));
+  Object.fromEntries(fields.map(f => [f.header, { value: '', checked: [], other: '', grid: {} }]));
+
+// A grid's errors are keyed by its rows' own columns ("Header [Row]").
+const fieldError = (f: FormField, errors: Record<string, string>): string | undefined =>
+  f.type === 'grid'
+    ? Object.entries(errors).find(([k]) => k.startsWith(`${f.header} [`))?.[1]
+    : errors[f.header];
 
 function toAnswers(fields: FormField[], state: Record<string, FieldState>): Answers {
   const answers: Answers = {};
   for (const f of fields) {
     const s = state[f.header];
-    if (f.type === 'checkboxes') {
+    if (f.type === 'grid') {
+      for (const [row, v] of Object.entries(s.grid)) if (v) answers[gridKey(f.header, row)] = v;
+    } else if (f.type === 'checkboxes') {
       const list = s.checked.filter(v => v !== OTHER);
       if (s.checked.includes(OTHER) && s.other.trim()) list.push(s.other.trim());
       if (list.length) answers[f.header] = list;
@@ -80,7 +89,8 @@ export default function EntryForm({ formKey, onSubmitted, compact = false }: {
     if (Object.keys(found).length) {
       setErrors(found);
       setMessage({ kind: 'error', text: 'Please fix the highlighted questions.' });
-      document.getElementById(ids[Object.keys(found)[0]] ?? '')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const first = def.fields.find(f => fieldError(f, found));
+      if (first) document.getElementById(ids[first.header])?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
     setSubmitting(true);
@@ -113,7 +123,7 @@ export default function EntryForm({ formKey, onSubmitted, compact = false }: {
       {def.fields.map(f => {
         const s = state[f.header];
         const id = ids[f.header];
-        const err = errors[f.header];
+        const err = fieldError(f, errors);
         return (
           <fieldset key={f.header} id={id} className="rounded-lg p-3 sm:p-4 space-y-2 min-w-0"
             style={{ border: `1px solid ${err ? '#ef4444' : 'var(--cn-border)'}`, background: 'var(--cn-bg-card)' }}>
@@ -159,6 +169,46 @@ export default function EntryForm({ formKey, onSubmitted, compact = false }: {
                     </label>
                   );
                 })}
+              </div>
+            )}
+
+            {f.type === 'grid' && (
+              <div className="overflow-x-auto">
+                <table className="text-sm w-full" style={{ color: 'var(--cn-text-primary)' }}>
+                  <thead>
+                    <tr>
+                      <th className="text-left font-medium py-1 pr-3" style={{ color: 'var(--cn-text-muted)' }}><span className="sr-only">Row</span></th>
+                      {f.options!.map(col => (
+                        <th key={col} className="font-semibold px-1.5 py-1 text-center text-xs" style={{ color: 'var(--cn-text-muted)' }}>{col}</th>
+                      ))}
+                      <th><span className="sr-only">Clear</span></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {f.rows!.map((row, ri) => (
+                      <tr key={row} className="border-t" style={{ borderColor: 'var(--cn-border)' }}>
+                        <td className="py-1.5 pr-3 min-w-[160px]">{row}</td>
+                        {f.options!.map((col, ci) => (
+                          <td key={col} className="text-center px-1.5">
+                            <input type="radio" id={`${id}-r${ri}-c${ci}`} name={`${id}-r${ri}`} aria-label={`${row}: ${col}`}
+                              checked={s.grid[row] === col}
+                              onChange={() => update(f.header, { grid: { ...s.grid, [row]: col } })}
+                              style={{ accentColor: 'var(--cn-accent)' }} />
+                          </td>
+                        ))}
+                        <td className="pl-1.5">
+                          {s.grid[row] && (
+                            <button type="button" className="text-xs cursor-pointer" style={{ color: 'var(--cn-text-muted)' }}
+                              aria-label={`Clear ${row}`}
+                              onClick={() => { const next = { ...s.grid }; delete next[row]; update(f.header, { grid: next }); }}>
+                              Clear
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
 

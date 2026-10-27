@@ -101,7 +101,7 @@ google-sheets-dashboard/
 
 ## Data storage: MySQL
 
-All data lives in MySQL; Google Sheets is no longer connected, and tasks and projects are added through the dashboard's own forms (`/api/forms`); the Leaderboard Google Form still reaches MySQL through `/api/intake`. Setup, the one-time import from Google Sheets, the Google Forms script and the Cloudways go-live steps are in [docs/mysql-migration.md](docs/mysql-migration.md).
+All data lives in MySQL; Google Sheets and Google Forms are no longer used. Tasks, projects and Leaderboard points are added through the dashboard's own forms (`/api/forms`). Setup, the one-time import from Google Sheets, the Cloudways go-live steps and how to retire the Google files are in [docs/mysql-migration.md](docs/mysql-migration.md).
 
 ## Switching to Different Sheets
 

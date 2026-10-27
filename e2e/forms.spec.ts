@@ -133,6 +133,48 @@ test('PM "Add New Project": the project is saved and appears in My Projects', as
   await expect(page.getByText(project).first()).toBeVisible();
 });
 
+test('Leaderboard "Add Feedback": grid points are saved in their own columns and listed', async ({ page }) => {
+  await login(page, USERS.admin);
+  await openPage(page, 'Web', 'Leaderboard');
+  await page.getByRole('button', { name: '+ Add Feedback' }).click();
+  await expect(page.getByRole('heading', { name: 'Leaderboard Feedback' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Submit' }).click();
+  await expect(page.getByText('This question is required')).toHaveCount(2);
+
+  const project = uniqueMark('LB Project');
+  await input(page, 'leaderboard', 0).selectOption('Pawan');
+  await input(page, 'leaderboard', 1).fill(project);
+  await input(page, 'leaderboard', 2).fill('E2E topic');
+  await page.getByLabel('Delivered before the deadline: P10').check();
+  await page.getByLabel('Task reassigned due to errors: M5').check();
+  // Pick one, then take it back with "Clear"
+  await page.getByLabel('Client gave positive feedback: P5').check();
+  await page.getByRole('button', { name: 'Clear Client gave positive feedback' }).click();
+  await expect(page.getByLabel('Client gave positive feedback: P5')).not.toBeChecked();
+  await input(page, 'leaderboard', 5).fill('P5');
+  await page.getByRole('button', { name: 'Submit' }).click();
+  await expect(page.getByRole('heading', { name: 'Leaderboard Feedback' })).toBeHidden();
+
+  const row = await waitForDb(async () => (await query<Row[]>('SELECT * FROM leaderboard_feedback WHERE project_name = ?', [project]))[0], 'leaderboard row');
+  expect(row).toMatchObject({
+    sheet_tab: 'Leaderboard',
+    email_address: USERS.admin.email,
+    select_resource: 'Pawan',
+    task_name_topic: 'E2E topic',
+    positive_feedback_delivered_before_the_deadline: 'P10',
+    negative_feedback_task_reassigned_due_to_errors: 'M5',
+    positive_feedback_client_gave_positive_feedback: '',
+    keka_objectives_points: 'P5',
+  });
+  expect(row.timestamp).toMatch(DMY_TS);
+
+  // The Leaderboard reads it back (its data source)
+  const lb = await (await page.request.get(`/api/data?sheetId=${encodeURIComponent(row.sheet_id)}&range=${encodeURIComponent("'Leaderboard'!A1:Z10000")}`,
+    { headers: { 'sec-fetch-mode': 'cors', 'sec-fetch-dest': 'empty' } })).json();
+  expect(lb.data.some((r: Row) => r['Project Name'] === project && r['Positive Feedback [Delivered before the deadline]'] === 'P10')).toBe(true);
+});
+
 test('"Other" picked but left empty is flagged', async ({ page }) => {
   await login(page, USERS.admin);
   await openPage(page, 'Web', 'Add Task');
