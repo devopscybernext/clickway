@@ -2,7 +2,6 @@
 //   npm run db:set-password -- <username>
 //   npm run db:set-password -- <username> --create --role WebTeam --name "Full Name" --email name@cybernext.io
 // The password is asked for twice and never shown or passed on the command line.
-// (With DATA_SOURCE=sheets, users still live in the UserDetails spreadsheet.)
 import './env';
 import readline from 'readline';
 import bcrypt from 'bcryptjs';

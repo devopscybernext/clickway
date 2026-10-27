@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { SheetData } from '@/lib/googleSheets';
+import { SheetData } from '@/lib/dataStore';
 import { Trophy, RefreshCw } from 'lucide-react';
 import { memberColor } from '@/lib/memberColors';
 import { AuthUser, isAdminTierRole } from '@/lib/auth';

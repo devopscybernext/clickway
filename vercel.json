@@ -1,0 +1,9 @@
+{
+  "redirects": [
+    {
+      "source": "/:path*",
+      "destination": "https://phpstack-994179-6749812.cloudwaysapps.com/:path*",
+      "permanent": false
+    }
+  ]
+}

@@ -4,7 +4,7 @@ import {
   PartyPopper, CalendarDays, Sparkles, Flag, Palette, Flame, Moon, TreePine,
   Feather, BookOpen, Sun, Gift, Star, type LucideIcon,
 } from 'lucide-react';
-import { SheetData } from '@/lib/googleSheets';
+import { SheetData } from '@/lib/dataStore';
 
 interface Holiday {
   name: string;

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { ExternalLink, Sparkles, Briefcase, Hammer, Search, X } from 'lucide-react';
-import { SheetData } from '@/lib/googleSheets';
+import { SheetData } from '@/lib/dataStore';
 
 type FocusFilter = 'All' | 'Management' | 'Production';
 type PriceFilter = 'All' | 'Free' | 'Freemium' | 'Premium';

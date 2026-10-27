@@ -3,7 +3,7 @@
 // data layer returns them). Prints where a difference is, never the values.
 //   npm run db:verify
 import './env';
-import * as sheets from '../../lib/data/sheets';
+import * as sheets from './googleSheets';
 import * as db from '../../lib/data/mysql';
 import { DATASETS, IGNORED_TABS, findDataset } from '../../lib/data/datasets';
 import { SheetResult } from '../../lib/data/rows';

@@ -1,7 +1,7 @@
 'use client';
 
 import { BarChart2, TrendingUp, TrendingDown, Hash } from 'lucide-react';
-import { SheetData } from '@/lib/googleSheets';
+import { SheetData } from '@/lib/dataStore';
 
 interface StatsCardsProps {
   data: SheetData[];

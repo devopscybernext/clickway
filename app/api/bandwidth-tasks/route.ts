@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySession, COOKIE_NAME } from '@/lib/session';
-import { fetchSheetData, fetchSheetTabNames, SheetData } from '@/lib/googleSheets';
+import { fetchSheetData, fetchSheetTabNames, SheetData } from '@/lib/dataStore';
 import { SHEET_IDS, TAB_BANDWIDTH, TAB_AVAILABILITY, TAB_QA_TESTING, TAB_LEADERBOARD } from '@/lib/config';
 
 export const runtime = 'nodejs';

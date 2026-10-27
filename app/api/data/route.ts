@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchSheetData } from '@/lib/googleSheets';
+import { fetchSheetData } from '@/lib/dataStore';
 import { verifySession, COOKIE_NAME } from '@/lib/session';
 import { isReadableRange } from '@/lib/sheetAccess';
 import { isDirectBrowserNavigation } from '@/lib/blockDirectAccess';

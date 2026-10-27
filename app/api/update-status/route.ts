@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySession, COOKIE_NAME } from '@/lib/session';
-import { updateSheetCell, DataError } from '@/lib/googleSheets';
+import { updateSheetCell, DataError } from '@/lib/dataStore';
 import { isWritableTab } from '@/lib/sheetAccess';
 
 export const runtime = 'nodejs';

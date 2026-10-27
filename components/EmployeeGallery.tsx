@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { SheetData } from '@/lib/googleSheets';
+import { SheetData } from '@/lib/dataStore';
 import { X, Clock, Calendar, CalendarDays, CheckCircle2 } from 'lucide-react';
 import { memberColor } from '@/lib/memberColors';
 import { PersonStats } from './Leaderboard';

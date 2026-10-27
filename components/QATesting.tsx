@@ -2,7 +2,7 @@
 
 import { useEffect, useState, ChangeEvent, useCallback } from 'react';
 import { Copy, Check, Search, X, Trash2 } from 'lucide-react';
-import { SheetData } from '@/lib/googleSheets';
+import { SheetData } from '@/lib/dataStore';
 import { totalTimeRow, totalRowHtml, totalRowText } from '@/lib/copyTotals';
 import { memberColor, memberPhoto } from '@/lib/memberColors';
 
