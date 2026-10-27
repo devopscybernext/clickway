@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Pencil } from 'lucide-react';
-import { SheetData } from '@/lib/googleSheets';
+import { SheetData } from '@/lib/dataStore';
 import { memberPhoto } from '@/lib/memberColors';
 
 interface Props {

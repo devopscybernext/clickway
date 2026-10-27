@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySession, COOKIE_NAME } from '@/lib/session';
-import { fetchSheetData, fetchSheetTabNames } from '@/lib/googleSheets';
+import { fetchSheetData, fetchSheetTabNames } from '@/lib/dataStore';
 import { INHOUSE_SHEET_ID } from '@/lib/config';
 import { isAdminTierRole, canSeeInHouse } from '@/lib/auth';
 

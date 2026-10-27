@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { fetchSheetData } from '@/lib/googleSheets';
+import { fetchSheetData } from '@/lib/dataStore';
 import { USER_DETAILS_SHEET_ID, RANGE_USERS } from '@/lib/config';
 import { signSession, COOKIE_NAME } from '@/lib/session';
 import { MOD_ENABLED, Role, AuthUser, isAdminTierRole } from '@/lib/auth';

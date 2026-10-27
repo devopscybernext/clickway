@@ -6,7 +6,7 @@
 // edits made in the dashboard since — hence the --yes guard.
 import './env';
 import { closePool, ensureSchema, getPool } from '../../lib/data/mysql';
-import { fetchRawValues, fetchSheetTabNames } from '../../lib/data/sheets';
+import { fetchRawValues, fetchSheetTabNames } from './googleSheets';
 import { DATASETS, Dataset, IGNORED_TABS, columnName, findDataset } from '../../lib/data/datasets';
 import { normalizeHeaders } from '../../lib/data/rows';
 

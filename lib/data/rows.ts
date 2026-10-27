@@ -32,10 +32,11 @@ export function normalizeHeaders(raw: unknown[], renameDuplicates = false): stri
   return headers;
 }
 
-// Same cell conversion for both data sources: numeric-looking text (commas
+// Cell conversion the screens were built on: numeric-looking text (commas
 // allowed) becomes a number, everything else stays text. __row is the row's
-// write-back handle — the sheet row number for Google Sheets, the primary key
-// for MySQL — so callers pass it straight back to updateSheetCell().
+// write-back handle — its MySQL id — so callers pass it straight back to
+// updateSheetCell(). (The one-time import check converts Google Sheets rows
+// with this same function, so both can be compared.)
 export function toRow(headers: string[], cells: unknown[], rowHandle: number): SheetData {
   const obj: SheetData = {};
   headers.forEach((header, i) => {

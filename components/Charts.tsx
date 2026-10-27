@@ -10,7 +10,7 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   CartesianGrid, Tooltip, Legend,
 } from 'recharts';
-import { SheetData } from '@/lib/googleSheets';
+import { SheetData } from '@/lib/dataStore';
 import { ChartType } from './ChartSelector';
 
 const COLORS = [

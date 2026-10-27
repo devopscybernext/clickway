@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronDown as ChevDown, ChevronLeft, ChevronRight, Copy, Check, Pencil, Send } from 'lucide-react';
-import { SheetData } from '@/lib/googleSheets';
+import { SheetData } from '@/lib/dataStore';
 import { totalTimeRow, totalRowHtml, totalRowText } from '@/lib/copyTotals';
 import { STATUS_COLORS, formatHHMM, toHM, DURATION_HOUR_OPTIONS, DURATION_MINUTE_OPTIONS, hhmmToDecimalHours, addLoggedToTotal } from './SpecificCharts';
 

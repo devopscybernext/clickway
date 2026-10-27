@@ -3,7 +3,7 @@
 import { createPortal } from 'react-dom';
 import { useEffect, useState } from 'react';
 import { Copy, FileDown, Check, Pencil, X } from 'lucide-react';
-import { SheetData } from '@/lib/googleSheets';
+import { SheetData } from '@/lib/dataStore';
 import { parseHHMM, formatHHMM, formatHoursClock } from './SpecificCharts';
 import ClampedText from './ClampedText';
 import { totalTimeRow, totalRowHtml, totalRowText } from '@/lib/copyTotals';

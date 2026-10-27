@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
-import { SheetData } from '@/lib/googleSheets';
+import { SheetData } from '@/lib/dataStore';
 
 const PAGE_SIZE = 50;
 

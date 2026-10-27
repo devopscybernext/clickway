@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Gauge, CalendarClock, Target, CalendarRange, Hourglass, MessageSquareWarning, FileText, FileSpreadsheet, type LucideIcon } from 'lucide-react';
-import { SheetData } from '@/lib/googleSheets';
+import { SheetData } from '@/lib/dataStore';
 import { WEB_TEAM, MARKETING_ASSIGNED_PERSONS } from '@/lib/config';
 import { TEAM_LABELS, buildProductivityTasks, formatRange, summarise, type ReportTeam } from '@/lib/productivity';
 import { downloadProductivityPdf } from '@/lib/productivityPdf';

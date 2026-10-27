@@ -1,6 +1,5 @@
 import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import { dataSource } from '@/lib/googleSheets';
 import { insertRow } from '@/lib/data/mysql';
 import { findDataset } from '@/lib/data/datasets';
 import {
@@ -9,9 +8,9 @@ import {
 
 export const runtime = 'nodejs';
 
-// Google Forms → MySQL. With DATA_SOURCE=mysql the forms no longer write to a
-// spreadsheet the dashboard reads, so an Apps Script on each form posts every
-// new response here (docs/mysql-migration.md has the script). The row is
+// Google Forms → MySQL. The dashboard no longer reads the forms' linked
+// spreadsheets, so an Apps Script on each form posts every new response here
+// (docs/mysql-migration.md has the script). The row is
 // stored exactly as the form's linked sheet would have shown it: same
 // columns, same timestamp/date format, checkbox answers joined with ", ".
 
@@ -64,10 +63,6 @@ export async function POST(req: NextRequest) {
   if (!secretMatches(req.headers.get('authorization'))) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }
-  if (dataSource() !== 'mysql') {
-    return NextResponse.json({ success: false, error: 'Form intake is only used with DATA_SOURCE=mysql' }, { status: 409 });
-  }
-
   let body: { form?: string; responseId?: string; submittedAt?: string; email?: string; answers?: Record<string, unknown> };
   try {
     body = await req.json();

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySession, COOKIE_NAME } from '@/lib/session';
-import { fetchSheetData } from '@/lib/googleSheets';
+import { fetchSheetData } from '@/lib/dataStore';
 import { USER_DETAILS_SHEET_ID, RANGE_USERS } from '@/lib/config';
 import { isDirectBrowserNavigation } from '@/lib/blockDirectAccess';
 import { Role, isPmTierRole } from '@/lib/auth';

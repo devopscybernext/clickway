@@ -4,11 +4,11 @@ import {
   TAB_USERS, TAB_LEAVE, TAB_NEWS, TAB_HOLIDAY, TAB_AI_TOOLS, TAB_LEADERBOARD, TAB_QA_TESTING, TAB_AVAILABILITY,
 } from '../config';
 
-// Every spreadsheet tab the dashboard reads, mapped to a MySQL table. With
-// DATA_SOURCE=mysql the routes keep asking for (spreadsheet id, tab) exactly
-// as before — the ids in lib/config.ts become plain dataset keys — and get
-// back the same headers, in the same order, so column indexes the UI sends
-// for edits still line up.
+// Every dataset the dashboard uses, mapped to a MySQL table. The data came
+// from Google Sheets, and the routes still ask for (spreadsheet id, tab) as
+// they always did — the ids in lib/config.ts are now just dataset keys — and
+// get back the same headers, in the same order, so column indexes the UI
+// sends for edits still line up.
 //
 // A source with tab '*' takes every tab of that spreadsheet not claimed by a
 // more specific source (e.g. Sheet 1's task tabs, but not Leaderboard or

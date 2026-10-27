@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySession, COOKIE_NAME } from '@/lib/session';
-import { fetchSheetData, updateSheetCell, dataSource, DataError } from '@/lib/googleSheets';
+import { fetchSheetData, updateSheetCell, DataError } from '@/lib/dataStore';
 import { USER_DETAILS_SHEET_ID, RANGE_USERS, TAB_USERS } from '@/lib/config';
 import { isAdminTierRole } from '@/lib/auth';
 import { isDirectBrowserNavigation } from '@/lib/blockDirectAccess';
@@ -32,8 +32,8 @@ export async function GET(req: NextRequest) {
   const displayNameCol = headers.find(h => h.toLowerCase() === 'display name');
   const emailCol = headers.find(h => h.toLowerCase() === 'email');
 
-  // row is the user's write-back handle (__row — the sheet row number, or the
-  // MySQL id) — needed so an edit here lands on exactly the right user.
+  // row is the user's write-back handle (__row, the MySQL id) — needed so an
+  // edit here lands on exactly the right user.
   const users = data
     .map(r => ({
       row: Number(r.__row),
@@ -54,9 +54,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { row, field, value } = await req.json() as { row?: number; field?: string; value?: string };
-  // In Sheets, row 1 is the header row; MySQL ids start at 1.
-  const minRow = dataSource() === 'sheets' ? 2 : 1;
-  if (!row || row < minRow || !field || value === undefined) {
+  if (!row || row < 1 || !field || value === undefined) {
     return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
   }
   if (!EDITABLE_FIELDS.includes(field as EditableField)) {
