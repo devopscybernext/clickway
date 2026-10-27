@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SheetData } from '@/lib/dataStore';
-import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, PM_BANDWIDTH_ALL_DATA_SHEET_ID, PM_PROJECT_FORM_URL, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, MARKETING_ASSIGNED_PERSONS, WEB_TEAM, TAB_BANDWIDTH, LEAVE_SHEET_ID, TAB_LEAVE, RANGE_LEAVE, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
+import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, PM_BANDWIDTH_ALL_DATA_SHEET_ID, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, MARKETING_ASSIGNED_PERSONS, WEB_TEAM, TAB_BANDWIDTH, LEAVE_SHEET_ID, TAB_LEAVE, RANGE_LEAVE, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
 
 import { AuthUser, SheetId, Team, NavLeaf, getFirstNavLeaf, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, canSeeInHouse } from '@/lib/auth';
 import Sidebar from './Sidebar';
@@ -23,6 +23,7 @@ import ProjectReport from './ProjectReport';
 import Reports from './Reports';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import LeaveStatus from './LeaveStatus';
+import EntryForm from './EntryForm';
 import AdminPortal from './AdminPortal';
 import { AlertCircle, Sparkles, ChevronUp, ChevronDown, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
@@ -304,6 +305,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [tableKey, setTableKey] = useState(0);
   const [formSubmitted, setFormSubmitted] = useState(false);
+  // Bumped after an entry form is submitted, so the PM and Marketing data
+  // reload right away and the new row shows up.
+  const [entryRefreshKey, setEntryRefreshKey] = useState(0);
   const [analysisSubTab, setAnalysisSubTab] = useState<'resources' | 'pm'>('resources');
   const [toolsSubTab, setToolsSubTab] = useState<'clock' | 'holiday' | 'ai'>('clock');
   const [inHouseSubTab, setInHouseSubTab] = useState<InHouseSubTab | 'nextbot'>('websites');
@@ -316,7 +320,6 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [teamBandwidthSubTab, setTeamBandwidthSubTab] = useState<Team>(lockedTeamBandwidthTeam ?? 'web');
   const [analyticsSubDept, setAnalyticsSubDept] = useState<SubDept>('all');
   const [analysisDateFilter, setAnalysisDateFilter] = useState<'all' | 'daily' | 'weekly' | 'monthly'>('all');
-  const iframeLoadCount = useRef(0);
 
   const intervalRef   = useRef<ReturnType<typeof setInterval> | null>(null);
   const lbIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -458,7 +461,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     fetchPmBandwidth();
     const id = setInterval(fetchPmBandwidth, REFRESH_INTERVAL);
     return () => clearInterval(id);
-  }, [canSeePmBandwidth]);
+  }, [canSeePmBandwidth, entryRefreshKey]);
 
   // Marketing Team — SEO/PPC/SMM tabs in their own spreadsheet, merged
   // server-side via /api/marketing-team (each row tagged with its sub-team)
@@ -474,7 +477,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     fetchMarketingTeam();
     const id = setInterval(fetchMarketingTeam, REFRESH_INTERVAL);
     return () => clearInterval(id);
-  }, [canSeeMarketingTeam]);
+  }, [canSeeMarketingTeam, entryRefreshKey]);
 
   // QA Testing data (Vinay's dedicated tab) — once on load, then every 160s.
   // Vinay, admin, and PM can see this tab (admin/PM read-only), so only fetch for them.
@@ -587,7 +590,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     if (leaf.id === '17' && leaf.subTab) setInHouseSubTab(leaf.subTab as InHouseSubTab | 'nextbot');
     setSearchTerm('');
     // tableKey intentionally NOT incremented here so filters persist across tab switches
-    if (leaf.id === '6') { iframeLoadCount.current = 0; setFormSubmitted(false); }
+    if (leaf.id === '6') setFormSubmitted(false);
   };
 
   const isSheet1           = selectedSheet === '1';
@@ -608,8 +611,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const isReport            = selectedSheet === '16';
   const isInHouse           = selectedSheet === '17';
 
-  // "Add New Project" form — single shared form, only shown to PM-tier users
-  const myProjectFormUrl = isPmTier ? PM_PROJECT_FORM_URL : undefined;
+  // "Add New Project" form — only shown to PM-tier users
+  const canAddProject = isPmTier;
 
   // ── Team roster filtering (Web/Marketing split for Team Bandwidth & Tasks Overview) ──
   const filterByRoster = (rows: SheetData[], rowHeaders: string[], roster: string[]) => {
@@ -700,13 +703,12 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
   const analysisFilteredBandwidthData = filterBandwidthByDate(activeBandwidthData, bandwidthHeaders, analysisDateFilter);
 
-  // ── iframe submission detection ───────────────────────────────────────────
-  const handleIframeLoad = () => {
-    iframeLoadCount.current += 1;
-    if (iframeLoadCount.current >= 2) {
-      setFormSubmitted(true);
-      setTimeout(() => setFormSubmitted(false), 6000);
-    }
+  // ── Entry form submitted: show the banner and reload so the row appears ──
+  const handleTaskSubmitted = () => {
+    setFormSubmitted(true);
+    setTimeout(() => setFormSubmitted(false), 6000);
+    fetchAll();
+    setEntryRefreshKey(k => k + 1);
   };
 
   // Apply admin theme for all users
@@ -1068,7 +1070,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               className="cn-card rounded-lg border transition-colors"
               style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
             >
-              {myProjectFormUrl && effectivePmBandwidthSubTab !== 'closed' && (
+              {canAddProject && effectivePmBandwidthSubTab !== 'closed' && (
                 <div className="flex items-center justify-end gap-3 px-4 sm:px-6 pt-4 sm:pt-5 pb-0">
                   <button
                     onClick={() => setShowAddProjectForm(true)}
@@ -1136,7 +1138,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           )}
 
           {/* ── Add New Project modal — PM's own intake form ── */}
-          {isPmBandwidth && showAddProjectForm && myProjectFormUrl && (
+          {isPmBandwidth && showAddProjectForm && canAddProject && (
             <div
               className="fixed inset-0 z-50 flex items-center justify-center p-4"
               style={{ background: 'rgba(0,0,0,0.6)' }}
@@ -1157,14 +1159,13 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     ✕
                   </button>
                 </div>
-                <iframe
-                  key={myProjectFormUrl}
-                  src={`${myProjectFormUrl}?embedded=true`}
-                  className="flex-1 w-full"
-                  style={{ border: 'none', borderRadius: '0 0 8px 8px' }}
-                >
-                  Loading…
-                </iframe>
+                <div className="flex-1 overflow-y-auto p-4 sm:p-5">
+                  <EntryForm
+                    formKey="pm-project"
+                    compact
+                    onSubmitted={() => { setEntryRefreshKey(k => k + 1); setTimeout(() => setShowAddProjectForm(false), 1500); }}
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -1303,18 +1304,12 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
             </section>
           )}
 
-          {/* ── Add Task (Google Form) ──────────────────────────────────────────── */}
+          {/* ── Add Task (task request form → MySQL) ──────────────────────────── */}
           {isAddTask && (
             <section
               className="cn-card rounded-lg p-3 sm:p-6 border transition-colors space-y-4"
               style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
             >
-              {(() => {
-              const addTaskFormUrl = addTaskTeam === 'web'
-                ? 'https://docs.google.com/forms/d/e/1FAIpQLSfBDYMZ6trWVeDVRhqz2AGUpcAfzlItvHTQLhUu8Ooly9h7YA'
-                : 'https://docs.google.com/forms/d/e/1FAIpQLSdja_uZyhdM9hBSyjQjQ_ZB0ahKzF3JwRdXIAEofxM9RTnFeA';
-              return (
-              <>
               {/* ── Success banner ── */}
               {formSubmitted && (
                 <div className="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium animate-pulse"
@@ -1325,9 +1320,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   🎉 Task submitted successfully! Your response has been recorded. The team will review and assign it shortly.
                 </div>
               )}
-              <div className="flex gap-6 items-start">
-                {/* ── Left: Info (40%) ── */}
-                <div className="space-y-5" style={{ flex: '0 0 50%' }}>
+              <div className="flex flex-col lg:flex-row gap-6 items-start">
+                {/* ── Left: Info ── */}
+                <div className="space-y-5 w-full lg:w-1/2 min-w-0">
 
                   {/* Introduction About Dashboard */}
                   <div>
@@ -1384,50 +1379,20 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     </ul>
                   </div>
 
-                  <div className="h-px" style={{ background: 'var(--cn-border)' }} />
-
-                  {/* Fallback Access */}
-                  <div className="rounded-lg px-3 py-3 space-y-2" style={{ background: 'rgba(254,74,35,0.06)', border: '1px solid rgba(254,74,35,0.15)' }}>
-                    <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>Need Help?</p>
-                    <p className="text-[11px] leading-snug" style={{ color: 'var(--cn-text-muted)' }}>If the dashboard is not displaying entries or the task request form is not loading, use the direct link below to access the form.</p>
-                    <div className="flex flex-col gap-1">
-                        <a
-                          href={`${addTaskFormUrl}/viewform`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1.5 text-[11px] font-medium transition-opacity hover:opacity-70"
-                          style={{ color: 'var(--cn-accent)' }}
-                        >
-                          <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                          Open Google Form
-                        </a>
-                    </div>
-                  </div>
-
                   {/* Copyright */}
                   <p className="text-[10px] text-center" style={{ color: 'var(--cn-text-faint)' }}>© Cybernext | Since 2014</p>
 
                 </div>
 
-                {/* ── Right: iframe (60%) ── */}
-                <div style={{ flex: '0 0 50%' }}>
-                  <iframe
+                {/* ── Right: task request form ── */}
+                <div className="w-full lg:w-1/2 min-w-0">
+                  <EntryForm
                     key={addTaskTeam}
-                    src={`${addTaskFormUrl}/viewform?embedded=true`}
-                    width="100%"
-                    style={{ height: '80vh', minHeight: 600, border: 'none', borderRadius: 8 }}
-                    frameBorder={0}
-                    marginHeight={0}
-                    marginWidth={0}
-                    onLoad={handleIframeLoad}
-                  >
-                    Loading…
-                  </iframe>
+                    formKey={addTaskTeam === 'web' ? 'web-task' : 'marketing-task'}
+                    onSubmitted={handleTaskSubmitted}
+                  />
                 </div>
               </div>
-              </>
-              );
-              })()}
             </section>
           )}
 
