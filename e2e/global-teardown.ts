@@ -1,7 +1,7 @@
 import { assertLocal, query } from './helpers';
 
 // Removes everything the tests created in the LOCAL database: the test
-// users, the rows they submitted through the forms and the intake endpoint,
+// users, the rows they submitted through the forms,
 // and the change-log entries of their edits. Edits to real rows are reverted
 // by the tests themselves.
 export default async function globalTeardown() {

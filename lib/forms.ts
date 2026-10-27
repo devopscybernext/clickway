@@ -183,15 +183,6 @@ export const ENTRY_FORMS: Record<FormKey, EntryFormDef> = {
   },
 };
 
-// Google Forms that may still post through Apps Script → /api/intake while
-// they're being retired (every form now has a dashboard version).
-export const INTAKE_TARGETS: Record<string, { sheetId: string; tab: string; order: DateOrder; emailHeader: string; initialValues?: Record<string, string> }> = {
-  'web-task':       ENTRY_FORMS['web-task'],
-  'marketing-task': ENTRY_FORMS['marketing-task'],
-  'pm-project':     ENTRY_FORMS['pm-project'],
-  'leaderboard':    ENTRY_FORMS['leaderboard'],
-};
-
 export type Answers = Record<string, string | string[]>;
 
 const MAX_TEXT = 5000;
