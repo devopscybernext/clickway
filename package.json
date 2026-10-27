@@ -10,7 +10,8 @@
     "db:migrate": "tsx scripts/db/migrate.ts",
     "db:import": "tsx scripts/db/import-from-sheets.ts",
     "db:verify": "tsx scripts/db/verify.ts",
-    "db:set-password": "tsx scripts/db/set-password.ts"
+    "db:set-password": "tsx scripts/db/set-password.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "axios": "^1.16.0",
@@ -28,6 +29,7 @@
   },
   "devDependencies": {
     "@next/env": "16.2.6",
+    "@playwright/test": "1.52.0",
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",

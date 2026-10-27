@@ -149,6 +149,10 @@ Any MySQL 5.7+ or MariaDB 10.3+ works. WAMP includes both: **MySQL 8.3 on port 3
 | `npm run build`, then `next start` **with the Google credentials removed**, running all of the above | All 45 checks pass; no Google code in the build output |
 | Typecheck, and lint of the new files | Clean |
 
+### Automated browser tests (Playwright)
+
+`npm run test:e2e` runs 21 browser tests against the local dashboard and database: login, every page for each role, all three entry forms, assigning and editing tasks, Leave Status, the Admin Portal, and the server's access rules. They clean up after themselves. See [e2e/README.md](../e2e/README.md). Run them before every deploy.
+
 ### Manual checklist (in the browser)
 
 - [ ] Log in as an admin, as a PM and as a team member (your normal passwords work, because the hashes were imported).
@@ -174,6 +178,10 @@ Any MySQL 5.7+ or MariaDB 10.3+ works. WAMP includes both: **MySQL 8.3 on port 3
 | "Add New Project" (PM Projects) | PMs | `pm_projects`, tab *CurrentMonth* |
 
 The server checks the same permissions as the menu, rejects missing required answers and values outside a dropdown's options, and stores a submission once even if the button is clicked twice.
+
+**New tasks and assigning them.** With Google Sheets, someone filled in a new task's Assigned Person, status and buckets by hand in the sheet. Now:
+- A new web or marketing task starts with Task Status, Daily Bucket, PM Status and Today Bucket Set set to **"No Action Taken"**, so it passes Tasks Assigned's default filters and shows up straight away.
+- **Web → Tasks Assigned also lists unassigned tasks.** Admins, PMs and team admins click **Edit Task**, then **Assign…** in the Assigned Person column, and pick a name. The Web team list is always offered. Marketing tasks are assigned in the form itself, as before.
 
 **To change a form's questions or options** (for example, a new project name), edit that form in `lib/forms.ts`. The question title must stay equal to the table column's header. A new question needs its column added in `lib/data/datasets.ts`, then `npm run db:migrate`.
 

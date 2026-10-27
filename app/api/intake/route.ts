@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
   // so a renamed question shows up as a failed Apps Script run — the response
   // stays in the form and can be resent once the column exists.
   const byHeader = new Map(ds.headers.map(h => [h.trim().toLowerCase(), h]));
-  const values: Record<string, string> = {};
+  const values: Record<string, string> = { ...form.initialValues };
   const unknown: string[] = [];
   for (const [question, raw] of Object.entries(body.answers)) {
     const header = byHeader.get(question.trim().toLowerCase());
