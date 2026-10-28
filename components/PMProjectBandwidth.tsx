@@ -864,6 +864,112 @@ function PmRowEditModal({ row, fields, kindOf, optionsFor, pendingHoursOf, onSav
   );
 }
 
+// Dropdown lists for the PM sheet's fixed-choice columns: the canonical lists
+// (matching the sheet's own data validation) unioned with anything already in
+// the data, so a value outside the current list still shows up.
+export function buildPmDropdownOptions(headers: string[], optionSourceData: SheetData[]): Record<string, string[]> {
+  const find = (pred: (h: string) => boolean) => headers.find(pred);
+  const departmentCol = find(h => h.toLowerCase() === 'department');
+  const statusCol = find(h => h.toLowerCase() === 'status');
+  const phaseCol = find(h => h.toLowerCase() === 'phase');
+  const yearCol = find(h => h.toLowerCase() === 'year');
+  const monthCol = find(h => h.toLowerCase() === 'month');
+  const upsellCol = find(h => h.toLowerCase().includes('cross-sell'));
+  const paymentStatusCol = find(h => h.toLowerCase().includes('payment status'));
+  const assignedCol = find(h => h.toLowerCase() === 'assigned');
+  const withExtras = (col: string | undefined, canonical: string[]) => {
+    if (!col) return canonical;
+    const extras = [...new Set(optionSourceData.map(r => String(r[col] ?? '').trim()).filter(Boolean))]
+      .filter(v => !canonical.includes(v));
+    return [...canonical, ...extras.sort()];
+  };
+  const opts: Record<string, string[]> = {};
+  if (departmentCol) opts[departmentCol] = withExtras(departmentCol, DEPARTMENT_OPTIONS);
+  if (statusCol) opts[statusCol] = withExtras(statusCol, STATUS_OPTIONS);
+  if (phaseCol) opts[phaseCol] = withExtras(phaseCol, PHASE_OPTIONS);
+  if (yearCol) {
+    const years = new Set([...YEAR_OPTIONS, ...withExtras(yearCol, YEAR_OPTIONS)]);
+    years.add(String(new Date().getFullYear()));
+    opts[yearCol] = [...years].sort((a, b) => Number(b) - Number(a));
+  }
+  if (monthCol) opts[monthCol] = MONTH_NAMES;
+  if (upsellCol) opts[upsellCol] = withExtras(upsellCol, UPSELL_OPTIONS);
+  if (paymentStatusCol) opts[paymentStatusCol] = withExtras(paymentStatusCol, PAYMENT_STATUS_OPTIONS);
+  // Assigned holds several comma-separated names per cell (e.g. "Dhruv,
+  // Robin, Shubham") — split before unioning, otherwise withExtras would
+  // add each whole multi-name cell as if it were one option.
+  if (assignedCol) {
+    const individualExtras = new Set<string>();
+    optionSourceData.forEach(r => {
+      String(r[assignedCol] ?? '').split(',').forEach(s => {
+        const name = s.trim();
+        if (name && !ASSIGNED_OPTIONS.includes(name)) individualExtras.add(name);
+      });
+    });
+    opts[assignedCol] = [...ASSIGNED_OPTIONS, ...[...individualExtras].sort()];
+  }
+  return opts;
+}
+
+// The "Edit Project" popup for one row, used by Current Month, Previous Months
+// and Closed Project. It holds EVERY column of the project — Year, Month and
+// the weekly / report fields included — each with the right kind of control;
+// only Timestamp and Email (who submitted the row) are left out. Changed
+// fields are written one by one through onCellChange.
+export function PmProjectEditPopup({ row, headers, optionSourceData, onCellChange, onClose }: {
+  row: SheetData;
+  headers: string[];
+  optionSourceData: SheetData[];
+  onCellChange: (row: SheetData, col: string, value: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const find = (pred: (h: string) => boolean) => headers.find(pred);
+  const timestampCol = find(h => h.toLowerCase().includes('timestamp'));
+  const emailCol = find(h => h.toLowerCase().includes('email'));
+  const assignedCol = find(h => h.toLowerCase() === 'assigned');
+  const totalHoursCol = find(h => h.toLowerCase() === 'total hours');
+  const acHoursCol = find(h => h.toLowerCase() === 'ac hours');
+  const currentMonthHoursCol = find(h => h.toLowerCase() === 'current month hours');
+  const riskMonthHoursCol = find(h => h.toLowerCase() === 'risk month hours');
+  const statusCol = find(h => h.toLowerCase() === 'status');
+  const paymentStatusCol = find(h => h.toLowerCase().includes('payment status'));
+  const commentsCol = find(h => h.toLowerCase().includes('comment'));
+  const milestonesCol = find(h => h.toLowerCase().includes('upcoming milestones'));
+  const dropdownOptions = useMemo(() => buildPmDropdownOptions(headers, optionSourceData), [headers, optionSourceData]);
+  const fields = headers.filter(h => h !== timestampCol && h !== emailCol && !/ \(\d+\)$/.test(h));
+  const isDurationCol = (h: string) => h === totalHoursCol || h === acHoursCol || h === currentMonthHoursCol || h === riskMonthHoursCol;
+  return (
+    <PmRowEditModal
+      row={row}
+      fields={fields}
+      kindOf={h =>
+        h === assignedCol ? 'assigned'
+        : dropdownOptions[h] ? 'select'
+        : isDateCol(h) ? 'date'
+        : isDurationCol(h) ? 'duration'
+        : (h === commentsCol || h === milestonesCol || LONG_TEXT_COLS.includes(h.toLowerCase())) ? 'textarea'
+        : 'text'}
+      optionsFor={h => dropdownOptions[h] ?? []}
+      pendingHoursOf={draft =>
+        totalHoursCol && currentMonthHoursCol
+          ? `${formatHoursClock(
+              parseDurationDecimal(draft[totalHoursCol]) -
+              (countsAsCurrent(draft as SheetData, statusCol, paymentStatusCol) ? parseDurationDecimal(draft[currentMonthHoursCol]) : 0)
+            )}h`
+          : null}
+      onSave={async changes => {
+        // One write per changed column, in order — a failure throws and
+        // leaves the popup open (earlier columns already saved stay saved).
+        for (const [col, val] of Object.entries(changes)) {
+          await onCellChange(row, col, val);
+        }
+        onClose();
+      }}
+      onCancel={onClose}
+    />
+  );
+}
+
 // Read-only "full details" popup for Current Month / Previous Months — a
 // header (project, status, PM, assigned, department/year/month), then the
 // project's fields grouped into divided sections of four, then the long-text
@@ -1392,40 +1498,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, pop
   // Dropdown columns — canonical lists (matching the sheet's actual data
   // validation) unioned with anything already in the data, so a value that
   // predates or falls outside the current list still shows up
-  const dropdownOptions = useMemo(() => {
-    const withExtras = (col: string | undefined, canonical: string[]) => {
-      if (!col) return canonical;
-      const extras = [...new Set(optionSourceData.map(r => String(r[col] ?? '').trim()).filter(Boolean))]
-        .filter(v => !canonical.includes(v));
-      return [...canonical, ...extras.sort()];
-    };
-    const opts: Record<string, string[]> = {};
-    if (departmentCol) opts[departmentCol] = withExtras(departmentCol, DEPARTMENT_OPTIONS);
-    if (statusCol) opts[statusCol] = withExtras(statusCol, STATUS_OPTIONS);
-    if (phaseCol) opts[phaseCol] = withExtras(phaseCol, PHASE_OPTIONS);
-    if (yearCol) {
-      const years = new Set([...YEAR_OPTIONS, ...withExtras(yearCol, YEAR_OPTIONS)]);
-      years.add(String(new Date().getFullYear()));
-      opts[yearCol] = [...years].sort((a, b) => Number(b) - Number(a));
-    }
-    if (monthCol) opts[monthCol] = MONTH_NAMES;
-    if (upsellCol) opts[upsellCol] = withExtras(upsellCol, UPSELL_OPTIONS);
-    if (paymentStatusCol) opts[paymentStatusCol] = withExtras(paymentStatusCol, PAYMENT_STATUS_OPTIONS);
-    // Assigned holds several comma-separated names per cell (e.g. "Dhruv,
-    // Robin, Shubham") — split before unioning, otherwise withExtras would
-    // add each whole multi-name cell as if it were one option.
-    if (assignedCol) {
-      const individualExtras = new Set<string>();
-      optionSourceData.forEach(r => {
-        String(r[assignedCol] ?? '').split(',').forEach(s => {
-          const name = s.trim();
-          if (name && !ASSIGNED_OPTIONS.includes(name)) individualExtras.add(name);
-        });
-      });
-      opts[assignedCol] = [...ASSIGNED_OPTIONS, ...[...individualExtras].sort()];
-    }
-    return opts;
-  }, [optionSourceData, departmentCol, statusCol, phaseCol, yearCol, monthCol, upsellCol, paymentStatusCol, assignedCol]);
+  const dropdownOptions = useMemo(() => buildPmDropdownOptions(headers, optionSourceData), [headers, optionSourceData]);
   const isDropdownCol = (h: string) =>
     h === departmentCol || h === yearCol || h === monthCol || h === statusCol || h === phaseCol ||
     h === upsellCol || h === paymentStatusCol || h === assignedCol;
@@ -2200,34 +2273,13 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, pop
       )}
 
       {popupRow && onCellChange && (
-        <PmRowEditModal
+        <PmProjectEditPopup
           key={String(popupRow['__id'] ?? '')}
           row={popupRow}
-          fields={tableCols.filter(h => h !== yearCol && h !== monthCol)}
-          kindOf={h =>
-            h === assignedCol ? 'assigned'
-            : isDropdownCol(h) ? 'select'
-            : isDateCol(h) ? 'date'
-            : isDurationCol(h) ? 'duration'
-            : (h === commentsCol || h === milestonesCol || LONG_TEXT_COLS.includes(h.toLowerCase())) ? 'textarea'
-            : 'text'}
-          optionsFor={h => dropdownOptions[h] ?? []}
-          pendingHoursOf={draft =>
-            totalHoursCol && currentMonthHoursCol
-              ? fmtHours(
-                  parseDurationDecimal(draft[totalHoursCol]) -
-                  (countsAsCurrent(draft as SheetData, statusCol, paymentStatusCol) ? parseDurationDecimal(draft[currentMonthHoursCol]) : 0)
-                )
-              : null}
-          onSave={async changes => {
-            // One write per changed column, in order — a failure throws and
-            // leaves the popup open (earlier columns already saved stay saved).
-            for (const [col, val] of Object.entries(changes)) {
-              await onCellChange(popupRow, col, val);
-            }
-            setPopupRow(null);
-          }}
-          onCancel={() => setPopupRow(null)}
+          headers={headers}
+          optionSourceData={optionSourceData}
+          onCellChange={onCellChange}
+          onClose={() => setPopupRow(null)}
         />
       )}
     </div>
