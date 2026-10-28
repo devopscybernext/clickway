@@ -1915,9 +1915,9 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
         )}
       </div>
       {bucketOptions.length > 0 && (
-        <MiniMultiSelect label="Task Daily Buckets" options={bucketOptions} selected={bucketFilter} onChange={setBucketFilter} />
+        <MiniMultiSelect label="Task Daily Buckets" emptyLabel="Daily Bucket" options={bucketOptions} selected={bucketFilter} onChange={setBucketFilter} />
       )}
-      <MiniMultiSelect label="PM Statuses" options={pmStatusOptions} selected={pmStatusFilter} onChange={setPmStatusFilter} alignRight />
+      <MiniMultiSelect label="PM Statuses" emptyLabel="PM Status" options={pmStatusOptions} selected={pmStatusFilter} onChange={setPmStatusFilter} alignRight />
       </div>
       )}
 
@@ -2184,8 +2184,10 @@ export function PmStatusOverview({ data, headers, pmUsers, layout = 'grid' }: {
 }
 
 // ─── Tiny multi-select dropdown (checkbox list) ────────────────────────────────
-function MiniMultiSelect({ label, options, selected, onChange, alignRight = false }: {
+function MiniMultiSelect({ label, options, selected, onChange, alignRight = false, emptyLabel }: {
   label: string; options: string[]; selected: string[]; onChange: (vals: string[]) => void;
+  /** button text when nothing is picked; defaults to "All <label>" */
+  emptyLabel?: string;
   /** open the list towards the left, for a dropdown sitting at the right edge */
   alignRight?: boolean;
 }) {
@@ -2204,7 +2206,7 @@ function MiniMultiSelect({ label, options, selected, onChange, alignRight = fals
     onChange(selected.includes(val) ? selected.filter(v => v !== val) : [...selected, val]);
 
   const btnLabel = selected.length === 0
-    ? `All ${label}`
+    ? (emptyLabel ?? `All ${label}`)
     : selected.length === 1
     ? selected[0]
     : `${selected.length} selected`;
