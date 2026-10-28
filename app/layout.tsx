@@ -5,6 +5,7 @@ import DisableDevTools from '@/components/DisableDevTools';
 export const metadata: Metadata = {
   title: 'Cybernext Bandwidth Allocation Sheet',
   description: 'Real-time bandwidth allocation dashboard by Cybernext',
+  robots: { index: false, follow: false, nocache: true },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
