@@ -1684,8 +1684,8 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, pop
   };
 
   // PM Summary cards act as a multi-select for the PM filter. When at least one is
-  // picked, the others fade to 20% opacity.
-  const PM_CARD_DIMMED_OPACITY = 0.2;
+  // picked, the others fade to 60% opacity.
+  const PM_CARD_DIMMED_OPACITY = 0.6;
   const selectedPms = filters['__pm'] ?? [];
   const pmCardsClickable = showPmCol && !hidePmFilter;
   const togglePmCard = (name: string) => {
