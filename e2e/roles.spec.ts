@@ -8,7 +8,7 @@ import { USERS, login } from './helpers';
 test('a team member sees only their own pages, and is refused elsewhere', async ({ page }) => {
   await login(page, USERS.team);
   const nav = page.getByRole('navigation');
-  for (const hidden of ['Marketing', 'PM Projects', 'Leave Status', 'Cybernext InHouse']) {
+  for (const hidden of ['Marketing', 'PM Projects', 'Leave Status']) {
     await expect(nav.getByRole('button', { name: hidden, exact: true })).toHaveCount(0);
   }
   if (!(await nav.getByRole('button', { name: 'Team Bandwidth', exact: true }).isVisible())) {
@@ -25,7 +25,15 @@ test('a team member sees only their own pages, and is refused elsewhere', async 
 
   const api = page.request;
   const json = { 'sec-fetch-mode': 'cors', 'sec-fetch-dest': 'empty' };
-  expect((await api.get('/api/inhouse', { headers: json })).status()).toBe(403);
+  // Cybernext InHouse is open to everyone, but a team member only gets Brand Kit
+  await nav.getByRole('button', { name: 'Cybernext InHouse', exact: true }).click();
+  await expect(nav.getByRole('button', { name: 'Brand Kit', exact: true })).toBeVisible();
+  for (const hidden of ['Websites', 'Case Studies', 'Documentations', 'NextBot']) {
+    await expect(nav.getByRole('button', { name: hidden, exact: true })).toHaveCount(0);
+  }
+  const inhouse = await api.get('/api/inhouse', { headers: json });
+  expect(inhouse.status()).toBe(200);
+  expect(Object.keys(await inhouse.json()).sort()).toEqual(['brandKit', 'success']);
   expect((await api.get('/api/admin-users', { headers: json })).status()).toBe(401);
   const form = await api.post('/api/forms', { data: { form: 'web-task', submissionId: randomUUID(), answers: {} } });
   expect(form.status()).toBe(403);

@@ -53,11 +53,13 @@ const INDIVIDUAL_TIER_ROLES: Role[] = ['resource', 'WebTeam', 'MarketingTeam', '
 export function isAdminTierRole(role: Role): boolean {
   return ADMIN_TIER_ROLES.includes(role);
 }
-// Cybernext InHouse: Super Admin (Admin), Mod and High Management (HM) only — the
-// admin tier. Not for PMs, team admins or team members. The menu, the page and
-// /api/inhouse all use this one check.
-export function canSeeInHouse(role: Role): boolean {
-  return isAdminTierRole(role);
+// Cybernext InHouse: the tab is open to everyone, but only High Management (HM) and
+// Super Admin (Admin) — plus the legacy slugs that map to them — get Websites, Case
+// Studies, Documentations and NextBot. Everyone else (Mod, PMs, team admins, team
+// members) sees just Brand Kit. The menu, the page and /api/inhouse all use this one check.
+const INHOUSE_FULL_ROLES: Role[] = ['HM', 'Admin', 'admin', 'high', 'akash'];
+export function canSeeInHouseFull(role: Role): boolean {
+  return INHOUSE_FULL_ROLES.includes(role);
 }
 export function isPmTierRole(role: Role): boolean {
   return PM_TIER_ROLES.includes(role);
@@ -177,19 +179,19 @@ const TOOLS_CHILDREN: NavLeaf[] = [
   { id: '14', subTab: 'ai', label: 'AI Tools' },
 ];
 // Cybernext's own portfolio: websites we built / manage, and our case studies.
-// Read-only. HM / Admin / Mod only (see canSeeInHouse, which the API and the page also use).
+// Read-only. Everyone gets Brand Kit; the rest is HM / Admin only (see
+// canSeeInHouseFull, which the API and the page also use).
 // NextBot ("coming soon" for now) is always the last sub-tab.
-const INHOUSE_BASE: NavLeaf[] = [
+const INHOUSE_BRAND_KIT: NavLeaf = { id: '17', subTab: 'brand-kit', label: 'Brand Kit' };
+const INHOUSE_NEXTBOT: NavLeaf = { id: '17', subTab: 'nextbot', label: 'NextBot' };
+const INHOUSE_FULL_CHILDREN: NavLeaf[] = [
   { id: '17', subTab: 'websites', label: 'Websites' },
   { id: '17', subTab: 'case-studies', label: 'Case Studies' },
-  { id: '17', subTab: 'brand-kit', label: 'Brand Kit' },
-];
-const INHOUSE_NEXTBOT: NavLeaf = { id: '17', subTab: 'nextbot', label: 'NextBot' };
-const INHOUSE_ADMIN_CHILDREN: NavLeaf[] = [
-  ...INHOUSE_BASE,
+  INHOUSE_BRAND_KIT,
   { id: '17', subTab: 'documentations', label: 'Documentations' },
   INHOUSE_NEXTBOT,
 ];
+const INHOUSE_LIMITED: NavItem = { label: 'Cybernext InHouse', children: [INHOUSE_BRAND_KIT] };
 const LEAVE_STATUS: NavLeaf = { id: '2' };
 // User Details (Username/Role/Display Name/Email) editor — HM/Admin/Mod
 // (and their legacy aliases) only, never PM-tier/team-admin/individual
@@ -202,9 +204,11 @@ const ADMIN_NAV: NavItem[] = [
   { label: 'Marketing', children: MARKETING_FULL },
   { label: 'PM Projects', children: PM_PROJECTS_ADMIN },
   LEAVE_STATUS,
-  { label: 'Cybernext InHouse', children: INHOUSE_ADMIN_CHILDREN },
+  { label: 'Cybernext InHouse', children: INHOUSE_FULL_CHILDREN },
   { label: 'Tools', children: TOOLS_CHILDREN },
 ];
+// Mod — everything HM / Admin have, except InHouse is just Brand Kit
+const MOD_NAV: NavItem[] = ADMIN_NAV.map(item => (isNavParent(item) && item.label === 'Cybernext InHouse' ? INHOUSE_LIMITED : item));
 // PMWebAdmin / PMMarketingAdmin — full access everywhere except Tasks
 // Assigned, which stays pinned to their own team (see old
 // TASKS_ASSIGNED_TEAM_LOCK behavior this replaces).
@@ -213,6 +217,7 @@ const PM_WEB_ADMIN_NAV: NavItem[] = [
   { label: 'Marketing', children: MARKETING_NO_TASKS_ASSIGNED },
   { label: 'PM Projects', children: PM_PROJECTS_FULL },
   LEAVE_STATUS,
+  INHOUSE_LIMITED,
   { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 const PM_MARKETING_ADMIN_NAV: NavItem[] = [
@@ -220,6 +225,7 @@ const PM_MARKETING_ADMIN_NAV: NavItem[] = [
   { label: 'Marketing', children: MARKETING_FULL },
   { label: 'PM Projects', children: PM_PROJECTS_FULL },
   LEAVE_STATUS,
+  INHOUSE_LIMITED,
   { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 // legacy "pm" — like ADMIN_NAV but no Tasks Assigned at all, plus "My Projects"
@@ -228,6 +234,7 @@ const PM_LEGACY_NAV: NavItem[] = [
   { label: 'Marketing', children: MARKETING_NO_TASKS_ASSIGNED },
   { label: 'PM Projects', children: PM_PROJECTS_FULL },
   LEAVE_STATUS,
+  INHOUSE_LIMITED,
   { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 // WebAdmin — no Leave Status, no PM Projects; otherwise Web-only, except
@@ -236,11 +243,13 @@ const PM_LEGACY_NAV: NavItem[] = [
 const WEB_ADMIN_NAV: NavItem[] = [
   { label: 'Web', children: WEB_FULL },
   { label: 'Marketing', children: MARKETING_TASKS_OVERVIEW_ONLY },
+  INHOUSE_LIMITED,
   { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 // WebTeam / legacy "resource" — individual contributor, own team
 const WEB_TEAM_NAV: NavItem[] = [
   { label: 'Web', children: WEB_INDIVIDUAL },
+  INHOUSE_LIMITED,
   { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 // MarketingAdmin — no Leave Status, no PM Projects; otherwise
@@ -249,18 +258,20 @@ const WEB_TEAM_NAV: NavItem[] = [
 const MARKETING_ADMIN_NAV: NavItem[] = [
   { label: 'Marketing', children: MARKETING_FULL },
   { label: 'Web', children: WEB_TASKS_OVERVIEW_ONLY },
+  INHOUSE_LIMITED,
   { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 // MarketingTeam — individual contributor, own team
 const MARKETING_TEAM_NAV: NavItem[] = [
   { label: 'Marketing', children: MARKETING_INDIVIDUAL },
+  INHOUSE_LIMITED,
   { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 
 export const ROLE_NAV: Record<Role, NavItem[]> = {
   HM:    ADMIN_NAV,
   Admin: ADMIN_NAV,
-  Mod:   ADMIN_NAV,
+  Mod:   MOD_NAV,
   PMWebAdmin:       PM_WEB_ADMIN_NAV,
   PMMarketingAdmin: PM_MARKETING_ADMIN_NAV,
   WebAdmin:       WEB_ADMIN_NAV,
@@ -276,7 +287,7 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
   akash:    ADMIN_NAV,
   admin:    ADMIN_NAV,
   high:     ADMIN_NAV,
-  mod:      ADMIN_NAV,
+  mod:      MOD_NAV,
 };
 
 export const SHEET_LABELS: Record<SheetId, string> = {

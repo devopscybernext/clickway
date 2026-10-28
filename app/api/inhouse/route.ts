@@ -2,23 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifySession, COOKIE_NAME } from '@/lib/session';
 import { fetchSheetData, fetchSheetTabNames } from '@/lib/dataStore';
 import { INHOUSE_SHEET_ID } from '@/lib/config';
-import { isAdminTierRole, canSeeInHouse } from '@/lib/auth';
+import { canSeeInHouseFull } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 
 // Cybernext InHouse: Websites, Case Studies, Brand Kit and Documentations, each
-// from its own tab of the portfolio spreadsheet. Read-only, and only for the admin
-// tier (HM, Admin, Mod): everyone else gets a 403 (see canSeeInHouse).
+// from its own tab of the portfolio spreadsheet. Read-only. Everyone logged in gets
+// Brand Kit; Websites, Case Studies and Documentations are only sent to HM and Admin
+// (see canSeeInHouseFull) — for anyone else they are left out of the response.
 export async function GET(req: NextRequest) {
   const user = verifySession(req.cookies.get(COOKIE_NAME)?.value);
   if (!user) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }
 
-  // HM / Admin / Mod only
-  if (!canSeeInHouse(user.role)) {
-    return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
-  }
+  const full = canSeeInHouseFull(user.role);
 
   try {
     const tabs = await fetchSheetTabNames(INHOUSE_SHEET_ID);
@@ -36,9 +34,10 @@ export async function GET(req: NextRequest) {
       return { headers, data: data.filter(r => nameCol && String(r[nameCol] ?? '').trim() !== '') };
     };
 
-    const [websites, caseStudies, brandKit] = await Promise.all([load(websitesTab), load(caseStudiesTab), load(brandKitTab)]);
-    const documentations = isAdminTierRole(user.role) ? await load(documentationsTab) : undefined;
-    return NextResponse.json({ success: true, websites, caseStudies, brandKit, ...(documentations ? { documentations } : {}) });
+    const brandKit = await load(brandKitTab);
+    if (!full) return NextResponse.json({ success: true, brandKit });
+    const [websites, caseStudies, documentations] = await Promise.all([load(websitesTab), load(caseStudiesTab), load(documentationsTab)]);
+    return NextResponse.json({ success: true, websites, caseStudies, brandKit, documentations });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return NextResponse.json({ success: false, error: message }, { status: 500 });
