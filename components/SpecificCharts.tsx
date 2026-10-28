@@ -3418,8 +3418,12 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
   const rows = names.map(name => {
     // Closed tasks no longer count toward someone's bandwidth — a task
     // marked Task Closed shouldn't keep occupying their hours.
+    // Same set as Team Bandwidth and Tasks Overview: today + everyday tasks that are
+    // still with the resource, so a task already submitted to the PM / admin / client
+    // no longer counts toward their bandwidth.
+    const HANDED_OFF = ['submitted to client', 'submitted to pm', 'submitted to akash', 'submitted to admin'];
     const todayTasksOf = sheet1Data
-      .filter(r => String(r[resourceCol] ?? '').trim() === name && ['today', 'everyday'].includes(getBucket(r)) && !SKIP_STATUSES.includes(getStatus(r)));
+      .filter(r => String(r[resourceCol] ?? '').trim() === name && ['today', 'everyday'].includes(getBucket(r)) && !SKIP_STATUSES.includes(getStatus(r)) && !HANDED_OFF.includes(getStatus(r)));
     const displayHours = todayTasksOf.reduce((s, r) => s + getTime(r), 0);
     const loadHours = isWebMemberName(name) ? todayTasksOf.reduce((s, r) => s + remainingOf(getTime(r), getLogged(r)), 0) : displayHours;
 
