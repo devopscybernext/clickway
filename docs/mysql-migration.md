@@ -28,7 +28,6 @@ Every API route reads and writes through `lib/dataStore.ts`. Its functions keep 
 | `lib/sheetAccess.ts` | Allowlist: what the generic `/api/data` and `/api/update-status` routes may read and write |
 | `lib/forms.ts`, `components/EntryForm.tsx`, `app/api/forms/route.ts` | The entry forms |
 | `scripts/db/migrate.ts`, `scripts/db/set-password.ts` | `db:migrate`, `db:set-password` |
-| `vercel.json` | Sends visitors of the old Vercel deployment to the Cloudways site |
 
 The dataset ids in `lib/config.ts` are the old Google spreadsheet ids, kept as names. Each row remembers its dataset and tab (`sheet_id`, `sheet_tab`). That keeps the "current month" and "archive" split, and lets edits go back to the right place.
 
@@ -55,7 +54,7 @@ Every table also has `id` (permanent row id), `sheet_id` and `sheet_tab` (datase
 
 **Data columns are text, in the same format the sheets used.** Dates are mixed (`26/10/2026` for Web, `10/26/2026` for Marketing and PM), and hours are text like `12.50 hrs`. The screens parse these strings, and the entry forms write new rows in the same format. Converting columns to real `DATE` and number types can be a later improvement, one column at a time.
 
-To add a column, add its header to the right dataset in `lib/data/datasets.ts`, then run `npm run db:migrate`. That adds the column and never drops anything.
+To add a column, add its header to the right dataset in `lib/data/datasets.ts`, then run `npm run db:migrate` (locally; on the server the deploy runs it). That adds the column and never drops anything.
 
 ## Settings
 
@@ -131,7 +130,7 @@ The server checks the same permissions as the menu, rejects missing required ans
 
 `npm run test:e2e` runs 22 Playwright browser tests against the **local** dashboard and database, and refuses to run against anything else. They cover login, every page for each role, all four entry forms, assigning and editing tasks, Leave Status, the Admin Portal, and the server's access rules, and they clean up after themselves. See [e2e/README.md](../e2e/README.md).
 
-**Deploy:** run the tests locally, then merge to `main`. GitHub Actions deploys to Cloudways in about 2 minutes (`.github/workflows/deploy.yml`, which runs `~/deploy-dashboard.sh` on the server). If the change adds a column to `lib/data/datasets.ts`, run `npm run db:migrate` on the server afterwards. Over SSH, load Node first with `source ~/.bash_profile` if `npm` or `pm2` isn't found.
+**Deploy:** run the tests locally, then merge to `main`. GitHub Actions deploys to Cloudways in about 2 minutes (`.github/workflows/deploy.yml`, which runs `~/deploy-dashboard.sh` on the server). The script runs `npm run db:migrate` before restarting, so new columns are added automatically, and a failed step leaves the old version running. Over SSH, load Node first with `source ~/.bash_profile` if `npm` or `pm2` isn't found.
 
 ## Day-to-day tasks
 
@@ -170,9 +169,10 @@ UPDATE pm_projects SET sheet_id = '1QjLPmyVrzWpWIYoKKSsntwYAYFNGDRUyowvz9N8U25s'
 | Date | Step |
 |---|---|
 | 26 Oct 2026 | Hosting moved from Vercel to Cloudways; MySQL support added next to Google Sheets; access fix for `/api/data` and `/api/update-status` (any logged-in user could read the `Sheet2` plain-text password tabs) |
-| 27 Oct 2026 | Final copy of the 8 spreadsheets (17 tabs, 2,027 rows) into MySQL, verified cell by cell; the app switched to MySQL only; Vercel redirected to Cloudways |
+| 27 Oct 2026 | Final copy of the 8 spreadsheets (17 tabs, 2,027 rows) into MySQL, verified cell by cell; the app switched to MySQL only |
 | 27 Oct 2026 | The 4 Google Forms replaced by the dashboard's own forms; new tasks made visible and assignable in Tasks Assigned; Playwright tests added |
 | 27 Oct 2026 | The one-time import scripts, the `googleapis` package and the temporary Google Forms endpoint (`/api/intake`) removed |
+| 28 Oct 2026 | Vercel removed: the redirect from the old Vercel URL dropped; the Vercel project deleted |
 
 What changed for users compared with Google Sheets:
 - Every refresh shows the latest data, with no 60-second cache.
@@ -184,5 +184,5 @@ What changed for users compared with Google Sheets:
 1. Turn off *Accepting responses* on the 4 Google Forms. Re-enter through the dashboard anything submitted after the final copy (27 Oct 2026, morning).
 2. Download Excel backups of the 8 spreadsheets and the form responses, and keep them safe.
 3. Delete the 8 spreadsheets and 4 forms in Google Drive. Leave them in the trash for about 30 days.
-4. Delete the service account in Google Cloud Console, and remove any `GOOGLE_*` lines from the server's `.env.local` and Vercel's settings. Remove any Apps Script triggers added to the forms.
+4. Delete the service account in Google Cloud Console, and remove any `GOOGLE_*` lines from the server's `.env.local`. Remove any Apps Script triggers added to the forms.
 5. Make sure no copy of the `Sheet2` / `Sheet3` plain-text password tabs remains, and ask everyone to change their dashboard password.
