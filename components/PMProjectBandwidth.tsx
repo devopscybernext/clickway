@@ -1547,6 +1547,27 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, pop
     return rows;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, filters, filterCols, statusCol, phaseCol, milestonesCol, upsellCol, paymentStatusCol]);
+  // The rows without the PM filter: the PM Summary cards are built from these, so
+  // every PM keeps their card (and their own figures) while some are selected.
+  const filteredNoPm = useMemo(() => {
+    let rows = data;
+    filterCols.forEach(({ col }) => {
+      if (col === '__pm') return;
+      const selected = filters[col] ?? [];
+      if (selected.length > 0) rows = rows.filter(r => selected.includes(String(r[col] ?? '').trim()));
+    });
+    return rows;
+  }, [data, filters, filterCols]);
+  const scopedRowsNoPm = useMemo(() => {
+    let rows = data;
+    filterCols.forEach(({ col }) => {
+      if (col === '__pm' || attributeFilterCols.includes(col)) return;
+      const selected = filters[col] ?? [];
+      if (selected.length > 0) rows = rows.filter(r => selected.includes(String(r[col] ?? '').trim()));
+    });
+    return rows;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, filters, filterCols, statusCol, phaseCol, milestonesCol, upsellCol, paymentStatusCol]);
   const withScopedHours = (rowsFiltered: SheetData[], rowsScoped: SheetData[]) => {
     const counts = computeStatsFor(rowsFiltered, statsCols);
     const hours = computeStatsFor(rowsScoped, statsCols);
@@ -1599,22 +1620,22 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, pop
   // zero project rows yet, so a new PM shows up immediately at full
   // Bandwidth/Available instead of staying invisible until their first
   // submission.
-  const hasActiveFilter = Object.values(filters).some(v => v.length > 0);
+  const hasActiveFilter = Object.entries(filters).some(([k, v]) => k !== '__pm' && v.length > 0);
   const pmSummaries = useMemo(() => {
     if (!showPmCol) return [];
     const allNames = new Set(data.map(r => String(r['__pm'] ?? '').trim()).filter(Boolean));
     if (allNames.size <= 1) return [];
-    const fromFiltered = filtered.map(r => String(r['__pm'] ?? '').trim()).filter(Boolean);
+    const fromFiltered = filteredNoPm.map(r => String(r['__pm'] ?? '').trim()).filter(Boolean);
     const names = [...new Set(hasActiveFilter ? fromFiltered : [...fromFiltered, ...allPmNames])].sort();
     return names.map(name => ({
       name,
       ...withScopedHours(
-        filtered.filter(r => String(r['__pm'] ?? '').trim() === name),
-        scopedRows.filter(r => String(r['__pm'] ?? '').trim() === name)
+        filteredNoPm.filter(r => String(r['__pm'] ?? '').trim() === name),
+        scopedRowsNoPm.filter(r => String(r['__pm'] ?? '').trim() === name)
       ),
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, filtered, scopedRows, showPmCol, hasActiveFilter, allPmNames, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol]);
+  }, [data, filteredNoPm, scopedRowsNoPm, showPmCol, hasActiveFilter, allPmNames, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol]);
 
   const fmtHours = (n: number) => `${formatHoursClock(n)}h`;
 
@@ -1659,6 +1680,19 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, pop
 
   const handleFilter = (col: string, vals: string[]) => {
     setFilters(prev => ({ ...prev, [col]: vals }));
+    setPage(1);
+  };
+
+  // PM Summary cards act as a multi-select for the PM filter. When at least one is
+  // picked, the others fade to 20% opacity.
+  const PM_CARD_DIMMED_OPACITY = 0.2;
+  const selectedPms = filters['__pm'] ?? [];
+  const pmCardsClickable = showPmCol && !hidePmFilter;
+  const togglePmCard = (name: string) => {
+    setFilters(prev => {
+      const cur = prev['__pm'] ?? [];
+      return { ...prev, __pm: cur.includes(name) ? cur.filter(n => n !== name) : [...cur, name] };
+    });
     setPage(1);
   };
 
@@ -1873,8 +1907,22 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, pop
               // like "Bandwidth"/"Follow-up Due").
               const metricsGridCols = 'grid-cols-2';
               const workload = pmWorkloadStatus(pm.totalHours);
+              const isSelected = selectedPms.includes(pm.name);
+              const dimmed = pmCardsClickable && selectedPms.length > 0 && !isSelected;
               return (
-                <div key={pm.name} className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+                <div
+                  key={pm.name}
+                  className="rounded-xl border overflow-hidden transition-opacity"
+                  style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)', opacity: dimmed ? PM_CARD_DIMMED_OPACITY : 1, cursor: pmCardsClickable ? 'pointer' : undefined }}
+                  {...(pmCardsClickable ? {
+                    role: 'button',
+                    tabIndex: 0,
+                    'aria-pressed': isSelected,
+                    title: isSelected ? `Show all PMs again (click to unselect ${pm.name})` : `Show only ${pm.name}'s projects`,
+                    onClick: () => togglePmCard(pm.name),
+                    onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); togglePmCard(pm.name); } },
+                  } : {})}
+                >
                   <div className="flex items-center gap-2.5 px-3.5 pt-3.5 pb-3">
                     {photo ? (
                       <img src={photo} alt={pm.name} className="w-9 h-9 rounded-full object-cover shrink-0"
