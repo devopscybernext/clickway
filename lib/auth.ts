@@ -321,8 +321,17 @@ export function getSheetLabel(id: SheetId, role: Role): string {
 
 // QA Testing ('8') lives as a nested tab inside Vinay's Tasks Overview instead
 // of its own sidebar entry — admin still gets the standalone tab via ROLE_NAV.
+// The sidebar's top-level order, the same for every role (a role simply lacks the
+// items it can't open). Only the menu is sorted this way — the page a role lands on
+// after login still comes from ROLE_NAV's own first item (getFirstNavLeaf).
+const MENU_ORDER = ['PM Projects', 'Marketing', 'Web', 'Leave Status', 'Cybernext InHouse', 'Tools'];
+const menuRank = (item: NavItem): number => {
+  const label = isNavParent(item) ? item.label : SHEET_LABELS[item.id];
+  const i = MENU_ORDER.indexOf(label);
+  return i === -1 ? MENU_ORDER.length : i;
+};
 export function getNavItems(user: AuthUser): NavItem[] {
-  return ROLE_NAV[user.role];
+  return [...ROLE_NAV[user.role]].sort((a, b) => menuRank(a) - menuRank(b));
 }
 
 // The first actual page a role lands on — a role's first NavItem may be a
