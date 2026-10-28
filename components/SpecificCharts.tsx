@@ -1590,6 +1590,9 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
   const [openName, setOpenName] = useState<string | null>(null);
   const [pmFilter, setPmFilter] = useState<'all' | 'me' | 'today' | 'me-today' | 'flat' | 'qa'>(restrictToMine ? 'me' : vinayQaMode ? 'flat' : defaultFilter);
   const [search, setSearch] = useState('');
+  // Column filters next to the search box (empty = no filtering on that column)
+  const [bucketFilter, setBucketFilter] = useState<string[]>([]);
+  const [pmStatusFilter, setPmStatusFilter] = useState<string[]>([]);
 
   // Close all rows whenever the filter switches
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1780,23 +1783,42 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
       }).filter(row => row.pendingTasks.length > 0)
     : rows;
 
+  // Task Daily Bucket / PM Status dropdown options. Buckets come from the data
+  // (shown in the usual order, then anything unexpected); PM Status is the fixed list.
+  const BUCKET_ORDER = ['today', 'everyday', 'tomorrow', 'day after tomorrow', 'no action taken', 'submitted', 'to be expected'];
+  const titleCase = (v: string) => v.replace(/\b\w/g, c => c.toUpperCase());
+  const bucketOptions = [...new Set(rows.flatMap(r => r.pendingTasks.map(t => t.bucket.toLowerCase())).filter(Boolean))]
+    .sort((a, b) => {
+      const ia = BUCKET_ORDER.indexOf(a), ib = BUCKET_ORDER.indexOf(b);
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a.localeCompare(b);
+    })
+    .map(titleCase);
+  const pmStatusOptions = PM_STATUS_OPTIONS_RO;
+  const columnFiltersActive = bucketFilter.length > 0 || pmStatusFilter.length > 0;
+  const matchesColumnFilters = (t: ResourceRow['pendingTasks'][number]) =>
+    (bucketFilter.length === 0 || bucketFilter.some(b => b.toLowerCase() === t.bucket.toLowerCase())) &&
+    // A blank PM Status means nobody has acted yet, same as "No Action Taken"
+    (pmStatusFilter.length === 0 || pmStatusFilter.some(p => p.toLowerCase() === (t.pmStatus.trim().toLowerCase() || 'no action taken')));
+
   // Search by project, task name, status, PM status or bucket
   const searchQ = search.trim().toLowerCase();
   const matchesSearch = (t: ResourceRow['pendingTasks'][number], personName: string) =>
     !searchQ || [personName, t.task, t.project, t.status, t.pmStatus, t.bucket, t.bucketSet]
       .some(v => v.toLowerCase().includes(searchQ));
+  const narrowing = !!searchQ || columnFiltersActive;
+  const keepTask = (t: ResourceRow['pendingTasks'][number], personName: string) => matchesSearch(t, personName) && matchesColumnFilters(t);
 
-  const searchedRows = searchQ
+  const searchedRows = narrowing
     ? filteredRows
-        .map(row => ({ ...row, pendingTasks: row.pendingTasks.filter(t => matchesSearch(t, row.name)) }))
+        .map(row => ({ ...row, pendingTasks: row.pendingTasks.filter(t => keepTask(t, row.name)) }))
         .filter(row => row.pendingTasks.length > 0)
     : filteredRows;
 
-  const flatSearchedRows = searchQ
-    ? rows.map(row => ({ ...row, pendingTasks: row.pendingTasks.filter(t => matchesSearch(t, row.name)) }))
+  const flatSearchedRows = narrowing
+    ? rows.map(row => ({ ...row, pendingTasks: row.pendingTasks.filter(t => keepTask(t, row.name)) }))
     : rows;
 
-  if (!searchedRows.length && pmFilter === 'all' && !searchQ) return null;
+  if (!searchedRows.length && pmFilter === 'all' && !narrowing) return null;
 
   return (
     <div className="space-y-4">
@@ -1869,9 +1891,10 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
         </div>
       </div>
 
-      {/* Search — QA Testing has its own search bar, so skip this one for that tab */}
+      {/* Search + column filters — QA Testing has its own search bar, so skip these for that tab */}
       {pmFilter !== 'qa' && (
-      <div className="relative w-full">
+      <div className="flex items-center gap-2 flex-wrap">
+      <div className="relative flex-1 min-w-[200px]">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: 'var(--cn-text-muted)' }} />
         <input
           type="text"
@@ -1890,6 +1913,11 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
             <X className="w-3.5 h-3.5" />
           </button>
         )}
+      </div>
+      {bucketOptions.length > 0 && (
+        <MiniMultiSelect label="Task Daily Buckets" options={bucketOptions} selected={bucketFilter} onChange={setBucketFilter} />
+      )}
+      <MiniMultiSelect label="PM Statuses" options={pmStatusOptions} selected={pmStatusFilter} onChange={setPmStatusFilter} alignRight />
       </div>
       )}
 
@@ -1918,7 +1946,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
         <div className="space-y-2">
           {searchedRows.length === 0 && (
             <p className="text-center py-6 text-sm" style={{ color: 'var(--cn-text-muted)' }}>
-              {searchQ ? 'No tasks match your search.' : 'No tasks assigned to you.'}
+              {narrowing ? 'No tasks match your search or filters.' : 'No tasks assigned to you.'}
             </p>
           )}
           {searchedRows.map(row => (
@@ -1926,8 +1954,8 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
               key={row.name}
               row={row}
               onLeave={leaveSet.has(row.name.toLowerCase())}
-              isOpen={pmFilter !== 'all' || !!searchQ || openName === row.name}
-              onToggle={() => pmFilter === 'all' && !searchQ && setOpenName(openName === row.name ? null : row.name)}
+              isOpen={pmFilter !== 'all' || narrowing || openName === row.name}
+              onToggle={() => pmFilter === 'all' && !narrowing && setOpenName(openName === row.name ? null : row.name)}
               onStatusChange={onStatusChange}
               pmStatusColName={pmStatusColName}
               canEditPmStatus={canEditPmStatus}
@@ -2156,8 +2184,10 @@ export function PmStatusOverview({ data, headers, pmUsers, layout = 'grid' }: {
 }
 
 // ─── Tiny multi-select dropdown (checkbox list) ────────────────────────────────
-function MiniMultiSelect({ label, options, selected, onChange }: {
+function MiniMultiSelect({ label, options, selected, onChange, alignRight = false }: {
   label: string; options: string[]; selected: string[]; onChange: (vals: string[]) => void;
+  /** open the list towards the left, for a dropdown sitting at the right edge */
+  alignRight?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -2191,7 +2221,7 @@ function MiniMultiSelect({ label, options, selected, onChange }: {
       </button>
       {open && (
         <div
-          className="absolute top-full left-0 mt-1 w-52 border rounded-lg z-50 max-h-64 overflow-y-auto"
+          className={`absolute top-full ${alignRight ? 'right-0' : 'left-0'} mt-1 w-52 border rounded-lg z-50 max-h-64 overflow-y-auto`}
           style={{ background: 'var(--cn-bg-dropdown)', borderColor: 'var(--cn-border)', boxShadow: '0 8px 24px rgba(0,0,0,0.25)' }}
         >
           <div className="flex gap-3 px-3 py-2 border-b" style={{ borderColor: 'var(--cn-border)' }}>
