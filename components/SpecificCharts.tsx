@@ -343,13 +343,15 @@ function parseDeadlineDate(val: string): Date | null {
 // Web & SMM band on today's daily task hours; PPC & SEO log "Everyday"
 // tasks as a monthly retainer block instead of a daily one, so they band
 // on a much larger monthly-hours scale.
-// Web bandwidth: the time a today / everyday task takes out of the person's day is
-// the larger of its Time Estimation and the time already logged on it (Time Logged
-// On AC) — i.e. time worked plus what is still to do. Estimate 3h with 1h logged
-// counts 3h; with 4h logged (ran over) it counts 4h. Every task that is not closed
-// counts, submitted ones included. Marketing keeps the plain Time Estimation.
+// Web and SMM bandwidth: the time a today / everyday task takes out of the person's
+// day is the larger of its Time Estimation and the time already logged on it (Time
+// Logged On AC) — i.e. time worked plus what is still to do. Estimate 3h with 1h
+// logged counts 3h; with 4h logged (ran over) it counts 4h. Every task that is not
+// closed counts, submitted ones included. PPC and SEO, who work to a monthly
+// retainer, keep the plain Time Estimation.
 const HANDED_OFF_STATUSES = ['submitted to client', 'submitted to pm', 'submitted to akash', 'submitted to admin'];
-const isWebMemberName = (name: string) => WEB_TEAM.some(n => n.toLowerCase() === name.trim().toLowerCase());
+// Everyone on a daily 7h day (Web and SMM) — i.e. everyone except the monthly-retainer PPC / SEO names
+const usesLoggedTimeRule = (name: string) => !MONTHLY_BLOCK_MARKETING_NAMES.has(name.trim().toLowerCase());
 const webTaskLoad = (estHours: number, loggedHours: number) => Math.max(estHours, loggedHours);
 
 // The band (label) is only used internally for the bar's colour; the screens show
@@ -1680,7 +1682,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
     // Sum hours + count for today + everyday tasks only, excluding closed/n/a
     const todayFiltered = myTasks.filter(r => { const b = getBucket(r); return (b === 'today' || b === 'everyday') && !NON_PENDING.includes(getStatus(r)); });
     const todayHours = todayFiltered.reduce((sum, r) => sum + parseHours(getTimeEst(r)), 0);
-    const todayLoadHours = isWebMemberName(name)
+    const todayLoadHours = usesLoggedTimeRule(name)
       ? myTasks
           .filter(r => { const b = getBucket(r); return (b === 'today' || b === 'everyday') && !['task closed', 'n/a', ''].includes(getStatus(r)); })
           .reduce((sum, r) => sum + webTaskLoad(parseHours(getTimeEst(r)), parseHours(getTimeLogged(r))), 0)
@@ -1759,7 +1761,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
         const activeProject = myTasks.find(t => t.status.toLowerCase() === 'in progress')?.project || row.activeProject;
         const todayFiltered = myTasks.filter(r => { const b = r.bucket.toLowerCase(); return (b === 'today' || b === 'everyday') && !NON_PENDING.includes(r.status.trim().toLowerCase()); });
         const todayHours = todayFiltered.reduce((sum, r) => sum + parseHours(r.timeEst), 0);
-        const todayLoadHours = isWebMemberName(row.name)
+        const todayLoadHours = usesLoggedTimeRule(row.name)
           ? myTasks
               .filter(r => { const b = r.bucket.toLowerCase(); return (b === 'today' || b === 'everyday') && !['task closed', 'n/a', ''].includes(r.status.trim().toLowerCase()); })
               .reduce((sum, r) => sum + webTaskLoad(parseHours(r.timeEst), parseHours(r.timeLogged)), 0)
@@ -2713,7 +2715,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
     // Tomorrow tab while the badge still read "Partially Occupied" from
     // stale Today hours.
     const displayHours = tabTasks.reduce((s, r) => s + getTime(r), 0);
-    const loadHours = isWebMemberName(name) ? tabTasks.reduce((s, r) => s + webTaskLoad(getTime(r), getLogged(r)), 0) : displayHours;
+    const loadHours = usesLoggedTimeRule(name) ? tabTasks.reduce((s, r) => s + webTaskLoad(getTime(r), getLogged(r)), 0) : displayHours;
     const tabHours = displayHours;
     const tabCount = tabTasks.length;
 
@@ -3052,7 +3054,7 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
     const SUBMITTED_STATUSES = ['submitted to client', 'submitted to pm', 'submitted to akash', 'submitted to admin'];
     const activeTasks = todayTasks.filter(r => !SUBMITTED_STATUSES.includes(getStatus(r)));
     const displayHours = activeTasks.reduce((s, r) => s + getTime(r), 0);
-    const loadHours = isWebMemberName(name) ? todayTasks.reduce((s, r) => s + webTaskLoad(getTime(r), getLogged(r)), 0) : displayHours;
+    const loadHours = usesLoggedTimeRule(name) ? todayTasks.reduce((s, r) => s + webTaskLoad(getTime(r), getLogged(r)), 0) : displayHours;
 
     let onLeave = false;
     let leaveDeduction = 0;
@@ -3311,7 +3313,7 @@ export function MyWorkloadSummary({ sheet1Data, sheet1Headers, availData, availH
   const SUBMITTED_STATUSES = ['submitted to client', 'submitted to pm', 'submitted to akash', 'submitted to admin'];
   const activeTasks = todayTasks.filter(r => !SUBMITTED_STATUSES.includes(getStatus(r).toLowerCase()));
   const displayHours = activeTasks.reduce((s, r) => s + getTime(r), 0);
-  const loadHours = isWebMemberName(personName) ? todayTasks.reduce((s, r) => s + webTaskLoad(getTime(r), getLogged(r)), 0) : displayHours;
+  const loadHours = usesLoggedTimeRule(personName) ? todayTasks.reduce((s, r) => s + webTaskLoad(getTime(r), getLogged(r)), 0) : displayHours;
 
   let onLeave = false;
   if (availData && availNameCol && availStatusCol) {
@@ -3431,7 +3433,7 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
     const todayTasksOf = sheet1Data
       .filter(r => String(r[resourceCol] ?? '').trim() === name && ['today', 'everyday'].includes(getBucket(r)) && !SKIP_STATUSES.includes(getStatus(r)));
     const displayHours = todayTasksOf.filter(r => !HANDED_OFF_STATUSES.includes(getStatus(r))).reduce((s, r) => s + getTime(r), 0);
-    const loadHours = isWebMemberName(name) ? todayTasksOf.reduce((s, r) => s + webTaskLoad(getTime(r), getLogged(r)), 0) : displayHours;
+    const loadHours = usesLoggedTimeRule(name) ? todayTasksOf.reduce((s, r) => s + webTaskLoad(getTime(r), getLogged(r)), 0) : displayHours;
 
     let onLeave = false;
     let leaveDeduction = 0;
@@ -3575,8 +3577,8 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
         const b = getBucket(r);
         return b === 'today' || b === 'everyday';
       });
-    // Web: see webTaskLoad (submitted tasks count too); Marketing: the plain estimate of tasks not yet submitted
-    const hours = isWebMemberName(name)
+    // Web and SMM: see webTaskLoad (submitted tasks count too); PPC / SEO: the plain estimate of tasks not yet submitted
+    const hours = usesLoggedTimeRule(name)
       ? todayOf.reduce((s, r) => s + webTaskLoad(getHours(r), getLogged(r)), 0)
       : todayOf.filter(r => !HANDED_OFF_STATUSES.includes(getStatus(r))).reduce((s, r) => s + getHours(r), 0);
     let leaveDeduction = 0;
