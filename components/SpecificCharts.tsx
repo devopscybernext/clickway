@@ -3000,15 +3000,19 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
 // card style: avatar/name/status header, then Total + Bandwidth as a
 // two-column stat grid. No click-to-expand, no editing — that's what the
 // standalone Team Bandwidth tab was for, and it's been retired.
-export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availHeaders, subDept: subDeptProp, onSubDeptChange }: {
+export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availHeaders, subDept: subDeptProp, onSubDeptChange, selectedName: selectedProp, onSelectName }: {
   sheet1Data: SheetData[]; sheet1Headers: string[];
   availData?: SheetData[]; availHeaders?: string[];
   subDept?: SubDept; onSubDeptChange?: (d: SubDept) => void;
+  /** One selected person at a time — the rest of the page filters to them. */
+  selectedName?: string | null; onSelectName?: (name: string | null) => void;
 }) {
   const [localSubDept, setLocalSubDept] = useState<SubDept>('all');
   const subDept = subDeptProp ?? localSubDept;
   const setSubDept = onSubDeptChange ?? setLocalSubDept;
-  const [openName, setOpenName] = useState<string | null>(null);
+  const [localSelected, setLocalSelected] = useState<string | null>(null);
+  const openName = selectedProp !== undefined ? selectedProp : localSelected;
+  const setOpenName = onSelectName ?? setLocalSelected;
   const resourceCol = findCol(sheet1Headers, 'assigned person', 'assigned to', 'resource');
   const statusCol   = findCol(sheet1Headers, 'task status', 'status');
   const bucketCol   = findCol(sheet1Headers, 'task daily bucket', 'bucket');
@@ -3109,7 +3113,7 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
       : [];
   const visibleCards = cards.filter(c => matchesSubDept(c.name, subDept));
   const openCard = visibleCards.find(c => c.name === openName);
-  const toggleOpen = (name: string) => setOpenName(prev => prev === name ? null : name);
+  const toggleOpen = (name: string) => setOpenName(openName === name ? null : name);
 
   return (
     <div className="space-y-3">
@@ -3139,9 +3143,18 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
           return (
             <div
               key={c.name}
-              onClick={() => c.tasks.length > 0 && toggleOpen(c.name)}
-              className="rounded-xl border overflow-hidden"
-              style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)', cursor: c.tasks.length > 0 ? 'pointer' : 'default' }}
+              onClick={() => toggleOpen(c.name)}
+              role="button"
+              tabIndex={0}
+              aria-pressed={openName === c.name}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleOpen(c.name); } }}
+              className="rounded-xl border overflow-hidden transition-all"
+              style={{
+                background: 'var(--cn-bg-card)',
+                borderColor: openName === c.name ? 'rgba(254, 74, 35, 0.5)' : 'var(--cn-border)',
+                opacity: openName && openName !== c.name ? 0.6 : 1,
+                cursor: 'pointer',
+              }}
             >
               <div className="flex items-center gap-2.5 px-3.5 pt-3.5 pb-3">
                 {photo ? (
@@ -3152,14 +3165,12 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
                     style={{ background: `linear-gradient(135deg, ${bg}cc, ${bg}66)` }}>{initials}</div>
                 )}
                 <p className="text-sm font-semibold truncate min-w-0 flex-1" style={{ color: 'var(--cn-text-primary)' }}>{c.name}</p>
-                {c.tasks.length > 0 && (
-                  <span
-                    className="shrink-0 w-6 h-6 rounded-lg inline-flex items-center justify-center"
-                    style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}
-                  >
-                    {openName === c.name ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                  </span>
-                )}
+                <span
+                  className="shrink-0 w-6 h-6 rounded-lg inline-flex items-center justify-center"
+                  style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}
+                >
+                  {openName === c.name ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </span>
               </div>
               <div className="px-3.5 pb-3"><WorkloadBar status={c.status} fill /></div>
               <div className="grid grid-cols-2 gap-px" style={{ background: 'var(--cn-border)', borderTop: '1px solid var(--cn-border)' }}>

@@ -321,6 +321,10 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [myProjectsView, setMyProjectsView] = useState<'all' | 'report'>('all');
   const [teamBandwidthSubTab, setTeamBandwidthSubTab] = useState<Team>(lockedTeamBandwidthTeam ?? 'web');
   const [analyticsSubDept, setAnalyticsSubDept] = useState<SubDept>('all');
+  // Team Workload card the admin/PM clicked — one person at a time; the Project
+  // State cards above follow it. Cleared when the team or sub-department tab changes.
+  const [selectedMember, setSelectedMember] = useState<string | null>(null);
+  useEffect(() => { setSelectedMember(null); }, [navTeam, analyticsSubDept]);
   const [analysisDateFilter, setAnalysisDateFilter] = useState<'all' | 'daily' | 'weekly' | 'monthly'>('all');
 
   const intervalRef   = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -794,6 +798,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   availData={analyticsAvailData}
                   availHeaders={analyticsAvailHeaders}
                   subDept={analyticsSubDept}
+                  personFilter={selectedMember ?? undefined}
                 />
               )}
 
@@ -834,6 +839,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                       availHeaders={analyticsAvailHeaders}
                       subDept={analyticsSubDept}
                       onSubDeptChange={setAnalyticsSubDept}
+                      selectedName={selectedMember}
+                      onSelectName={setSelectedMember}
                     />
                   </div>
                 </div>
