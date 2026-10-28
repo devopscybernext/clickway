@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronDown as ChevDown, ChevronLeft, ChevronRight, Copy, Check, Pencil, Send } from 'lucide-react';
 import { SheetData } from '@/lib/dataStore';
+import { pmRowTint } from '@/lib/pmRowTint';
 import { totalTimeRow, totalRowHtml, totalRowText } from '@/lib/copyTotals';
 import { STATUS_COLORS, formatHHMM, toHM, DURATION_HOUR_OPTIONS, DURATION_MINUTE_OPTIONS, hhmmToDecimalHours, addLoggedToTotal } from './SpecificCharts';
 
@@ -380,15 +381,6 @@ function AssignedPersonSelect({ value, options, row, col, onStatusChange }: Omit
     </div>
   );
 }
-
-// Row tint once the PM has acted on a task. "No Action Taken" (or blank) is
-// absent on purpose — those rows keep their normal look.
-const PM_ROW_TINTS: Record<string, { bg: string; border: string }> = {
-  'changes':             { bg: 'rgba(239,68,68,0.08)',  border: 'rgba(239,68,68,0.14)' },
-  'approved':            { bg: 'rgba(34,197,94,0.08)',  border: 'rgba(34,197,94,0.14)' },
-  'submitted to client': { bg: 'rgba(34,197,94,0.08)',  border: 'rgba(34,197,94,0.14)' },
-  'ticketclosed':        { bg: 'rgba(168,85,247,0.09)', border: 'rgba(168,85,247,0.15)' },
-};
 
 // ─── PM Status Select ─────────────────────────────────────────────────────────
 const PM_STATUS_OPTIONS = ['No Action Taken', 'Changes', 'Approved', 'Submitted To Client', 'TicketClosed'];
@@ -1229,7 +1221,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
               pageData.map((row, i) => {
                 const bucketVal = bucketCol ? String(row[bucketCol] ?? '').trim().toLowerCase() : '';
                 const isToday = bucketCol && bucketVal === 'today';
-                const pmTint = pmStatusRowCol ? PM_ROW_TINTS[String(row[pmStatusRowCol] ?? '').trim().toLowerCase()] : undefined;
+                const pmTint = pmStatusRowCol ? pmRowTint(String(row[pmStatusRowCol] ?? '')) : undefined;
                 return (
                   <tr
                     // __id (tab-prefixed, e.g. "Current Month Tasks::5") is

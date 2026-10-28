@@ -7,6 +7,7 @@ import {
 } from 'recharts';
 import { CheckCircle2, PauseCircle, LayoutGrid, Send, CalendarCheck, CalendarClock, UserCheck, ChevronDown, ChevronUp, AlertTriangle, ThumbsUp, RefreshCw, BadgeCheck, Copy, Check, Search, X, Pencil } from 'lucide-react';
 import { SheetData } from '@/lib/dataStore';
+import { pmRowTint } from '@/lib/pmRowTint';
 import { totalTimeRow, totalRowHtml, totalRowText } from '@/lib/copyTotals';
 import { memberColor, MONTHLY_BLOCK_MARKETING_NAMES } from '@/lib/memberColors';
 import { MARKETING_STATUS_OPTIONS, MARKETING_ASSIGNED_PERSONS, WEB_TEAM } from '@/lib/config';
@@ -1149,7 +1150,11 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                   String(t._raw[pmEmailCol] ?? '').trim().toLowerCase() === currentUserEmail.trim().toLowerCase()
                 );
                 return (
-                  <tr key={String(t._raw['__id'] ?? t._raw['__row'] ?? i)} style={{ borderTop: '1px solid var(--cn-border-light, var(--cn-border))' }}>
+                  <tr
+                    key={String(t._raw['__id'] ?? t._raw['__row'] ?? i)}
+                    data-row-tint={pmRowTint(t.pmStatus) ? '' : undefined}
+                    style={{ borderTop: '1px solid var(--cn-border-light, var(--cn-border))', ...(pmRowTint(t.pmStatus) && { backgroundColor: pmRowTint(t.pmStatus)!.bg, borderColor: pmRowTint(t.pmStatus)!.border }) }}
+                  >
                     {/* Copy row */}
                     {canCopy && (
                       <td className="px-2 py-2 text-center">
@@ -1470,7 +1475,11 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
                 String(t._raw[pmEmailCol] ?? '').trim().toLowerCase() === currentUserEmail.trim().toLowerCase()
               );
               return (
-                <tr key={String(t._raw['__id'] ?? t._raw['__row'] ?? i)} style={{ borderTop: '1px solid var(--cn-border-light, var(--cn-border))' }}>
+                <tr
+                    key={String(t._raw['__id'] ?? t._raw['__row'] ?? i)}
+                    data-row-tint={pmRowTint(t.pmStatus) ? '' : undefined}
+                    style={{ borderTop: '1px solid var(--cn-border-light, var(--cn-border))', ...(pmRowTint(t.pmStatus) && { backgroundColor: pmRowTint(t.pmStatus)!.bg, borderColor: pmRowTint(t.pmStatus)!.border }) }}
+                  >
                   {canCopy && (
                     <td className="px-2 py-2 text-center">
                       <button
