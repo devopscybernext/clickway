@@ -326,7 +326,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [analysisSubTab, setAnalysisSubTab] = useState<'resources' | 'pm'>('resources');
   const [toolsSubTab, setToolsSubTab] = useState<'clock' | 'holiday' | 'ai'>('clock');
   const [inHouseSubTab, setInHouseSubTab] = useState<InHouseSubTab | 'nextbot'>('websites');
-  const [pmBandwidthSubTab, setPmBandwidthSubTab] = useState<'current' | 'archive' | 'mine' | 'closed'>('current');
+  const [pmBandwidthSubTab, setPmBandwidthSubTab] = useState<'current' | 'archive' | 'mine' | 'closed'>(
+    firstLeaf.id === '11' && firstLeaf.subTab ? firstLeaf.subTab as 'current' | 'archive' | 'mine' | 'closed' : 'current');
   const [showAddProjectForm, setShowAddProjectForm] = useState(false);
   // Freeze the page behind the Add New Project popup.
   useBodyScrollLock(showAddProjectForm);

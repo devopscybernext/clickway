@@ -322,8 +322,8 @@ export function getSheetLabel(id: SheetId, role: Role): string {
 // QA Testing ('8') lives as a nested tab inside Vinay's Tasks Overview instead
 // of its own sidebar entry — admin still gets the standalone tab via ROLE_NAV.
 // The sidebar's top-level order, the same for every role (a role simply lacks the
-// items it can't open). Only the menu is sorted this way — the page a role lands on
-// after login still comes from ROLE_NAV's own first item (getFirstNavLeaf).
+// items it can't open). The page a role lands on after login is the first page of
+// this menu too (getFirstNavLeaf).
 const MENU_ORDER = ['PM Projects', 'Marketing', 'Web', 'Leave Status', 'Cybernext InHouse', 'Tools'];
 const menuRank = (item: NavItem): number => {
   const label = isNavParent(item) ? item.label : SHEET_LABELS[item.id];
@@ -334,11 +334,15 @@ export function getNavItems(user: AuthUser): NavItem[] {
   return [...ROLE_NAV[user.role]].sort((a, b) => menuRank(a) - menuRank(b));
 }
 
-// The first actual page a role lands on — a role's first NavItem may be a
-// dropdown, so this drills into its first child rather than returning the
-// dropdown itself.
+// The first actual page a role lands on — the first item of the sidebar menu,
+// which may be a dropdown, so this drills into its first child rather than
+// returning the dropdown itself.
+// Exception: a Web / Marketing admin's menu starts with the other team's one-page
+// peek (Tasks Overview), which isn't a place to land — they open on their own team.
 export function getFirstNavLeaf(user: AuthUser): NavLeaf {
-  const item = ROLE_NAV[user.role][0];
+  const items = getNavItems(user);
+  const ownTeam = user.role === 'WebAdmin' ? 'Web' : user.role === 'MarketingAdmin' ? 'Marketing' : null;
+  const item = (ownTeam && items.find(i => isNavParent(i) && i.label === ownTeam)) || items[0];
   return isNavParent(item) ? item.children[0] : item;
 }
 
