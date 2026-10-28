@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { RefreshCw, Calendar, ChevronDown, LogOut, ShieldCheck } from 'lucide-react';
+import { RefreshCw, Calendar, ChevronDown, LogOut, ShieldCheck, KeyRound } from 'lucide-react';
 import { SheetId, AuthUser, getSheetLabel } from '@/lib/auth';
 import { memberPhoto } from '@/lib/memberColors';
 import ThemeToggle from './ThemeToggle';
+import ChangePasswordDialog from './ChangePasswordDialog';
 
 const USER_DESIGNATIONS: Record<string, string> = {
   // Web — Development
@@ -48,6 +49,7 @@ interface TopBarProps {
 
 export default function TopBar({ lastUpdated, loading, selectedSheet, onRefresh, user, onLogout, isAdmin, canOpenAdminPortal, onOpenAdminPortal }: TopBarProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -185,6 +187,18 @@ export default function TopBar({ lastUpdated, loading, selectedSheet, onRefresh,
                   </button>
                 )}
 
+                {/* Change password — everyone */}
+                <button
+                  onClick={() => { setDropdownOpen(false); setChangingPassword(true); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg transition-colors cursor-pointer text-left"
+                  style={{ color: 'var(--cn-text-primary)' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--cn-bg-hover)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = '')}
+                >
+                  <KeyRound className="w-4 h-4 shrink-0" style={{ color: 'var(--cn-accent)' }} />
+                  <span>Change password</span>
+                </button>
+
                 {/* Sign out button */}
                 <button
                   onClick={() => { setDropdownOpen(false); onLogout(); }}
@@ -201,6 +215,7 @@ export default function TopBar({ lastUpdated, loading, selectedSheet, onRefresh,
           )}
         </div>
       </div>
+      {changingPassword && <ChangePasswordDialog onClose={() => setChangingPassword(false)} />}
     </header>
   );
 }
