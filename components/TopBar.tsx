@@ -40,11 +40,13 @@ interface TopBarProps {
   user: AuthUser;
   onLogout: () => void;
   isAdmin?: boolean;
+  /** HM / Admin only — shows the Admin Portal item in the profile menu */
+  canOpenAdminPortal?: boolean;
   /** Opens the Admin Portal — shown in the profile menu to admins (HM / Admin / Mod) */
   onOpenAdminPortal?: () => void;
 }
 
-export default function TopBar({ lastUpdated, loading, selectedSheet, onRefresh, user, onLogout, isAdmin, onOpenAdminPortal }: TopBarProps) {
+export default function TopBar({ lastUpdated, loading, selectedSheet, onRefresh, user, onLogout, isAdmin, canOpenAdminPortal, onOpenAdminPortal }: TopBarProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
 
@@ -170,7 +172,7 @@ export default function TopBar({ lastUpdated, loading, selectedSheet, onRefresh,
 
               <div className="p-1.5">
                 {/* Admin Portal — admins only */}
-                {isAdmin && onOpenAdminPortal && (
+                {canOpenAdminPortal && onOpenAdminPortal && (
                   <button
                     onClick={() => { setDropdownOpen(false); onOpenAdminPortal(); }}
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg transition-colors cursor-pointer text-left"

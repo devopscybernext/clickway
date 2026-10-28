@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import {
-  ENTRY_FORMS, FormKey, FormField, Answers, validateAnswers, gridKey,
+  ENTRY_FORMS, FormKey, FormField, Answers, validateAnswers, gridKey, resolveFieldOptions,
   DURATION_MAX_HOURS, DURATION_MAX_MINUTES, formatDuration, parseDuration,
 } from '@/lib/forms';
+import { currentRosterNames } from '@/lib/roster';
 
 // One of the dashboard's entry forms (lib/forms.ts) — replaces the embedded
 // Google Form. Submits to /api/forms, which stores the row in MySQL.
@@ -104,7 +105,7 @@ function toAnswers(fields: FormField[], state: Record<string, FieldState>): Answ
 // in the sheet (hints, keyed by the question title), so a project or client
 // that's already been used can be picked rather than retyped.
 function optionsFor(f: FormField, hints?: Record<string, string[]>): string[] {
-  const base = f.options ?? [];
+  const base = resolveFieldOptions(f, currentRosterNames()) ?? [];
   const seen = new Set(base.map(o => o.toLowerCase()));
   const extra = (hints?.[f.header] ?? []).map(v => v.trim()).filter(v => {
     if (!v || seen.has(v.toLowerCase())) return false;
@@ -143,7 +144,7 @@ export default function EntryForm({ formKey, onSubmitted, compact = false, optio
     e.preventDefault();
     setMessage(null);
     const answers = toAnswers(def.fields, state);
-    const found = validateAnswers(def, answers);
+    const found = validateAnswers(def, answers, currentRosterNames());
     // "Other" picked but left blank reads as unanswered
     for (const f of def.fields) {
       const s = state[f.header];

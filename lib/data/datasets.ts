@@ -93,7 +93,7 @@ export const DATASETS: Dataset[] = [
   {
     table: 'users',
     sources: [{ sheetId: USER_DETAILS_SHEET_ID, tab: TAB_USERS }],
-    headers: ['Username', 'Password Hash', 'Role', 'Display Name', 'Email'],
+    headers: ['Username', 'Password Hash', 'Role', 'Display Name', 'Email', 'Department', 'Sub Department'],
   },
   {
     table: 'leave_status',

@@ -102,10 +102,47 @@ test('Admin Portal: display name and role edits are saved', async ({ page }) => 
     await waitForDb(async () => (await query<Row[]>('SELECT display_name AS n FROM users WHERE username = ?', [USERS.team.username]))[0]?.n === 'E2E Team Renamed', 'display name saved');
 
     const renamed = page.getByRole('row').filter({ hasText: 'E2E Team Renamed' });
-    await renamed.locator('select').selectOption('MarketingTeam');
+    await renamed.getByLabel('Role').selectOption('MarketingTeam');
     await waitForDb(async () => (await query<Row[]>('SELECT role AS r FROM users WHERE username = ?', [USERS.team.username]))[0]?.r === 'MarketingTeam', 'role saved');
   } finally {
     // Restore for the remaining tests
     await query('UPDATE users SET display_name = ?, role = ? WHERE username = ?', [USERS.team.displayName, USERS.team.role, USERS.team.username]);
   }
+});
+
+test('Admin Portal: a user added to a department shows in that team\'s form, and can be removed', async ({ page }) => {
+  await login(page, USERS.admin);
+  const name = uniqueMark('Hire').replace(/ /g, '');
+  const username = `e2e_added_${Date.now().toString(36)}`;
+  const openPortal = async () => {
+    await page.getByRole('button', { name: USERS.admin.displayName }).first().click();
+    await page.getByRole('button', { name: 'Admin Portal' }).click();
+  };
+
+  await openPortal();
+  await page.getByRole('button', { name: 'Add User' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add user' });
+  await dialog.locator('#new-name').fill(name);
+  await dialog.locator('#new-email').fill(`${username}@example.invalid`);
+  await dialog.locator('#new-username').fill(username);
+  await dialog.locator('#new-password').fill('E2E-added-Passw0rd!');
+  await dialog.locator('#new-department').selectOption('Web');
+  await dialog.getByRole('button', { name: 'Back End' }).click();
+  await dialog.getByRole('button', { name: 'Add User' }).click();
+  await expect(page.getByText(`${name} was added to Web`)).toBeVisible();
+
+  const row = await waitForDb(async () => (await query<Row[]>('SELECT * FROM users WHERE username = ?', [username]))[0], 'added user row');
+  expect(row).toMatchObject({ role: 'WebTeam', department: 'Web', sub_department: 'backend', display_name: name, email: `${username}@example.invalid` });
+  expect(row.password_hash).toMatch(/^\$2[aby]\$/);
+
+  // They are now offered in the Web Add Task form
+  await openPage(page, 'Web', 'Add Task');
+  await expect(page.locator('#web-task-q6-input option', { hasText: name })).toHaveCount(1);
+
+  // ...and can be removed again
+  await openPortal();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.getByRole('button', { name: `Remove ${name}` }).click();
+  await page.getByRole('dialog', { name: 'Remove account' }).getByRole('button', { name: 'Remove' }).click();
+  await waitForDb(async () => (await query<Row[]>('SELECT id FROM users WHERE username = ?', [username])).length === 0, 'user removed');
 });

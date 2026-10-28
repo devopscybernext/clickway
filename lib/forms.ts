@@ -1,6 +1,7 @@
 import {
   SHEET_IDS, MARKETING_TEAM_SHEET_ID, PM_BANDWIDTH_SHEET_ID, TAB_BANDWIDTH, TAB_MARKETING_TASKS, TAB_LEADERBOARD,
 } from './config';
+import type { RosterNames } from './roster';
 
 // The dashboard's own entry forms — they replaced the Google Forms that used
 // to feed the task and project sheets. Questions, options, "Other" choices
@@ -28,6 +29,8 @@ export interface FormField {
   allowOther?: boolean;      // dropdown / choice / checkboxes: adds "Other" with a text box
   asDropdown?: boolean;      // checkboxes only: a dropdown you tick several entries in, not a list
   fromSheet?: boolean;       // dropdown: also offer the values already used in the sheet (e.g. project names)
+  roster?: 'web' | 'marketing' | 'all'; // the options are the people on that team (Admin Portal accounts); `options` is the fallback
+  rosterPrefix?: string[];   // entries that come before the people (e.g. "No Action Taken")
 }
 
 // Hours : Minutes entry. Stored the way every time cell in the sheets is
@@ -98,7 +101,7 @@ export const ENTRY_FORMS: Record<FormKey, EntryFormDef> = {
       { header: 'Task Priority', type: 'dropdown', required: true, options: ['Urgent', 'High', 'Medium', 'Low'] },
       { header: 'Team Required', type: 'dropdown', required: true, options: ['UIUX', 'FrontEnd', 'BackEnd', 'QA'] },
       { header: 'Task Information', type: 'dropdown', options: ['New', 'Running', 'To be expected'] },
-      { header: 'Preferred Resource', type: 'dropdown', options: ['Lovepreet', 'Shubham', 'Dhruv', 'Pawan', 'Robin', 'Akash'] },
+      { header: 'Preferred Resource', type: 'dropdown', roster: 'web', options: ['Lovepreet', 'Shubham', 'Dhruv', 'Pawan', 'Robin', 'Akash'] },
       { header: 'Time Estimation', type: 'duration' },
       { header: 'Deadline', type: 'date' },
     ],
@@ -120,7 +123,7 @@ export const ENTRY_FORMS: Record<FormKey, EntryFormDef> = {
         'Account Audit'] },
       { header: 'Task URL', type: 'paragraph', required: true },
       { header: 'Department', type: 'dropdown', options: ['SEO', 'PPC', 'SMM'] },
-      { header: 'Assigned Person', type: 'dropdown', options: [
+      { header: 'Assigned Person', type: 'dropdown', roster: 'marketing', options: [
         'Atul', 'Shiwangi', 'Dheeraj', 'Anjali', 'Anurag', 'Vansh', 'Akshay', 'Kshitij', 'Bhavya', 'Payal', 'Akanksha'] },
       { header: 'Task Estimation', type: 'duration' },
       { header: 'Deadline', type: 'date' },
@@ -147,7 +150,7 @@ export const ENTRY_FORMS: Record<FormKey, EntryFormDef> = {
       { header: 'AC Hours', type: 'duration', required: true },
       { header: 'Payment Details', type: 'dropdown', required: true, allowOther: true, options: [
         NO_ACTION, 'Milestones', 'Offline', 'Upwork', 'Direct - Fixed', 'Fixed', 'Direct', 'Fixed - Direct', 'Fixed Upwork'] },
-      { header: 'Assigned', type: 'checkboxes', asDropdown: true, required: true, options: [
+      { header: 'Assigned', type: 'checkboxes', asDropdown: true, required: true, roster: 'all', rosterPrefix: [NO_ACTION], options: [
         NO_ACTION, 'Akash', 'Pawan', 'Dhruv', 'Robin', 'Shubham', 'Lovepreet', 'Atul', 'Anjali', 'Dheeraj', 'Shiwangi',
         'Anurag', 'Vansh', 'Manas', 'Akshay', 'Kshitij', 'Bhavya', 'Payal', 'Akanksha'] },
       { header: 'Status', type: 'dropdown', required: true, options: [
@@ -185,7 +188,7 @@ export const ENTRY_FORMS: Record<FormKey, EntryFormDef> = {
     order: 'dmy',
     emailHeader: 'Email address',
     fields: [
-      { header: 'Select Resource', type: 'dropdown', required: true, options: ['Shubham', 'Lovepreet', 'Robin', 'Pawan', 'Dhruv', 'Akash'] },
+      { header: 'Select Resource', type: 'dropdown', required: true, roster: 'web', options: ['Shubham', 'Lovepreet', 'Robin', 'Pawan', 'Dhruv', 'Akash'] },
       { header: 'Project Name', type: 'text', required: true },
       { header: 'Task Name/Topic', type: 'text' },
       { header: 'Positive Feedback', type: 'grid', options: ['P5', 'P10', 'P15', 'P20', 'P25', 'P30'], rows: [
@@ -199,6 +202,13 @@ export const ENTRY_FORMS: Record<FormKey, EntryFormDef> = {
     ],
   },
 };
+
+// The choices a question offers: the fixed list, or — for the "who" questions — the
+// people on the team right now (names = the current roster).
+export function resolveFieldOptions(f: FormField, names?: RosterNames): string[] | undefined {
+  if (f.roster && names) return [...(f.rosterPrefix ?? []), ...names[f.roster]];
+  return f.options;
+}
 
 export type Answers = Record<string, string | string[]>;
 
@@ -216,7 +226,7 @@ function storedFields(def: EntryFormDef): FormField[] {
 // Returns a message per question that needs fixing (empty object = valid),
 // keyed by the stored question (grid rows by their own column name).
 // "Other" answers arrive as plain text that isn't one of the options.
-export function validateAnswers(def: EntryFormDef, answers: Answers): Record<string, string> {
+export function validateAnswers(def: EntryFormDef, answers: Answers, names?: RosterNames): Record<string, string> {
   const errors: Record<string, string> = {};
   const fields = storedFields(def);
   for (const key of Object.keys(answers)) {
@@ -235,8 +245,9 @@ export function validateAnswers(def: EntryFormDef, answers: Answers): Record<str
       if (!parseDuration(values[0])) errors[f.header] = `Choose hours (0-${DURATION_MAX_HOURS}) and minutes (0-${DURATION_MAX_MINUTES})`;
       continue;
     }
-    if (f.options && (f.type === 'choice' || f.type === 'dropdown' || f.type === 'checkboxes')) {
-      const others = values.filter(v => !f.options!.includes(v));
+    const options = resolveFieldOptions(f, names);
+    if (options && (f.type === 'choice' || f.type === 'dropdown' || f.type === 'checkboxes')) {
+      const others = values.filter(v => !options.includes(v));
       if (others.length > (f.allowOther ? 1 : 0)) errors[f.header] = 'Choose one of the listed options';
     }
     if (f.type === 'date') {

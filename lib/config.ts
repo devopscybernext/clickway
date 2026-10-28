@@ -73,7 +73,7 @@ export const RANGE_HOLIDAY = `'${TAB_HOLIDAY}'!A1:Z10000`;
 export const TAB_AI_TOOLS   = 'AI Tools';
 export const RANGE_AI_TOOLS = `'${TAB_AI_TOOLS}'!A1:Z10000`;
 
-// User credentials tab (inside the separate UserDetails spreadsheet) — columns: Username, Password Hash, Role, Display Name, Email
+// User credentials tab (inside the separate UserDetails spreadsheet) — columns: Username, Password Hash, Role, Display Name, Email, Department, Sub Department
 // Server-only: never fetched through the generic /api/data proxy.
 export const TAB_USERS   = 'UserDetails';
 export const RANGE_USERS = `'${TAB_USERS}'!A1:Z200`;

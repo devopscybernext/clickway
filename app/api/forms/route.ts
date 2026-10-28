@@ -3,6 +3,8 @@ import { verifySession, COOKIE_NAME } from '@/lib/session';
 import { insertRow } from '@/lib/data/mysql';
 import { AuthUser, getNavItems, isNavParent, isPmTierRole, isAdminTierRole, canAddLeaderboardFeedback } from '@/lib/auth';
 import { ENTRY_FORMS, FormKey, Answers, validateAnswers, answersToValues, formatTimestamp } from '@/lib/forms';
+import { loadRoster } from '@/lib/rosterServer';
+import { rosterNamesFrom } from '@/lib/roster';
 
 export const runtime = 'nodejs';
 
@@ -48,7 +50,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'submissionId is required' }, { status: 400 });
   }
   const answers = body.answers && typeof body.answers === 'object' ? body.answers : {};
-  const errors = validateAnswers(def, answers);
+  const errors = validateAnswers(def, answers, rosterNamesFrom(await loadRoster()));
   if (Object.keys(errors).length) {
     return NextResponse.json({ success: false, error: 'Some answers need fixing', errors }, { status: 422 });
   }

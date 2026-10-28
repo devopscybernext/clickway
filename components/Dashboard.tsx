@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SheetData } from '@/lib/dataStore';
-import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, PM_BANDWIDTH_ALL_DATA_SHEET_ID, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, MARKETING_ASSIGNED_PERSONS, WEB_TEAM, TAB_BANDWIDTH, LEAVE_SHEET_ID, TAB_LEAVE, RANGE_LEAVE, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
+import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, PM_BANDWIDTH_ALL_DATA_SHEET_ID, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, TAB_BANDWIDTH, LEAVE_SHEET_ID, TAB_LEAVE, RANGE_LEAVE, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
 
-import { AuthUser, SheetId, Team, NavLeaf, getFirstNavLeaf, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, canSeeInHouseFull, canAddLeaderboardFeedback } from '@/lib/auth';
+import { AuthUser, SheetId, Team, NavLeaf, getFirstNavLeaf, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, canSeeInHouseFull, canManageUsers, canAddLeaderboardFeedback } from '@/lib/auth';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import InHouse, { type InHouseSubTab } from './InHouse';
@@ -24,6 +24,7 @@ import Reports from './Reports';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import LeaveStatus from './LeaveStatus';
 import EntryForm from './EntryForm';
+import { setRoster, webTeam, marketingTeam } from '@/lib/roster';
 import { ENTRY_FORMS, FormKey } from '@/lib/forms';
 import AdminPortal from './AdminPortal';
 import { AlertCircle, Sparkles, ChevronUp, ChevronDown, AlertTriangle, CheckCircle2 } from 'lucide-react';
@@ -368,7 +369,18 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
       )
     : sortedData;
 
+  // Who is on the Web / Marketing teams (and their sub departments), from the Admin Portal's
+  // accounts. Until it arrives the old built-in lists are used (see lib/roster.ts).
+  const [, setRosterVersion] = useState(0);
+  const refreshRoster = useCallback(async () => {
+    try {
+      const json = await (await fetch('/api/team-roster')).json();
+      if (json.success) { setRoster(json.members); setRosterVersion(v => v + 1); }
+    } catch { /* keep whatever roster is already loaded */ }
+  }, []);
+
   const fetchAll = useCallback(async () => {
+    void refreshRoster();
     setLoading(true);
     setError('');
     try {
@@ -389,7 +401,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [refreshRoster]);
 
   // Core data: every 90 seconds
   useEffect(() => {
@@ -645,15 +657,15 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     const rosterLower = roster.map(r => r.toLowerCase());
     return rows.filter(r => rosterLower.includes(String(r[col] ?? '').trim().toLowerCase()));
   };
-  const webBandwidthData = filterByRoster(activeBandwidthData, bandwidthHeaders, WEB_TEAM);
-  const webAvailData     = filterByRoster(availData, availHeaders, WEB_TEAM);
+  const webBandwidthData = filterByRoster(activeBandwidthData, bandwidthHeaders, webTeam());
+  const webAvailData     = filterByRoster(availData, availHeaders, webTeam());
 
   // Marketing — tasks come from the separate Marketing Team spreadsheet's
   // Current Month Tasks + All Marketing Tasks tabs, merged server-side like
   // Bandwidth Allocation's archive tabs (Department column distinguishes
   // SEO/PPC/SMM), but the Leave spreadsheet covers every resource in one
   // table, so it's the same availData filtered to the Marketing roster.
-  const marketingAvailData = filterByRoster(availData, availHeaders, MARKETING_ASSIGNED_PERSONS);
+  const marketingAvailData = filterByRoster(availData, availHeaders, marketingTeam());
 
   // Dashboard analytics (sheet 3) — same Web/Marketing split as the other pages,
   // reusing the same generic (header-driven) components either way.
@@ -773,6 +785,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           user={user}
           onLogout={onLogout}
           isAdmin={isAdmin}
+          canOpenAdminPortal={canManageUsers(user.role)}
           onOpenAdminPortal={() => handleSheetChange({ id: '15' })}
         />
 
@@ -948,7 +961,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 onStatusChange={tasksAssignedTeam === 'web' ? handleBandwidthStatusChange : handleMarketingTeamChange}
                 statusOptions={tasksAssignedTeam === 'marketing' ? MARKETING_STATUS_OPTIONS : undefined}
                 todayBucketSetOptions={tasksAssignedTeam === 'marketing' ? MARKETING_TODAY_BUCKET_SET_OPTIONS : undefined}
-                assignedPersonOptions={tasksAssignedTeam === 'marketing' ? MARKETING_ASSIGNED_PERSONS : WEB_TEAM}
+                assignedPersonOptions={tasksAssignedTeam === 'marketing' ? marketingTeam() : webTeam()}
                 readOnlyStatus
                 readOnlyPmStatus={isIndividual}
                 defaultPersonFilter={isIndividual ? user.displayName : undefined}
@@ -1087,12 +1100,12 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               : <InHouse subTab={subTab} refreshKey={lastUpdated} />;
           })()}
 
-          {isAdminPortal && isAdmin && (
+          {isAdminPortal && canManageUsers(user.role) && (
             <section
               className="cn-card rounded-lg border transition-colors"
               style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
             >
-              <AdminPortal />
+              <AdminPortal currentUsername={user.username} onChanged={refreshRoster} />
             </section>
           )}
 

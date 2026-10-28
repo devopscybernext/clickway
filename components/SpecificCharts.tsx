@@ -10,7 +10,8 @@ import { SheetData } from '@/lib/dataStore';
 import { pmRowTint } from '@/lib/pmRowTint';
 import { totalTimeRow, totalRowHtml, totalRowText } from '@/lib/copyTotals';
 import { memberColor, MONTHLY_BLOCK_MARKETING_NAMES } from '@/lib/memberColors';
-import { MARKETING_STATUS_OPTIONS, MARKETING_ASSIGNED_PERSONS, WEB_TEAM } from '@/lib/config';
+import { MARKETING_STATUS_OPTIONS } from '@/lib/config';
+import { inSubDepartment, teamOf, webTeam, marketingTeam, type SubDeptKey } from '@/lib/roster';
 
 // "Task Closed" is a Tasks Assigned-only action — Tasks Overview (team's own
 // view of their work) doesn't offer it.
@@ -239,47 +240,32 @@ function teamPhoto(name: string): string {
   return key ? TEAM_PHOTOS[key] : '';
 }
 
-// Marketing sub-department rosters — used only for Team Workload's SEO/PPC/
-// SMM filter. Akshay is deliberately in both SEO and PPC (does work for
-// both), unlike teamDesignation() above which only ever shows one label.
-const SEO_NAMES = ['bhavya', 'kshitij', 'akshay'];
-const PPC_NAMES = ['atul', 'shiwangi', 'anjali', 'dheeraj', 'anurag', 'vansh', 'akshay'];
-const SMM_NAMES = ['payal', 'akanksha', 'manas'];
+// Sub-department membership (SEO / PPC / SMM, UIUX / Front End / Back End) comes from
+// the Admin Portal — see lib/roster.ts. Akshay (SEO + PPC) and Shubham (Front End +
+// Back End) are in two because their accounts list both.
 function inMarketingSubDept(name: string, dept: 'seo' | 'ppc' | 'smm'): boolean {
-  const lower = name.trim().toLowerCase();
-  const list = dept === 'seo' ? SEO_NAMES : dept === 'ppc' ? PPC_NAMES : SMM_NAMES;
-  return list.some(n => lower.includes(n));
+  return inSubDepartment(name, dept);
 }
-
-// Web sub-department rosters — same purpose as the Marketing split above,
-// for Team Workload's UIUX/Front End/Back End filter. Shubham deliberately
-// in both Front End and Back End (does work for both).
-const UIUX_NAMES = ['akash', 'robin'];
-const FRONTEND_NAMES = ['lovepreet', 'shubham'];
-const BACKEND_NAMES = ['pawan', 'dhruv', 'shubham'];
 function inWebSubDept(name: string, dept: 'uiux' | 'frontend' | 'backend'): boolean {
-  const lower = name.trim().toLowerCase();
-  const list = dept === 'uiux' ? UIUX_NAMES : dept === 'frontend' ? FRONTEND_NAMES : BACKEND_NAMES;
-  return list.some(n => lower.includes(n));
+  return inSubDepartment(name, dept);
 }
-export type SubDept = 'all' | 'seo' | 'ppc' | 'smm' | 'uiux' | 'frontend' | 'backend';
+export type SubDept = 'all' | SubDeptKey;
 function matchesSubDept(name: string, dept: SubDept): boolean {
   if (dept === 'all') return true;
   if (dept === 'seo' || dept === 'ppc' || dept === 'smm') return inMarketingSubDept(name, dept);
   return inWebSubDept(name, dept);
 }
 
-// Full canonical roster (from lib/config's team lists) for whichever team a
+// Full canonical roster (the Admin Portal's accounts, see lib/roster.ts) for whichever team a
 // given set of names belongs to, merged with whatever's actually in the
 // sheet data — so someone with zero tasks/rows so far (e.g. a new hire)
 // still gets a card showing full Bandwidth/Available instead of silently
 // disappearing until they're assigned something. Detects which team by
-// checking whether any of the given names already match one of that
-// team's sub-department rosters.
+// checking whether any of the given names is already on that team.
 function fullRosterFor(names: string[]): string[] {
-  const isMarketing = names.some(n => inMarketingSubDept(n, 'seo') || inMarketingSubDept(n, 'ppc') || inMarketingSubDept(n, 'smm'));
-  const isWeb = names.some(n => inWebSubDept(n, 'uiux') || inWebSubDept(n, 'frontend') || inWebSubDept(n, 'backend'));
-  const canonical = isMarketing ? MARKETING_ASSIGNED_PERSONS : isWeb ? WEB_TEAM : [];
+  const isMarketing = names.some(n => teamOf(n) === 'marketing');
+  const isWeb = names.some(n => teamOf(n) === 'web');
+  const canonical = isMarketing ? marketingTeam() : isWeb ? webTeam() : [];
   return [...new Set([...names, ...canonical])].sort();
 }
 

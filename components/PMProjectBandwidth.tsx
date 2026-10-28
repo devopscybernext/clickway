@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronLeft, ChevronRight, Pencil, Eye, SlidersHorizontal, Download } from 'lucide-react';
 import { SheetData } from '@/lib/dataStore';
 import { MultiSelect } from './FilteredDataTable';
+import { currentRosterNames } from '@/lib/roster';
 import { parseHHMM, formatHHMM, hhmmToDecimalHours, DURATION_MINUTE_OPTIONS, formatHoursClock } from './SpecificCharts';
 import { memberPhoto, memberColor } from '@/lib/memberColors';
 import ClampedText from './ClampedText';
@@ -422,7 +423,8 @@ const STATUS_OPTIONS = [
 const PHASE_OPTIONS = ['No Action Taken', 'Requirement Gathering', 'Design', 'Development', 'QA', 'Deployed', 'Marketing', 'Maintenance', 'Retainer', 'On Hold', 'Completed', 'Design + Dev'];
 const UPSELL_OPTIONS = ['No Action Taken', 'Upsell', 'Cross-Sell'];
 const PAYMENT_STATUS_OPTIONS = ['No Action Taken', 'Pending', 'Done', 'On Hold', 'QA_Done', 'Not Started Yet', 'In Progress', 'Ongoing', 'Automated Payment', 'Direct Billing'];
-const ASSIGNED_OPTIONS = ['No Action Taken', 'Akash', 'Pawan', 'Dhruv', 'Robin', 'Shubham', 'Lovepreet', 'Atul', 'Anjali', 'Dheeraj', 'Shiwangi', 'Anurag', 'Vansh', 'Manas', 'Akshay', 'Kshitij', 'Bhavya', 'Payal', 'Akanksha'];
+// Everyone who can be assigned to a project: the Web and Marketing teams from the Admin Portal
+const assignedOptions = (): string[] => ['No Action Taken', ...currentRosterNames().all];
 
 const CHEVRON_WHITE = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`;
 const CHEVRON_MUTED = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`;
@@ -899,14 +901,15 @@ export function buildPmDropdownOptions(headers: string[], optionSourceData: Shee
   // Robin, Shubham") — split before unioning, otherwise withExtras would
   // add each whole multi-name cell as if it were one option.
   if (assignedCol) {
+    const assigned = assignedOptions();
     const individualExtras = new Set<string>();
     optionSourceData.forEach(r => {
       String(r[assignedCol] ?? '').split(',').forEach(s => {
         const name = s.trim();
-        if (name && !ASSIGNED_OPTIONS.includes(name)) individualExtras.add(name);
+        if (name && !assigned.includes(name)) individualExtras.add(name);
       });
     });
-    opts[assignedCol] = [...ASSIGNED_OPTIONS, ...[...individualExtras].sort()];
+    opts[assignedCol] = [...assigned, ...[...individualExtras].sort()];
   }
   return opts;
 }

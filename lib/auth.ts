@@ -61,6 +61,12 @@ const INHOUSE_FULL_ROLES: Role[] = ['HM', 'Admin', 'admin', 'high', 'akash'];
 export function canSeeInHouseFull(role: Role): boolean {
   return INHOUSE_FULL_ROLES.includes(role);
 }
+// Admin Portal (add / edit / remove accounts): HM and Admin only, the same two
+// roles as the full InHouse. The page, the profile menu and /api/admin-users all
+// use this one check.
+export function canManageUsers(role: Role): boolean {
+  return INHOUSE_FULL_ROLES.includes(role);
+}
 export function isPmTierRole(role: Role): boolean {
   return PM_TIER_ROLES.includes(role);
 }

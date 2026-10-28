@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Gauge, CalendarClock, Target, CalendarRange, Hourglass, MessageSquareWarning, FileText, FileSpreadsheet, type LucideIcon } from 'lucide-react';
 import { SheetData } from '@/lib/dataStore';
-import { WEB_TEAM, MARKETING_ASSIGNED_PERSONS } from '@/lib/config';
+import { webTeam, marketingTeam } from '@/lib/roster';
 import { TEAM_LABELS, buildProductivityTasks, formatRange, summarise, type ReportTeam } from '@/lib/productivity';
 import { downloadProductivityPdf } from '@/lib/productivityPdf';
 import { downloadProductivityExcel } from '@/lib/productivityExcel';
@@ -20,7 +20,7 @@ import { AgingDialog, BlockersDialog, MonthlyDialog } from './ExtraReportDialogs
 
 type ReportId = 'productivity' | 'deadlines' | 'estimation' | 'monthly' | 'aging' | 'blockers';
 
-const ROSTER: Record<ReportTeam, string[]> = { web: WEB_TEAM, marketing: MARKETING_ASSIGNED_PERSONS };
+const rosterFor = (team: ReportTeam): string[] => (team === 'web' ? webTeam() : marketingTeam());
 
 // One entry per report. More reports slot in here later.
 // `teams` says which team's Report tab shows the card.
@@ -81,7 +81,7 @@ interface Props {
 export default function Reports({ data, headers, team }: Props) {
   const [open, setOpen] = useState<{ reportId: ReportId; format: Format } | null>(null);
 
-  const roster = ROSTER[team];
+  const roster = rosterFor(team);
   const tasks = useMemo(() => extractTasks(data, headers, team), [data, headers, team]);
   const people = useMemo(() => listPeople(tasks, roster), [tasks, roster]);
 
