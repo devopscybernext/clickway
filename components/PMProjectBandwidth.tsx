@@ -12,7 +12,7 @@ import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { downloadTableXlsx, type TableExport } from '@/lib/tableExport';
 import { downloadDetailsPdf, type DetailPdfProject, type ReportPdfSummary } from '@/lib/projectReportPdf';
 import { isFlaggedStatus } from '@/lib/statusFlags';
-import WorkloadBar from './WorkloadBar';
+import WorkloadBar, { workloadColor } from './WorkloadBar';
 import DownloadReportDialog, { ALL_DOWNLOAD_PDF_KEYS } from './DownloadReportDialog';
 
 const PAGE_SIZE = 50;
@@ -354,7 +354,8 @@ const PM_BANDWIDTH_CAPACITY = 300;
 // The screens show the percentage (Total Hours / the 300h ceiling), not the label;
 // the band only picks the bar's colour.
 function pmWorkloadStatus(totalHours: number): { label: string; bg: string; pct: number } {
-  return { ...pmWorkloadBand(totalHours), pct: Math.round((totalHours / PM_BANDWIDTH_CAPACITY) * 100) };
+  const pct = Math.round((totalHours / PM_BANDWIDTH_CAPACITY) * 100);
+  return { ...pmWorkloadBand(totalHours), bg: workloadColor(pct), pct };
 }
 function pmWorkloadBand(totalHours: number): { label: string; bg: string } {
   if (totalHours < 100) return { label: 'Available', bg: '#22c55e' };

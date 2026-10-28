@@ -5,9 +5,24 @@
 // beside it. The percentage is the real figure (it can pass 100 when someone is
 // over capacity); the bar itself stops at full. "On Leave" is not a workload, so
 // it keeps a small pill instead of a bar.
+// Colour by how full the day is — free bandwidth is red (someone can take work),
+// a full day is green:
+//   0-30% red   31-40% red-orange   41-50% orange   51-60% amber
+//   61-70% yellow   71-80% lime   81-90% light green   91%+ green
+export function workloadColor(pct: number): string {
+  if (pct <= 30) return '#dc2626';
+  if (pct <= 40) return '#ea580c';
+  if (pct <= 50) return '#f97316';
+  if (pct <= 60) return '#f59e0b';
+  if (pct <= 70) return '#eab308';
+  if (pct <= 80) return '#84cc16';
+  if (pct <= 90) return '#4ade80';
+  return '#16a34a';
+}
+
 export interface WorkloadStatusLike {
   label: string;
-  /** colour of the bar (green when light, red when overloaded) */
+  /** colour of the bar — from workloadColor() */
   bg: string;
   /** hours assigned / capacity, in whole percent */
   pct?: number;

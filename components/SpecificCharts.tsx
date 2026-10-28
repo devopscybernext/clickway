@@ -80,7 +80,7 @@ function DateFilterPills({ value, onChange }: { value: DateFilter; onChange: (f:
   );
 }
 import QATesting from './QATesting';
-import WorkloadBar from './WorkloadBar';
+import WorkloadBar, { workloadColor } from './WorkloadBar';
 
 interface Props {
   sheet1Data: SheetData[];
@@ -359,7 +359,7 @@ const webTaskLoad = (estHours: number, loggedHours: number) => Math.max(estHours
 // monthly-retainer PPC & SEO) — not the label.
 function workloadStatus(hours: number, isMonthlyBlock: boolean): { label: string; bg: string; pct: number } {
   const pct = Math.round((hours / (isMonthlyBlock ? 125 : 7)) * 100);
-  return { ...workloadBand(hours, isMonthlyBlock), pct };
+  return { ...workloadBand(hours, isMonthlyBlock), bg: workloadColor(pct), pct };
 }
 function workloadBand(hours: number, isMonthlyBlock: boolean): { label: string; bg: string } {
   if (isMonthlyBlock) {
@@ -3172,7 +3172,7 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
                 </div>
                 <div className="flex flex-col gap-1 px-3.5 py-2.5" style={{ background: 'var(--cn-bg-card)' }}>
                   <div className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#22c55e' }} />
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: c.status.bg }} />
                     <span className="text-[9px] font-semibold uppercase tracking-wide leading-tight" style={{ color: 'var(--cn-text-muted)' }}>Bandwidth</span>
                   </div>
                   <span className="text-sm font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{formatHoursClock(c.availableHours)}h</span>
@@ -3473,7 +3473,7 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
             <span className="flex flex-col min-w-0">
               <span className="truncate font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{m.name}</span>
               <span className="tabular-nums text-[11px]" style={{ color: 'var(--cn-text-muted)' }}>
-                {formatHoursClock(m.displayHours)}h · <span style={{ color: '#22c55e' }}>{formatHoursClock(m.availableHours)}h avail</span>
+                {formatHoursClock(m.displayHours)}h · <span style={{ color: m.status.bg }}>{formatHoursClock(m.availableHours)}h avail</span>
               </span>
             </span>
             <WorkloadBar status={m.status} />
