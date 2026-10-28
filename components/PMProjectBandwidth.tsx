@@ -1913,7 +1913,13 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, pop
                 <div
                   key={pm.name}
                   className="rounded-xl border overflow-hidden transition-opacity"
-                  style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)', opacity: dimmed ? PM_CARD_DIMMED_OPACITY : 1, cursor: pmCardsClickable ? 'pointer' : undefined }}
+                  style={{
+                    background: 'var(--cn-bg-card)',
+                    // a selected card gets a light orange border
+                    borderColor: isSelected && pmCardsClickable ? 'rgba(254, 74, 35, 0.5)' : 'var(--cn-border)',
+                    opacity: dimmed ? PM_CARD_DIMMED_OPACITY : 1,
+                    cursor: pmCardsClickable ? 'pointer' : undefined,
+                  }}
                   {...(pmCardsClickable ? {
                     role: 'button',
                     tabIndex: 0,
