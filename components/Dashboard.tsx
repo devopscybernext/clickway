@@ -1272,6 +1272,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     canEditStatus={isIndividual || isTeamAdmin}
                     canCopy={isIndividual || isTeamAdmin}
                     defaultFilter="me"
+                    hideAllTasks={isIndividual}
                     restrictPmStatusToOwn={isPmTier}
                     vinayQaMode={isVinay}
                     showQaTab={isAdmin || isPmTier}
@@ -1299,6 +1300,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     canEditStatus={isIndividual || isTeamAdmin}
                     canCopy={isIndividual || isTeamAdmin}
                     defaultFilter="me"
+                    hideAllTasks={isIndividual}
                     restrictPmStatusToOwn={isPmTier}
                   />
                 )}

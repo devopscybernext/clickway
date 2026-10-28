@@ -1586,9 +1586,9 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
   );
 }
 
-export function ResourceOverview({ data, headers, availData = [], availHeaders = [], onStatusChange, pmStatusColName, currentUserName, currentUserEmail, showFilter, canEditPmStatus = true, canEditStatus = false, canCopy = false, restrictToMine = false, defaultFilter = 'all', restrictPmStatusToOwn = false, vinayQaMode = false, showQaTab = false, qaData = [], qaHeaders = [], onQaCellChange }: { data: SheetData[]; headers: string[]; availData?: SheetData[]; availHeaders?: string[]; onStatusChange?: (row: SheetData, col: string, val: string) => Promise<void>; pmStatusColName?: string; currentUserName?: string; currentUserEmail?: string; showFilter?: boolean; canEditPmStatus?: boolean; canEditStatus?: boolean; canCopy?: boolean; restrictToMine?: boolean; defaultFilter?: 'all' | 'me'; restrictPmStatusToOwn?: boolean; vinayQaMode?: boolean; showQaTab?: boolean; qaData?: SheetData[]; qaHeaders?: string[]; onQaCellChange?: (row: SheetData, colName: string, value: string) => Promise<void> }) {
+export function ResourceOverview({ data, headers, availData = [], availHeaders = [], onStatusChange, pmStatusColName, currentUserName, currentUserEmail, showFilter, canEditPmStatus = true, canEditStatus = false, canCopy = false, restrictToMine = false, hideAllTasks = false, defaultFilter = 'all', restrictPmStatusToOwn = false, vinayQaMode = false, showQaTab = false, qaData = [], qaHeaders = [], onQaCellChange }: { data: SheetData[]; headers: string[]; availData?: SheetData[]; availHeaders?: string[]; onStatusChange?: (row: SheetData, col: string, val: string) => Promise<void>; pmStatusColName?: string; currentUserName?: string; currentUserEmail?: string; showFilter?: boolean; canEditPmStatus?: boolean; canEditStatus?: boolean; canCopy?: boolean; restrictToMine?: boolean; hideAllTasks?: boolean; defaultFilter?: 'all' | 'me'; restrictPmStatusToOwn?: boolean; vinayQaMode?: boolean; showQaTab?: boolean; qaData?: SheetData[]; qaHeaders?: string[]; onQaCellChange?: (row: SheetData, colName: string, value: string) => Promise<void> }) {
   const [openName, setOpenName] = useState<string | null>(null);
-  const [pmFilter, setPmFilter] = useState<'all' | 'me' | 'today' | 'me-today' | 'flat' | 'qa'>(restrictToMine ? 'me' : vinayQaMode ? 'flat' : defaultFilter);
+  const [pmFilter, setPmFilter] = useState<'all' | 'me' | 'today' | 'me-today' | 'flat' | 'qa'>(restrictToMine || (hideAllTasks && !vinayQaMode) ? 'me' : vinayQaMode ? 'flat' : defaultFilter);
   const [search, setSearch] = useState('');
   // Column filters next to the search box (empty = no filtering on that column)
   const [bucketFilter, setBucketFilter] = useState<string[]>([]);
@@ -1867,11 +1867,13 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
               </>
             ) : (
               <>
-                <button
-                  onClick={() => handleFilterChange('flat')}
-                  className="px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer"
-                  style={pmFilter === 'flat' ? { background: 'var(--cn-accent)', color: '#fff' } : { background: 'transparent', color: 'var(--cn-text-muted)' }}
-                >All Tasks</button>
+                {(!hideAllTasks || !canFilterByMe) && (
+                  <button
+                    onClick={() => handleFilterChange('flat')}
+                    className="px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer"
+                    style={pmFilter === 'flat' ? { background: 'var(--cn-accent)', color: '#fff' } : { background: 'transparent', color: 'var(--cn-text-muted)' }}
+                  >All Tasks</button>
+                )}
                 {canFilterByMe && (
                   <button
                     onClick={() => handleFilterChange('me')}
