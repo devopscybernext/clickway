@@ -74,6 +74,4 @@ docs/               mysql-migration.md: data store, forms, deploys, day-to-day t
 
 ## Deploying
 
-Merging to `main` deploys to Cloudways automatically through GitHub Actions (`.github/workflows/deploy.yml`). Run `npm run test:e2e` locally first. If a change adds a column in `lib/data/datasets.ts`, run `npm run db:migrate` on the server afterwards.
-
-The old Vercel URL redirects to Cloudways (`vercel.json`).
+Merging to `main` deploys to Cloudways automatically through GitHub Actions (`.github/workflows/deploy.yml`). Run `npm run test:e2e` locally first. The server's deploy script (`~/deploy-dashboard.sh`) installs, builds, runs `npm run db:migrate` (so new columns are added automatically) and restarts the app; if any step fails, the old version keeps running.
