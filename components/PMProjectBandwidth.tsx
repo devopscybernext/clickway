@@ -1012,6 +1012,8 @@ interface Props {
   // control entirely instead of offering tiers that don't add much value
   // at this scale.
   lockShowDataFull?: boolean;
+  /** Edit one project at a time in a popup (like My Projects) without locking the table to Full — for admins on Current / Previous Months */
+  popupEdit?: boolean;
   // True for "Previous Months" — every sheet column (including the
   // report-style ones hidden elsewhere) shown by default, at the Full level
   // with no Low/Medium/Full toggle.
@@ -1268,15 +1270,15 @@ export async function downloadProjectsPdf({ rows, headers, include, eyebrow, fil
   await downloadDetailsPdf(projects, fileName, summary, eyebrow);
 }
 
-export default function PMProjectBandwidth({ data, headers, canEdit = false, onCellChange, allData, defaultToCurrentMonth = true, hideYearMonthFilter = false, lockShowDataFull = false, showAllColumns = false, allowReportDownload = false, reportName = 'Report', hidePmFilter = false, hidePmSummary = false, allPmNames = [] }: Props) {
+export default function PMProjectBandwidth({ data, headers, canEdit = false, popupEdit = false, onCellChange, allData, defaultToCurrentMonth = true, hideYearMonthFilter = false, lockShowDataFull = false, showAllColumns = false, allowReportDownload = false, reportName = 'Report', hidePmFilter = false, hidePmSummary = false, allPmNames = [] }: Props) {
   const optionSourceData = allData ?? data;
   // Cells only become editable after clicking "Edit", same pattern as Tasks Assigned
   const [editMode, setEditMode] = useState(false);
   // My Projects (lockShowDataFull) edits one project at a time through a
   // popup instead of making every cell inline-editable — "Edit" there just
   // reveals a per-row edit button (see popupRow below).
-  const popupEditing = lockShowDataFull && canEdit && editMode;
-  const isEditable = canEdit && editMode && !lockShowDataFull;
+  const popupEditing = (lockShowDataFull || popupEdit) && canEdit && editMode;
+  const isEditable = canEdit && editMode && !lockShowDataFull && !popupEdit;
   const [popupRow, setPopupRow] = useState<SheetData | null>(null);
   // Current Month / Previous Months: click a row (or its eye) for a read-only
   // popup with the whole project. My Projects keeps its own edit popup.
