@@ -634,7 +634,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   // "Add New Project" form — PM-tier users and the admin tier
   // Admin / HM / Mod can add and edit projects too (PMs do on My Projects and can add)
   const canAddProject = isPmTier || isAdmin;
-  const canEditPmTab = isAdmin && (effectivePmBandwidthSubTab === 'current' || effectivePmBandwidthSubTab === 'archive' || effectivePmBandwidthSubTab === 'closed');
+  const canEditPmTab = isAdmin && (effectivePmBandwidthSubTab === 'current' || effectivePmBandwidthSubTab === 'archive');
 
   // ── Team roster filtering (Web/Marketing split for Team Bandwidth & Tasks Overview) ──
   const filterByRoster = (rows: SheetData[], rowHeaders: string[], roster: string[]) => {
@@ -1129,12 +1129,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   </div>
                 )}
                 {effectivePmBandwidthSubTab === 'closed' ? (
-                  <ClosedProjects
-                    data={pmBandwidthData}
-                    headers={pmBandwidthHeaders}
-                    canEdit={canEditPmTab}
-                    onCellChange={canEditPmTab ? handlePmBandwidthChange : undefined}
-                  />
+                  <ClosedProjects data={pmBandwidthData} headers={pmBandwidthHeaders} />
                 ) : effectivePmBandwidthSubTab === 'mine' && myProjectsView === 'report' ? (
                   <ProjectReport
                     data={pmBandwidthData.filter(r =>

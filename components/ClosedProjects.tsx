@@ -1,11 +1,11 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { X, Check, ArrowRight, Download, Pencil } from 'lucide-react';
+import { X, Check, ArrowRight, Download } from 'lucide-react';
 import { SheetData } from '@/lib/dataStore';
 import { memberPhoto, memberColor } from '@/lib/memberColors';
 import { MultiSelect } from './FilteredDataTable';
-import { statusColor, ProjectDetailsModal, PmProjectEditPopup, buildDetailsExcel, downloadProjectsPdf } from './PMProjectBandwidth';
+import { statusColor, ProjectDetailsModal, buildDetailsExcel, downloadProjectsPdf } from './PMProjectBandwidth';
 import DownloadReportDialog, { ALL_DOWNLOAD_PDF_KEYS } from './DownloadReportDialog';
 import { downloadTableXlsx } from '@/lib/tableExport';
 
@@ -53,15 +53,12 @@ interface Props {
   // Every project row from both Current Month and Previous Months sheets.
   data: SheetData[];
   headers: string[];
-  /** admins / PMs who may edit a project in the popup (same people as Current Month / Previous Months) */
-  canEdit?: boolean;
-  onCellChange?: (row: SheetData, col: string, value: string) => Promise<void>;
 }
 
 // Closed Project tab — read-only cards for every project (current or
 // previous month) whose Status is Escalated or one of the three Closed
 // outcomes, with filters on top.
-export default function ClosedProjects({ data, headers, canEdit = false, onCellChange }: Props) {
+export default function ClosedProjects({ data, headers }: Props) {
   const col = (name: string) => headers.find(h => h.toLowerCase() === name);
   const projectCol = headers.find(h => h.toLowerCase().includes('project name'));
   const statusCol = col('status');
@@ -81,11 +78,6 @@ export default function ClosedProjects({ data, headers, canEdit = false, onCellC
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // Clicking a card opens the full-details popup for that project.
   const [selected, setSelected] = useState<SheetData | null>(null);
-  // "Edit" turns the cards' click into the edit popup instead of the read-only details.
-  const [editMode, setEditMode] = useState(false);
-  const [editRow, setEditRow] = useState<SheetData | null>(null);
-  const editing = canEdit && !!onCellChange && editMode;
-  const openRow = (r: SheetData) => (editing ? setEditRow(r) : setSelected(r));
   // Download Report: Excel or PDF of the projects currently shown (after filters)
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [reportPdfSelection, setReportPdfSelection] = useState<Set<string> | null>(null);
@@ -195,26 +187,12 @@ export default function ClosedProjects({ data, headers, canEdit = false, onCellC
           );
         })}
 
-        {canEdit && onCellChange && (
-          <button
-            onClick={() => setEditMode(m => !m)}
-            title={editMode ? 'Stop editing' : 'Edit'}
-            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg cursor-pointer transition-all text-xs font-semibold"
-            style={editMode
-              ? { background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }
-              : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}
-          >
-            <Pencil className="w-3.5 h-3.5" />
-            {editMode ? 'Done Editing' : 'Edit'}
-          </button>
-        )}
-
         {/* Download Report — only the projects left after the filters */}
         <button
           onClick={() => setReportDialogOpen(true)}
           disabled={rows.length === 0 || reportBusy}
           title={rows.length === 0 ? 'No projects to download' : `Download the ${rows.length} project${rows.length === 1 ? '' : 's'} shown (after filters) as Excel or PDF`}
-          className={`${canEdit && onCellChange ? '' : 'ml-auto '}inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg cursor-pointer transition-all text-xs font-semibold disabled:opacity-60 disabled:cursor-not-allowed`}
+          className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg cursor-pointer transition-all text-xs font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
           style={reportError
             ? { background: '#dc2626', color: '#fff', border: '1px solid #dc2626' }
             : { background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }}
@@ -282,9 +260,9 @@ export default function ClosedProjects({ data, headers, canEdit = false, onCellC
                 key={id}
                 role="button"
                 tabIndex={0}
-                title={editing ? 'Click to edit this project' : 'Click to see all the details'}
-                onClick={() => openRow(r)}
-                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRow(r); } }}
+                title="Click to see all the details"
+                onClick={() => setSelected(r)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(r); } }}
                 className="rounded-3xl p-6 flex flex-col gap-5 min-w-0 cursor-pointer transition-shadow hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FE4A23]"
                 style={{ background: 'var(--cn-bg-row-even)', border: '1px solid var(--cn-border)' }}
               >
@@ -366,17 +344,6 @@ export default function ClosedProjects({ data, headers, canEdit = false, onCellC
       )}
 
       {selected && <ProjectDetailsModal row={selected} headers={headers} onClose={() => setSelected(null)} />}
-
-      {editRow && onCellChange && (
-        <PmProjectEditPopup
-          key={String(editRow['__id'] ?? '')}
-          row={editRow}
-          headers={headers}
-          optionSourceData={data}
-          onCellChange={onCellChange}
-          onClose={() => setEditRow(null)}
-        />
-      )}
 
       {reportDialogOpen && (
         <DownloadReportDialog
