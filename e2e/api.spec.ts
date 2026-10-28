@@ -62,6 +62,14 @@ test('entry forms validate answers and store a submission only once', async ({ r
   expect(Number(rows[0].n)).toBe(1);
 });
 
+test('nothing is offered to search engines', async ({ request }) => {
+  for (const path of ['/', '/api/login', '/favicon.ico']) {
+    expect((await request.get(path)).headers()['x-robots-tag'], path).toBe('noindex, nofollow, noarchive');
+  }
+  const html = await (await request.get('/')).text();
+  expect(html).toMatch(/<meta name="robots" content="noindex, nofollow, nocache"/);
+});
+
 test('the retired Google Forms endpoint no longer accepts anything', async ({ request }) => {
   const res = await request.post('/api/intake', { data: { form: 'leaderboard' }, headers: { authorization: 'Bearer x' } });
   expect(res.status()).toBe(404);

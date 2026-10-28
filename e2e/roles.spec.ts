@@ -45,13 +45,14 @@ test('a PM can add projects and has My Projects', async ({ page }) => {
   await expect(page.getByRole('button', { name: '+ Add Feedback' })).toBeVisible();
 });
 
-test('an admin has no My Projects or Add New Project, and is refused the PM form', async ({ page }) => {
+test('an admin has no My Projects, but can add projects', async ({ page }) => {
   await login(page, USERS.admin);
   const nav = page.getByRole('navigation');
   await nav.getByRole('button', { name: 'PM Projects', exact: true }).click();
   await expect(nav.getByRole('button', { name: 'Current Month', exact: true })).toBeVisible();
   await expect(nav.getByRole('button', { name: 'My Projects', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '+ Add New Project' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '+ Add New Project' })).toBeVisible();
+  // Allowed, so an empty submission fails validation (422) rather than access (403).
   const form = await page.request.post('/api/forms', { data: { form: 'pm-project', submissionId: randomUUID(), answers: {} } });
-  expect(form.status()).toBe(403);
+  expect(form.status()).toBe(422);
 });
