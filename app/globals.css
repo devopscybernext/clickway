@@ -123,11 +123,12 @@
 }
 
 /* Table rows in admin mode — remove zebra, add clean hover */
-[data-theme^="admin"] table tbody tr {
+/* Rows that carry their own tint (data-row-tint, e.g. PM Status colours in Tasks Assigned) keep it. */
+[data-theme^="admin"] table tbody tr:not([data-row-tint]) {
   background: var(--cn-bg-row-even) !important;
   border-bottom: 1px solid var(--cn-border-light) !important;
 }
-[data-theme^="admin"] table tbody tr:hover {
+[data-theme^="admin"] table tbody tr:not([data-row-tint]):hover {
   background: var(--cn-bg-hover) !important;
 }
 

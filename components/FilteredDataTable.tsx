@@ -381,6 +381,15 @@ function AssignedPersonSelect({ value, options, row, col, onStatusChange }: Omit
   );
 }
 
+// Row tint once the PM has acted on a task. "No Action Taken" (or blank) is
+// absent on purpose — those rows keep their normal look.
+const PM_ROW_TINTS: Record<string, { bg: string; border: string }> = {
+  'changes':             { bg: 'rgba(239,68,68,0.18)',  border: 'rgba(239,68,68,0.28)' },
+  'approved':            { bg: 'rgba(34,197,94,0.14)',  border: 'rgba(34,197,94,0.22)' },
+  'submitted to client': { bg: 'rgba(34,197,94,0.14)',  border: 'rgba(34,197,94,0.22)' },
+  'ticketclosed':        { bg: 'rgba(168,85,247,0.16)', border: 'rgba(168,85,247,0.26)' },
+};
+
 // ─── PM Status Select ─────────────────────────────────────────────────────────
 const PM_STATUS_OPTIONS = ['No Action Taken', 'Changes', 'Approved', 'Submitted To Client', 'TicketClosed'];
 const PM_STATUS_COLORS: Record<string, string> = {
@@ -790,6 +799,11 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
   const bucketCol = useMemo(
     () => filterCols.find(c => c.term === 'task daily bucket')?.col,
     [filterCols]
+  );
+
+  const pmStatusRowCol = useMemo(
+    () => headers.find(h => h.toLowerCase().includes('pm status')),
+    [headers]
   );
 
   // All real headers (exclude auto-named "Column N" placeholders)
@@ -1215,6 +1229,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
               pageData.map((row, i) => {
                 const bucketVal = bucketCol ? String(row[bucketCol] ?? '').trim().toLowerCase() : '';
                 const isToday = bucketCol && bucketVal === 'today';
+                const pmTint = pmStatusRowCol ? PM_ROW_TINTS[String(row[pmStatusRowCol] ?? '').trim().toLowerCase()] : undefined;
                 return (
                   <tr
                     // __id (tab-prefixed, e.g. "Current Month Tasks::5") is
@@ -1223,7 +1238,10 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                     // own row numbering at 2, which was rendering as blank/
                     // duplicated rows via React key collisions.
                     key={String(row['__id'] ?? row['__row'] ?? i)}
-                    style={isToday
+                    data-row-tint={pmTint ? '' : undefined}
+                    style={pmTint
+                      ? { backgroundColor: pmTint.bg, borderColor: pmTint.border }
+                      : isToday
                       ? { backgroundColor: 'rgba(34,197,94,0.20)', borderColor: 'rgba(34,197,94,0.15)' }
                       : { backgroundColor: i % 2 === 0 ? 'var(--cn-bg-row-even)' : 'var(--cn-bg-row-odd)', borderColor: 'var(--cn-border-light)' }}
                     className={`border-b transition-colors hover:bg-[var(--cn-bg-hover)]`}
