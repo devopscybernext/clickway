@@ -321,6 +321,10 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [myProjectsView, setMyProjectsView] = useState<'all' | 'report'>('all');
   const [teamBandwidthSubTab, setTeamBandwidthSubTab] = useState<Team>(lockedTeamBandwidthTeam ?? 'web');
   const [analyticsSubDept, setAnalyticsSubDept] = useState<SubDept>('all');
+  // Team Workload card the admin/PM clicked — one person at a time; the Project
+  // State cards above follow it. Cleared when the team or sub-department tab changes.
+  const [selectedMember, setSelectedMember] = useState<string | null>(null);
+  useEffect(() => { setSelectedMember(null); }, [navTeam, analyticsSubDept]);
   const [analysisDateFilter, setAnalysisDateFilter] = useState<'all' | 'daily' | 'weekly' | 'monthly'>('all');
 
   const intervalRef   = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -613,8 +617,10 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const isReport            = selectedSheet === '16';
   const isInHouse           = selectedSheet === '17';
 
-  // "Add New Project" form — only shown to PM-tier users
-  const canAddProject = isPmTier;
+  // "Add New Project" form — PM-tier users and the admin tier
+  // Admin / HM / Mod can add and edit projects too (PMs do on My Projects and can add)
+  const canAddProject = isPmTier || isAdmin;
+  const canEditPmTab = isAdmin && (effectivePmBandwidthSubTab === 'current' || effectivePmBandwidthSubTab === 'archive');
 
   // ── Team roster filtering (Web/Marketing split for Team Bandwidth & Tasks Overview) ──
   const filterByRoster = (rows: SheetData[], rowHeaders: string[], roster: string[]) => {
@@ -792,6 +798,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   availData={analyticsAvailData}
                   availHeaders={analyticsAvailHeaders}
                   subDept={analyticsSubDept}
+                  personFilter={selectedMember ?? undefined}
                 />
               )}
 
@@ -832,6 +839,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                       availHeaders={analyticsAvailHeaders}
                       subDept={analyticsSubDept}
                       onSubDeptChange={setAnalyticsSubDept}
+                      selectedName={selectedMember}
+                      onSelectName={setSelectedMember}
                     />
                   </div>
                 </div>
@@ -1126,8 +1135,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                         : pmBandwidthData.filter(r => r['__sheetId'] === PM_BANDWIDTH_ALL_DATA_SHEET_ID)
                   }
                   headers={pmBandwidthHeaders}
-                  canEdit={effectivePmBandwidthSubTab === 'mine'}
-                  onCellChange={effectivePmBandwidthSubTab === 'mine' ? handlePmBandwidthChange : undefined}
+                  canEdit={effectivePmBandwidthSubTab === 'mine' || canEditPmTab}
+                  popupEdit={canEditPmTab}
+                  onCellChange={effectivePmBandwidthSubTab === 'mine' || canEditPmTab ? handlePmBandwidthChange : undefined}
                   allData={pmBandwidthData}
                   allPmNames={pmUsers.map(u => u.displayName).filter(Boolean)}
                   defaultToCurrentMonth={effectivePmBandwidthSubTab !== 'archive'}

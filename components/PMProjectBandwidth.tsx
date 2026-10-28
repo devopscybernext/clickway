@@ -12,6 +12,7 @@ import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { downloadTableXlsx, type TableExport } from '@/lib/tableExport';
 import { downloadDetailsPdf, type DetailPdfProject, type ReportPdfSummary } from '@/lib/projectReportPdf';
 import { isFlaggedStatus } from '@/lib/statusFlags';
+import WorkloadBar, { workloadColor } from './WorkloadBar';
 import DownloadReportDialog, { ALL_DOWNLOAD_PDF_KEYS } from './DownloadReportDialog';
 
 const PAGE_SIZE = 50;
@@ -350,7 +351,13 @@ const PM_BANDWIDTH_CAPACITY = 300;
 
 // PM workload badge — bands on raw Total Hours (not a rate, not net of
 // current-month progress; deliberately simple per explicit request).
-function pmWorkloadStatus(totalHours: number): { label: string; bg: string } {
+// The screens show the percentage (Total Hours / the 300h ceiling), not the label;
+// the band only picks the bar's colour.
+function pmWorkloadStatus(totalHours: number): { label: string; bg: string; pct: number } {
+  const pct = Math.round((totalHours / PM_BANDWIDTH_CAPACITY) * 100);
+  return { ...pmWorkloadBand(totalHours), bg: workloadColor(pct), pct };
+}
+function pmWorkloadBand(totalHours: number): { label: string; bg: string } {
   if (totalHours < 100) return { label: 'Available', bg: '#22c55e' };
   if (totalHours < 180) return { label: 'Partially Available', bg: '#f59e0b' };
   if (totalHours < 230) return { label: 'Partially Occupied', bg: '#f59e0b' };
@@ -1005,6 +1012,8 @@ interface Props {
   // control entirely instead of offering tiers that don't add much value
   // at this scale.
   lockShowDataFull?: boolean;
+  /** Edit one project at a time in a popup (like My Projects) without locking the table to Full — for admins on Current / Previous Months */
+  popupEdit?: boolean;
   // True for "Previous Months" — every sheet column (including the
   // report-style ones hidden elsewhere) shown by default, at the Full level
   // with no Low/Medium/Full toggle.
@@ -1261,15 +1270,15 @@ export async function downloadProjectsPdf({ rows, headers, include, eyebrow, fil
   await downloadDetailsPdf(projects, fileName, summary, eyebrow);
 }
 
-export default function PMProjectBandwidth({ data, headers, canEdit = false, onCellChange, allData, defaultToCurrentMonth = true, hideYearMonthFilter = false, lockShowDataFull = false, showAllColumns = false, allowReportDownload = false, reportName = 'Report', hidePmFilter = false, hidePmSummary = false, allPmNames = [] }: Props) {
+export default function PMProjectBandwidth({ data, headers, canEdit = false, popupEdit = false, onCellChange, allData, defaultToCurrentMonth = true, hideYearMonthFilter = false, lockShowDataFull = false, showAllColumns = false, allowReportDownload = false, reportName = 'Report', hidePmFilter = false, hidePmSummary = false, allPmNames = [] }: Props) {
   const optionSourceData = allData ?? data;
   // Cells only become editable after clicking "Edit", same pattern as Tasks Assigned
   const [editMode, setEditMode] = useState(false);
   // My Projects (lockShowDataFull) edits one project at a time through a
   // popup instead of making every cell inline-editable — "Edit" there just
   // reveals a per-row edit button (see popupRow below).
-  const popupEditing = lockShowDataFull && canEdit && editMode;
-  const isEditable = canEdit && editMode && !lockShowDataFull;
+  const popupEditing = (lockShowDataFull || popupEdit) && canEdit && editMode;
+  const isEditable = canEdit && editMode && !lockShowDataFull && !popupEdit;
   const [popupRow, setPopupRow] = useState<SheetData | null>(null);
   // Current Month / Previous Months: click a row (or its eye) for a read-only
   // popup with the whole project. My Projects keeps its own edit popup.
@@ -1538,6 +1547,27 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
     return rows;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, filters, filterCols, statusCol, phaseCol, milestonesCol, upsellCol, paymentStatusCol]);
+  // The rows without the PM filter: the PM Summary cards are built from these, so
+  // every PM keeps their card (and their own figures) while some are selected.
+  const filteredNoPm = useMemo(() => {
+    let rows = data;
+    filterCols.forEach(({ col }) => {
+      if (col === '__pm') return;
+      const selected = filters[col] ?? [];
+      if (selected.length > 0) rows = rows.filter(r => selected.includes(String(r[col] ?? '').trim()));
+    });
+    return rows;
+  }, [data, filters, filterCols]);
+  const scopedRowsNoPm = useMemo(() => {
+    let rows = data;
+    filterCols.forEach(({ col }) => {
+      if (col === '__pm' || attributeFilterCols.includes(col)) return;
+      const selected = filters[col] ?? [];
+      if (selected.length > 0) rows = rows.filter(r => selected.includes(String(r[col] ?? '').trim()));
+    });
+    return rows;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, filters, filterCols, statusCol, phaseCol, milestonesCol, upsellCol, paymentStatusCol]);
   const withScopedHours = (rowsFiltered: SheetData[], rowsScoped: SheetData[]) => {
     const counts = computeStatsFor(rowsFiltered, statsCols);
     const hours = computeStatsFor(rowsScoped, statsCols);
@@ -1590,22 +1620,22 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
   // zero project rows yet, so a new PM shows up immediately at full
   // Bandwidth/Available instead of staying invisible until their first
   // submission.
-  const hasActiveFilter = Object.values(filters).some(v => v.length > 0);
+  const hasActiveFilter = Object.entries(filters).some(([k, v]) => k !== '__pm' && v.length > 0);
   const pmSummaries = useMemo(() => {
     if (!showPmCol) return [];
     const allNames = new Set(data.map(r => String(r['__pm'] ?? '').trim()).filter(Boolean));
     if (allNames.size <= 1) return [];
-    const fromFiltered = filtered.map(r => String(r['__pm'] ?? '').trim()).filter(Boolean);
+    const fromFiltered = filteredNoPm.map(r => String(r['__pm'] ?? '').trim()).filter(Boolean);
     const names = [...new Set(hasActiveFilter ? fromFiltered : [...fromFiltered, ...allPmNames])].sort();
     return names.map(name => ({
       name,
       ...withScopedHours(
-        filtered.filter(r => String(r['__pm'] ?? '').trim() === name),
-        scopedRows.filter(r => String(r['__pm'] ?? '').trim() === name)
+        filteredNoPm.filter(r => String(r['__pm'] ?? '').trim() === name),
+        scopedRowsNoPm.filter(r => String(r['__pm'] ?? '').trim() === name)
       ),
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, filtered, scopedRows, showPmCol, hasActiveFilter, allPmNames, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol]);
+  }, [data, filteredNoPm, scopedRowsNoPm, showPmCol, hasActiveFilter, allPmNames, totalHoursCol, currentMonthHoursCol, riskMonthHoursCol, paymentStatusCol, followupDateCol, statusCol]);
 
   const fmtHours = (n: number) => `${formatHoursClock(n)}h`;
 
@@ -1650,6 +1680,19 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
 
   const handleFilter = (col: string, vals: string[]) => {
     setFilters(prev => ({ ...prev, [col]: vals }));
+    setPage(1);
+  };
+
+  // PM Summary cards act as a multi-select for the PM filter. When at least one is
+  // picked, the others fade to 60% opacity.
+  const PM_CARD_DIMMED_OPACITY = 0.6;
+  const selectedPms = filters['__pm'] ?? [];
+  const pmCardsClickable = showPmCol && !hidePmFilter;
+  const togglePmCard = (name: string) => {
+    setFilters(prev => {
+      const cur = prev['__pm'] ?? [];
+      return { ...prev, __pm: cur.includes(name) ? cur.filter(n => n !== name) : [...cur, name] };
+    });
     setPage(1);
   };
 
@@ -1864,8 +1907,28 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
               // like "Bandwidth"/"Follow-up Due").
               const metricsGridCols = 'grid-cols-2';
               const workload = pmWorkloadStatus(pm.totalHours);
+              const isSelected = selectedPms.includes(pm.name);
+              const dimmed = pmCardsClickable && selectedPms.length > 0 && !isSelected;
               return (
-                <div key={pm.name} className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+                <div
+                  key={pm.name}
+                  className="rounded-xl border overflow-hidden transition-opacity"
+                  style={{
+                    background: 'var(--cn-bg-card)',
+                    // a selected card gets a light orange border
+                    borderColor: isSelected && pmCardsClickable ? 'rgba(254, 74, 35, 0.5)' : 'var(--cn-border)',
+                    opacity: dimmed ? PM_CARD_DIMMED_OPACITY : 1,
+                    cursor: pmCardsClickable ? 'pointer' : undefined,
+                  }}
+                  {...(pmCardsClickable ? {
+                    role: 'button',
+                    tabIndex: 0,
+                    'aria-pressed': isSelected,
+                    title: isSelected ? `Show all PMs again (click to unselect ${pm.name})` : `Show only ${pm.name}'s projects`,
+                    onClick: () => togglePmCard(pm.name),
+                    onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); togglePmCard(pm.name); } },
+                  } : {})}
+                >
                   <div className="flex items-center gap-2.5 px-3.5 pt-3.5 pb-3">
                     {photo ? (
                       <img src={photo} alt={pm.name} className="w-9 h-9 rounded-full object-cover shrink-0"
@@ -1875,14 +1938,9 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                         style={{ background: `linear-gradient(135deg, ${bg}cc, ${bg}66)` }}>{initials}</div>
                     )}
                     <p className="text-sm font-semibold truncate min-w-0 flex-1" style={{ color: 'var(--cn-text-primary)' }}>{pm.name}</p>
-                    {/* Workload status is a "right now" concept — doesn't
-                        make sense against a past month's totals, so it's
-                        hidden on the historical-only Previous Months tab. */}
-                    {defaultToCurrentMonth && (
-                      <span className="text-[10px] font-bold px-2 py-1 rounded-full shrink-0" style={{ background: workload.bg + '22', color: workload.bg }}>
-                        {workload.label}
-                      </span>
-                    )}
+                    {/* Workload: Total Hours as a 0-100% bar (300h = 100%), on every
+                        tab — Current Month, Previous Months and My Projects */}
+                    <WorkloadBar status={workload} />
                   </div>
                   {activeMetrics.length > 0 && (
                     <div className={`grid ${metricsGridCols} gap-px`} style={{ background: 'var(--cn-border)', borderTop: '1px solid var(--cn-border)' }}>
