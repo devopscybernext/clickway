@@ -1,7 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { ENTRY_FORMS, FormKey, FormField, Answers, validateAnswers, gridKey } from '@/lib/forms';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
+import {
+  ENTRY_FORMS, FormKey, FormField, Answers, validateAnswers, gridKey,
+  DURATION_MAX_HOURS, DURATION_MAX_MINUTES, formatDuration, parseDuration,
+} from '@/lib/forms';
 
 // One of the dashboard's entry forms (lib/forms.ts) — replaces the embedded
 // Google Form. Submits to /api/forms, which stores the row in MySQL.
@@ -18,6 +22,49 @@ const inputStyle = {
   color: 'var(--cn-text-primary)',
   border: '1px solid var(--cn-border)',
 } as const;
+
+const HOUR_CHOICES = Array.from({ length: DURATION_MAX_HOURS + 1 }, (_, i) => i);
+const MINUTE_CHOICES = Array.from({ length: DURATION_MAX_MINUTES + 1 }, (_, i) => i);
+const two = (n: number) => String(n).padStart(2, '0');
+
+// A dropdown you tick several entries in (the Assigned question). The chosen
+// names show on the button; the list closes when you click elsewhere.
+function MultiDropdown({ id, options, checked, onChange }: {
+  id: string; options: string[]; checked: string[]; onChange: (next: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const close = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, []);
+  return (
+    <div ref={ref} className="relative">
+      <button id={id} type="button" onClick={() => setOpen(o => !o)} aria-haspopup="listbox" aria-expanded={open}
+        className="w-full px-3 py-2 rounded-lg text-sm text-left flex items-center justify-between gap-2 cursor-pointer focus:outline-none" style={inputStyle}>
+        <span className="truncate" style={checked.length ? undefined : { color: 'var(--cn-text-muted)' }}>
+          {checked.length ? checked.join(', ') : 'Choose'}
+        </span>
+        <ChevronDown className={`w-4 h-4 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute left-0 right-0 top-full mt-1 z-50 max-h-64 overflow-y-auto rounded-lg border py-1"
+          style={{ background: 'var(--cn-bg-dropdown)', borderColor: 'var(--cn-border)', boxShadow: '0 8px 24px rgba(0,0,0,0.25)' }}>
+          {options.map(o => (
+            <label key={o} className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-[var(--cn-bg-input)]"
+              style={{ color: 'var(--cn-text-primary)' }}>
+              <input type="checkbox" checked={checked.includes(o)}
+                onChange={() => onChange(checked.includes(o) ? checked.filter(v => v !== o) : [...checked, o])}
+                style={{ accentColor: 'var(--cn-accent)' }} />
+              <span className="truncate">{o}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface FieldState {
   value: string;      // choice/dropdown/text/paragraph/date ("__other__" when Other is picked)
@@ -53,10 +100,26 @@ function toAnswers(fields: FormField[], state: Record<string, FieldState>): Answ
   return answers;
 }
 
-export default function EntryForm({ formKey, onSubmitted, compact = false }: {
+// Dropdown entries for a question: the form's own list plus anything already
+// in the sheet (hints, keyed by the question title), so a project or client
+// that's already been used can be picked rather than retyped.
+function optionsFor(f: FormField, hints?: Record<string, string[]>): string[] {
+  const base = f.options ?? [];
+  const seen = new Set(base.map(o => o.toLowerCase()));
+  const extra = (hints?.[f.header] ?? []).map(v => v.trim()).filter(v => {
+    if (!v || seen.has(v.toLowerCase())) return false;
+    seen.add(v.toLowerCase());
+    return true;
+  }).sort((a, b) => a.localeCompare(b));
+  return [...base, ...extra];
+}
+
+export default function EntryForm({ formKey, onSubmitted, compact = false, optionHints }: {
   formKey: FormKey;
   onSubmitted?: () => void;
   compact?: boolean;
+  /** extra dropdown entries per question title, e.g. the projects already in the sheet */
+  optionHints?: Record<string, string[]>;
 }) {
   const def = ENTRY_FORMS[formKey];
   const [state, setState] = useState(() => emptyState(def.fields));
@@ -148,13 +211,47 @@ export default function EntryForm({ formKey, onSubmitted, compact = false }: {
               <select id={`${id}-input`} value={s.value} onChange={e => update(f.header, { value: e.target.value })}
                 className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none cursor-pointer" style={inputStyle}>
                 <option value="">Choose</option>
-                {f.options!.map(o => <option key={o} value={o}>{o}</option>)}
+                {optionsFor(f, optionHints).map(o => <option key={o} value={o}>{o}</option>)}
+                {f.allowOther && <option value={OTHER}>Other…</option>}
               </select>
             )}
 
-            {(f.type === 'choice' || f.type === 'checkboxes') && (
+            {f.type === 'duration' && (() => {
+              const d = parseDuration(s.value);
+              return (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <select id={`${id}-input`} aria-label={`${f.header} hours`} value={d ? String(d.h) : ''}
+                    onChange={e => update(f.header, { value: e.target.value === '' ? '' : formatDuration(Number(e.target.value), d?.m ?? 0) })}
+                    className="px-3 py-2 rounded-lg text-sm focus:outline-none cursor-pointer" style={inputStyle}>
+                    <option value="">Hours</option>
+                    {HOUR_CHOICES.map(h => <option key={h} value={h}>{two(h)}</option>)}
+                  </select>
+                  <span className="font-semibold" style={{ color: 'var(--cn-text-muted)' }}>:</span>
+                  <select id={`${id}-minutes`} aria-label={`${f.header} minutes`} value={d ? String(d.m) : ''}
+                    onChange={e => update(f.header, { value: e.target.value === '' ? '' : formatDuration(d?.h ?? 0, Number(e.target.value)) })}
+                    className="px-3 py-2 rounded-lg text-sm focus:outline-none cursor-pointer" style={inputStyle}>
+                    <option value="">Minutes</option>
+                    {MINUTE_CHOICES.map(m => <option key={m} value={m}>{two(m)}</option>)}
+                  </select>
+                  {d && (
+                    <>
+                      <span className="text-xs tabular-nums" style={{ color: 'var(--cn-text-muted)' }}>{two(d.h)}:{two(d.m)}</span>
+                      <button type="button" className="text-xs cursor-pointer" style={{ color: 'var(--cn-text-muted)' }}
+                        onClick={() => update(f.header, { value: '' })}>Clear</button>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
+
+            {f.type === 'checkboxes' && f.asDropdown && (
+              <MultiDropdown id={`${id}-input`} options={optionsFor(f, optionHints)} checked={s.checked.filter(v => v !== OTHER)}
+                onChange={next => update(f.header, { checked: next })} />
+            )}
+
+            {(f.type === 'choice' || (f.type === 'checkboxes' && !f.asDropdown)) && (
               <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
-                {[...f.options!, ...(f.allowOther ? [OTHER] : [])].map((o, i) => {
+                {[...optionsFor(f, optionHints), ...(f.allowOther ? [OTHER] : [])].map((o, i) => {
                   const optId = `${id}-o${i}`;
                   const checked = f.type === 'checkboxes' ? s.checked.includes(o) : s.value === o;
                   return (

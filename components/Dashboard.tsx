@@ -24,6 +24,7 @@ import Reports from './Reports';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import LeaveStatus from './LeaveStatus';
 import EntryForm from './EntryForm';
+import { ENTRY_FORMS, FormKey } from '@/lib/forms';
 import AdminPortal from './AdminPortal';
 import { AlertCircle, Sparkles, ChevronUp, ChevronDown, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
@@ -69,6 +70,19 @@ async function fetchBandwidthTasks(): Promise<{ data: SheetData[]; headers: stri
 // Tasks Assigned correctly now that Bandwidth Allocation is merged with
 // archive tabs — __row alone is only unique within a single tab, so a raw
 // __row sort would interleave old and current rows arbitrarily.
+// What's already in the sheet for each dropdown question of an entry form
+// (project names, clients, ...), so the dropdown offers them next to its own list.
+function formOptionHints(form: FormKey, data: SheetData[], headers: string[]): Record<string, string[]> {
+  const hints: Record<string, string[]> = {};
+  for (const f of ENTRY_FORMS[form].fields) {
+    if (!f.fromSheet) continue;
+    const col = headers.find(h => h.trim().toLowerCase() === f.header.toLowerCase());
+    if (!col) continue;
+    hints[f.header] = [...new Set(data.map(r => String(r[col] ?? '').trim()).filter(Boolean))];
+  }
+  return hints;
+}
+
 function parseRowTimestamp(row: SheetData, headers: string[]): number {
   const tsCol = headers.find(h => h.toLowerCase().includes('timestamp'));
   if (!tsCol) return 0;
@@ -1179,6 +1193,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 <div className="flex-1 overflow-y-auto p-4 sm:p-5">
                   <EntryForm
                     formKey="pm-project"
+                    optionHints={formOptionHints('pm-project', pmBandwidthData, pmBandwidthHeaders)}
                     compact
                     onSubmitted={() => { setEntryRefreshKey(k => k + 1); setTimeout(() => setShowAddProjectForm(false), 1500); }}
                   />
@@ -1408,6 +1423,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   <EntryForm
                     key={addTaskTeam}
                     formKey={addTaskTeam === 'web' ? 'web-task' : 'marketing-task'}
+                    optionHints={addTaskTeam === 'web'
+                      ? formOptionHints('web-task', bandwidthData, bandwidthHeaders)
+                      : formOptionHints('marketing-task', marketingTeamData, marketingTeamHeaders)}
                     onSubmitted={handleTaskSubmitted}
                   />
                 </div>

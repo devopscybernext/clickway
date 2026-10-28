@@ -13,8 +13,19 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 const field = (page: Page, form: string, i: number) => page.locator(`#${form}-q${i}`);
 const input = (page: Page, form: string, i: number) => page.locator(`#${form}-q${i}-input`);
 const other = (page: Page, form: string, i: number) => page.locator(`#${form}-q${i}-other`);
+// Project / task / client style questions are dropdowns; "Other:" is their "Other…" entry.
 const pick = (page: Page, form: string, i: number, option: string) =>
-  field(page, form, i).getByLabel(option, { exact: true }).check();
+  input(page, form, i).selectOption(option === 'Other:' ? { label: 'Other…' } : option);
+// Time questions are an Hours dropdown and a Minutes dropdown (stored as "HH.MM Hours").
+const duration = async (page: Page, form: string, i: number, hours: number, minutes: number) => {
+  await input(page, form, i).selectOption(String(hours));
+  await page.locator(`#${form}-q${i}-minutes`).selectOption(String(minutes));
+};
+// "Assigned" is a dropdown you tick several names in.
+const tickAll = async (page: Page, form: string, i: number, names: string[]) => {
+  await input(page, form, i).click();
+  for (const name of names) await field(page, form, i).getByLabel(name, { exact: true }).check();
+};
 
 test('Web "Add Task": required questions are enforced, then the task is saved and listed', async ({ page }) => {
   await login(page, USERS.admin);
@@ -32,7 +43,7 @@ test('Web "Add Task": required questions are enforced, then the task is saved an
   await input(page, 'web-task', 3).selectOption('High');
   await input(page, 'web-task', 4).selectOption('FrontEnd');
   await input(page, 'web-task', 6).selectOption('Pawan');
-  await input(page, 'web-task', 7).fill('02.00 Hours');
+  await duration(page, 'web-task', 7, 2, 0);
   await input(page, 'web-task', 8).fill('2026-11-03');
   await page.getByRole('button', { name: 'Submit' }).click();
   await expect(page.getByText('Task submitted successfully')).toBeVisible();
@@ -44,6 +55,7 @@ test('Web "Add Task": required questions are enforced, then the task is saved an
   expect(row.deadline).toBe('03/11/2026');
   expect(row.task_name).toBe('Video Editing');
   expect(row.task_priority).toBe('High');
+  expect(row.time_estimation).toBe('02.00 Hours');
   expect(row.preferred_resource).toBe('Pawan');
   // New tasks start as "No Action Taken", unassigned
   expect(row).toMatchObject({ task_status_updation: 'No Action Taken', task_daily_bucket: 'No Action Taken', pm_status: 'No Action Taken', today_bucket_set: 'No Action Taken', assigned_person: '' });
@@ -65,7 +77,7 @@ test('Marketing "Add Task": the task is saved in the marketing format and listed
   await input(page, 'marketing-task', 2).fill('https://example.invalid/e2e-mkt');
   await input(page, 'marketing-task', 3).selectOption('PPC');
   await input(page, 'marketing-task', 4).selectOption('Atul');
-  await input(page, 'marketing-task', 5).fill('3 hrs');
+  await duration(page, 'marketing-task', 5, 3, 30);
   await input(page, 'marketing-task', 6).fill('2026-11-03');
   await page.getByRole('button', { name: 'Submit' }).click();
   await expect(page.getByText('Task submitted successfully')).toBeVisible();
@@ -100,16 +112,15 @@ test('PM "Add New Project": the project is saved and appears in My Projects', as
   await pick(page, f, 4, 'Other:'); await other(page, f, 4).fill('E2E Client');
   await pick(page, f, 5, 'Other:'); await other(page, f, 5).fill('Slack');
   await pick(page, f, 6, 'Shopify');
-  await input(page, f, 7).fill('40');
-  await input(page, f, 8).fill('10');
+  await duration(page, f, 7, 40, 0);
+  await duration(page, f, 8, 10, 0);
   await pick(page, f, 9, 'Upwork');
-  await pick(page, f, 10, 'Akash');
-  await pick(page, f, 10, 'Pawan');
+  await tickAll(page, f, 10, ['Akash', 'Pawan']);
   await input(page, f, 11).selectOption('In Progress');
   await input(page, f, 12).selectOption('Development');
   await pick(page, f, 13, 'M1');
-  await input(page, f, 14).fill('12.50 hrs');
-  await input(page, f, 15).fill('0 hrs');
+  await duration(page, f, 14, 12, 50);
+  await duration(page, f, 15, 0, 0);
   await pick(page, f, 16, 'Other:'); await other(page, f, 16).fill('M2 next week');
   await pick(page, f, 17, 'Upsell');
   await input(page, f, 18).fill('2026-10-01');
@@ -128,6 +139,8 @@ test('PM "Add New Project": the project is saved and appears in My Projects', as
   expect(row.project_start_date).toBe('10/1/2026');
   expect(row.target_end_date).toBe('12/15/2026');
   expect(row.upsell_cross_sell).toBe('Upsell');
+  expect(row.total_hours).toBe('40.00 Hours');
+  expect(row.current_month_hours).toBe('12.50 Hours');
 
   await openPage(page, 'PM Projects', 'My Projects');
   await expect(page.getByText(project).first()).toBeVisible();

@@ -16,6 +16,7 @@ export type FieldType =
   | 'text'        // one line
   | 'paragraph'   // several lines
   | 'date'
+  | 'duration'    // Hours : Minutes dropdowns, stored as "HH.MM Hours" like every other time cell
   | 'grid';       // one choice per row; each row is its own column, "Header [Row]"
 
 export interface FormField {
@@ -24,7 +25,23 @@ export interface FormField {
   required?: boolean;
   options?: string[];        // grid: the column choices
   rows?: string[];           // grid only
-  allowOther?: boolean;
+  allowOther?: boolean;      // dropdown / choice / checkboxes: adds "Other" with a text box
+  asDropdown?: boolean;      // checkboxes only: a dropdown you tick several entries in, not a list
+  fromSheet?: boolean;       // dropdown: also offer the values already used in the sheet (e.g. project names)
+}
+
+// Hours : Minutes entry. Stored the way every time cell in the sheets is
+// written ("04.00 Hours": the "." splits literal hours and minutes), so the
+// bandwidth maths and the PM tables read it back unchanged.
+export const DURATION_MAX_HOURS = 500;
+export const DURATION_MAX_MINUTES = 59;
+const pad2 = (n: number) => String(n).padStart(2, '0');
+export const formatDuration = (h: number, m: number) => `${pad2(h)}.${pad2(m)} Hours`;
+export function parseDuration(value: string): { h: number; m: number } | null {
+  const match = /^(\d{2,3})\.(\d{2}) Hours$/.exec(value.trim());
+  if (!match) return null;
+  const h = Number(match[1]), m = Number(match[2]);
+  return h <= DURATION_MAX_HOURS && m <= DURATION_MAX_MINUTES ? { h, m } : null;
 }
 
 // Column a grid row is stored in — the same name Google Forms gave it.
@@ -70,10 +87,10 @@ export const ENTRY_FORMS: Record<FormKey, EntryFormDef> = {
     emailHeader: 'Email address',
     initialValues: NEW_TASK_VALUES,
     fields: [
-      { header: 'Project Name', type: 'choice', required: true, allowOther: true, options: [
+      { header: 'Project Name', type: 'dropdown', required: true, allowOther: true, fromSheet: true, options: [
         'Cybernext', 'Vigora Bloom', 'IHE', 'YDB', 'Strongsuit', 'Sean Doyle Windows', 'KataZoom', 'Studio Amelia',
         'Matthews Jewellers', 'Dr Sebaa', 'Raquel Tamez'] },
-      { header: 'Task Name', type: 'choice', required: true, allowOther: true, options: [
+      { header: 'Task Name', type: 'dropdown', required: true, allowOther: true, options: [
         'Weekly Maintenance', 'Monthly Maintenance', 'Speed Optimization', 'Client Feedback', 'Ad Creatives',
         'SMM Creatives', 'Video Editing', 'Website Audit', 'Time Estimation', 'Task Discussion', 'QA Testing',
         'Section Dynamic', 'Blog Post'] },
@@ -82,7 +99,7 @@ export const ENTRY_FORMS: Record<FormKey, EntryFormDef> = {
       { header: 'Team Required', type: 'dropdown', required: true, options: ['UIUX', 'FrontEnd', 'BackEnd', 'QA'] },
       { header: 'Task Information', type: 'dropdown', options: ['New', 'Running', 'To be expected'] },
       { header: 'Preferred Resource', type: 'dropdown', options: ['Lovepreet', 'Shubham', 'Dhruv', 'Pawan', 'Robin', 'Akash'] },
-      { header: 'Time Estimation', type: 'text' },
+      { header: 'Time Estimation', type: 'duration' },
       { header: 'Deadline', type: 'date' },
     ],
   },
@@ -95,17 +112,17 @@ export const ENTRY_FORMS: Record<FormKey, EntryFormDef> = {
     emailHeader: 'Email Address',
     initialValues: NEW_TASK_VALUES,
     fields: [
-      { header: 'Project Name', type: 'choice', required: true, allowOther: true, options: [
+      { header: 'Project Name', type: 'dropdown', required: true, allowOther: true, fromSheet: true, options: [
         'Cybernext', 'Vigora Bloom', 'HEM Ankle Rehab', 'Steen Schotten', 'Lagant Google and LinkedIn Ads', 'YDB',
         'KROS Framework', 'CDL Experts', 'Sean Doyle Windows', 'KataZoom'] },
-      { header: 'Task Name', type: 'choice', required: true, allowOther: true, options: [
+      { header: 'Task Name', type: 'dropdown', required: true, allowOther: true, options: [
         'Google Ads Optimization', 'FB Ads Optimization', 'CRO and Funnel Audit', 'Monthly Report', 'Weekly Report',
         'Account Audit'] },
       { header: 'Task URL', type: 'paragraph', required: true },
       { header: 'Department', type: 'dropdown', options: ['SEO', 'PPC', 'SMM'] },
       { header: 'Assigned Person', type: 'dropdown', options: [
         'Atul', 'Shiwangi', 'Dheeraj', 'Anjali', 'Anurag', 'Vansh', 'Akshay', 'Kshitij', 'Bhavya', 'Payal', 'Akanksha'] },
-      { header: 'Task Estimation', type: 'text' },
+      { header: 'Task Estimation', type: 'duration' },
       { header: 'Deadline', type: 'date' },
     ],
   },
@@ -122,15 +139,15 @@ export const ENTRY_FORMS: Record<FormKey, EntryFormDef> = {
       { header: 'Month', type: 'dropdown', required: true, options: [
         'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November',
         'December'] },
-      { header: 'Project Name', type: 'choice', required: true, allowOther: true, options: [NO_ACTION] },
-      { header: 'Client Name', type: 'choice', required: true, allowOther: true, options: [NO_ACTION] },
-      { header: 'Communication Channel', type: 'choice', required: true, allowOther: true, options: [NO_ACTION] },
-      { header: 'Tech', type: 'choice', required: true, allowOther: true, options: [NO_ACTION, 'Wordpress', 'Shopify', 'Webflow', 'Wix'] },
-      { header: 'Total Hours', type: 'text', required: true },
-      { header: 'AC Hours', type: 'text', required: true },
-      { header: 'Payment Details', type: 'choice', required: true, allowOther: true, options: [
+      { header: 'Project Name', type: 'dropdown', required: true, allowOther: true, fromSheet: true, options: [NO_ACTION] },
+      { header: 'Client Name', type: 'dropdown', required: true, allowOther: true, fromSheet: true, options: [NO_ACTION] },
+      { header: 'Communication Channel', type: 'dropdown', required: true, allowOther: true, fromSheet: true, options: [NO_ACTION] },
+      { header: 'Tech', type: 'dropdown', required: true, allowOther: true, options: [NO_ACTION, 'Wordpress', 'Shopify', 'Webflow', 'Wix'] },
+      { header: 'Total Hours', type: 'duration', required: true },
+      { header: 'AC Hours', type: 'duration', required: true },
+      { header: 'Payment Details', type: 'dropdown', required: true, allowOther: true, options: [
         NO_ACTION, 'Milestones', 'Offline', 'Upwork', 'Direct - Fixed', 'Fixed', 'Direct', 'Fixed - Direct', 'Fixed Upwork'] },
-      { header: 'Assigned', type: 'checkboxes', required: true, options: [
+      { header: 'Assigned', type: 'checkboxes', asDropdown: true, required: true, options: [
         NO_ACTION, 'Akash', 'Pawan', 'Dhruv', 'Robin', 'Shubham', 'Lovepreet', 'Atul', 'Anjali', 'Dheeraj', 'Shiwangi',
         'Anurag', 'Vansh', 'Manas', 'Akshay', 'Kshitij', 'Bhavya', 'Payal', 'Akanksha'] },
       { header: 'Status', type: 'dropdown', required: true, options: [
@@ -140,13 +157,13 @@ export const ENTRY_FORMS: Record<FormKey, EntryFormDef> = {
       { header: 'Phase', type: 'dropdown', required: true, options: [
         NO_ACTION, 'Initial Setup', 'Requirement Gathering', 'Design', 'Development', 'QA', 'Deployed', 'Marketing',
         'Maintenance', 'Retainer', 'On Hold', 'Completed', 'Design + Dev', 'Ongoing Optimization', 'Need Based Support'] },
-      { header: 'Milestone', type: 'choice', required: true, allowOther: true, options: [
+      { header: 'Milestone', type: 'dropdown', required: true, allowOther: true, options: [
         NO_ACTION, 'M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7', 'Offline', 'Offline Retainer', 'Upwork Hourly',
         'Upwork - Milestone', 'Offline - Kickoff', 'TBD', 'Billing'] },
-      { header: 'Current Month Hours', type: 'text', required: true },
-      { header: 'Risk Month Hours', type: 'text', required: true },
-      { header: 'Upcoming Milestones', type: 'choice', required: true, allowOther: true, options: [NO_ACTION] },
-      { header: 'Upsell/Cross-Sell', type: 'choice', required: true, allowOther: true, options: [NO_ACTION, 'Upsell', 'Cross-Sell'] },
+      { header: 'Current Month Hours', type: 'duration', required: true },
+      { header: 'Risk Month Hours', type: 'duration', required: true },
+      { header: 'Upcoming Milestones', type: 'dropdown', required: true, allowOther: true, fromSheet: true, options: [NO_ACTION] },
+      { header: 'Upsell/Cross-Sell', type: 'dropdown', required: true, allowOther: true, options: [NO_ACTION, 'Upsell', 'Cross-Sell'] },
       { header: 'Project Start Date', type: 'date', required: true },
       { header: 'Target End Date', type: 'date', required: true },
       { header: 'Payment Status', type: 'dropdown', required: true, options: [
@@ -214,6 +231,10 @@ export function validateAnswers(def: EntryFormDef, answers: Answers): Record<str
     }
     if (values.some(v => v.length > MAX_TEXT)) { errors[f.header] = 'Answer is too long'; continue; }
     if (f.type !== 'checkboxes' && values.length > 1) { errors[f.header] = 'Choose one answer'; continue; }
+    if (f.type === 'duration') {
+      if (!parseDuration(values[0])) errors[f.header] = `Choose hours (0-${DURATION_MAX_HOURS}) and minutes (0-${DURATION_MAX_MINUTES})`;
+      continue;
+    }
     if (f.options && (f.type === 'choice' || f.type === 'dropdown' || f.type === 'checkboxes')) {
       const others = values.filter(v => !f.options!.includes(v));
       if (others.length > (f.allowOther ? 1 : 0)) errors[f.header] = 'Choose one of the listed options';
