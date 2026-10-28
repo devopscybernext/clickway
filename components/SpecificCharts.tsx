@@ -80,6 +80,7 @@ function DateFilterPills({ value, onChange }: { value: DateFilter; onChange: (f:
   );
 }
 import QATesting from './QATesting';
+import WorkloadBar from './WorkloadBar';
 
 interface Props {
   sheet1Data: SheetData[];
@@ -342,7 +343,20 @@ function parseDeadlineDate(val: string): Date | null {
 // Web & SMM band on today's daily task hours; PPC & SEO log "Everyday"
 // tasks as a monthly retainer block instead of a daily one, so they band
 // on a much larger monthly-hours scale.
-function workloadStatus(hours: number, isMonthlyBlock: boolean): { label: string; bg: string } {
+// Web bandwidth works from what is left of each task: Time Estimation minus Time
+// Logged On AC (never below 0). So as someone logs time, their load drops and their
+// bandwidth grows. Marketing keeps the plain Time Estimation.
+const isWebMemberName = (name: string) => WEB_TEAM.some(n => n.toLowerCase() === name.trim().toLowerCase());
+const remainingOf = (estHours: number, loggedHours: number) => Math.max(estHours - loggedHours, 0);
+
+// The band (label) is only used internally for the bar's colour; the screens show
+// the percentage — assigned hours / capacity (7h a day, or 125h a month for the
+// monthly-retainer PPC & SEO) — not the label.
+function workloadStatus(hours: number, isMonthlyBlock: boolean): { label: string; bg: string; pct: number } {
+  const pct = Math.round((hours / (isMonthlyBlock ? 125 : 7)) * 100);
+  return { ...workloadBand(hours, isMonthlyBlock), pct };
+}
+function workloadBand(hours: number, isMonthlyBlock: boolean): { label: string; bg: string } {
   if (isMonthlyBlock) {
     if (hours <= 40)  return { label: 'Available',           bg: '#22c55e' };
     if (hours <= 70)  return { label: 'Partially Available', bg: '#16a34a' };
@@ -358,9 +372,9 @@ function workloadStatus(hours: number, isMonthlyBlock: boolean): { label: string
 }
 
 // Status based on todayHours (today+everyday) — matches the badge shown on the card.
-function resourceStatus(row: ResourceRow, onLeave = false): { label: string; bg: string; text: string } {
+function resourceStatus(row: ResourceRow, onLeave = false): { label: string; bg: string; text: string; pct?: number } {
   if (onLeave) return { label: 'On Leave', bg: '#ef4444', text: '#fff' };
-  const s = workloadStatus(row.todayHours, MONTHLY_BLOCK_MARKETING_NAMES.has(row.name.trim().toLowerCase()));
+  const s = workloadStatus(row.todayLoadHours, MONTHLY_BLOCK_MARKETING_NAMES.has(row.name.trim().toLowerCase()));
   return { ...s, text: '#fff' };
 }
 
@@ -376,6 +390,8 @@ interface ResourceRow {
   testingTasks: number;
   totalHours: number;
   todayHours: number;
+  /** hours the workload bar / bandwidth use: Time Estimation - Time Logged On AC for Web, else todayHours */
+  todayLoadHours: number;
   todayTasks: number;
   pendingTasks: { task: string; project: string; status: string; pmStatus: string; timeEst: string; taskUrl: string; bucketSet: string; bucket: string; timeLogged: string; totalHoursVal: string; actionTakenToday: string; performanceSignal: string; blocker: string; nextSteps: string; deadline: string; _raw: SheetData }[];
 }
@@ -894,9 +910,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <p className="text-sm font-semibold truncate" style={{ color: 'var(--cn-text-primary)' }}>{row.name}</p>
-            <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: status.bg, color: status.text }}>
-              {status.label}
-            </span>
+            <WorkloadBar status={status} />
           </div>
           <p className="text-[11px] truncate mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>
             {teamDesignation(row.name) || row.activeProject || '—'}
@@ -1663,6 +1677,9 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
     // Sum hours + count for today + everyday tasks only, excluding closed/n/a
     const todayFiltered = myTasks.filter(r => { const b = getBucket(r); return (b === 'today' || b === 'everyday') && !NON_PENDING.includes(getStatus(r)); });
     const todayHours = todayFiltered.reduce((sum, r) => sum + parseHours(getTimeEst(r)), 0);
+    const todayLoadHours = isWebMemberName(name)
+      ? todayFiltered.reduce((sum, r) => sum + remainingOf(parseHours(getTimeEst(r)), parseHours(getTimeLogged(r))), 0)
+      : todayHours;
     const todayTasks = todayFiltered.length;
 
     const inProgressTask = myTasks.find(r => getStatus(r) === 'in progress');
@@ -1682,7 +1699,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
       }))
       .slice(0, 20);
 
-    return { name, department, activeProject, activeTasks, onHoldTasks, pendingPM, toBeStarted, testingTasks, totalHours, todayHours, todayTasks, pendingTasks };
+    return { name, department, activeProject, activeTasks, onHoldTasks, pendingPM, toBeStarted, testingTasks, totalHours, todayHours, todayLoadHours, todayTasks, pendingTasks };
   }).filter(r => r.totalHours > 0 || r.activeTasks + r.onHoldTasks + r.pendingPM + r.toBeStarted + r.testingTasks > 0)
     .sort((a, b) => (b.activeTasks + b.onHoldTasks) - (a.activeTasks + a.onHoldTasks));
 
@@ -1737,8 +1754,11 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
         const activeProject = myTasks.find(t => t.status.toLowerCase() === 'in progress')?.project || row.activeProject;
         const todayFiltered = myTasks.filter(r => { const b = r.bucket.toLowerCase(); return (b === 'today' || b === 'everyday') && !NON_PENDING.includes(r.status.trim().toLowerCase()); });
         const todayHours = todayFiltered.reduce((sum, r) => sum + parseHours(r.timeEst), 0);
+        const todayLoadHours = isWebMemberName(row.name)
+          ? todayFiltered.reduce((sum, r) => sum + remainingOf(parseHours(r.timeEst), parseHours(r.timeLogged)), 0)
+          : todayHours;
         const todayTasks = todayFiltered.length;
-        return { ...row, pendingTasks: myTasks, activeTasks, onHoldTasks, pendingPM, toBeStarted, activeProject, todayHours, todayTasks };
+        return { ...row, pendingTasks: myTasks, activeTasks, onHoldTasks, pendingPM, toBeStarted, activeProject, todayHours, todayLoadHours, todayTasks };
       }).filter(row => row.pendingTasks.length > 0)
     : rows;
 
@@ -2651,6 +2671,8 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
   const getTask      = (r: SheetData) => taskCol      ? String(r[taskCol]      ?? '').trim() : '';
   const getProj      = (r: SheetData) => projectCol   ? String(r[projectCol]   ?? '').trim() : '';
   const getTime      = (r: SheetData) => timeEstCol   ? parseHours(String(r[timeEstCol]   ?? '').trim()) : 0;
+  const timeLoggedCol = findCol(sheet1Headers, 'time logged');
+  const getLogged = (r: SheetData) => timeLoggedCol ? parseHours(String(r[timeLoggedCol] ?? '').trim()) : 0;
   const getTaskUrl   = (r: SheetData) => taskUrlCol   ? String(r[taskUrlCol]   ?? '').trim() : '';
   const getBucketSet = (r: SheetData) => bucketSetCol ? String(r[bucketSetCol] ?? '').trim() : '';
   const getPmStatus  = (r: SheetData) => pmStatusCol2 ? String(r[pmStatusCol2] ?? '').trim() : '';
@@ -2684,6 +2706,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
     // Tomorrow tab while the badge still read "Partially Occupied" from
     // stale Today hours.
     const displayHours = tabTasks.reduce((s, r) => s + getTime(r), 0);
+    const loadHours = isWebMemberName(name) ? tabTasks.reduce((s, r) => s + remainingOf(getTime(r), getLogged(r)), 0) : displayHours;
     const tabHours = displayHours;
     const tabCount = tabTasks.length;
 
@@ -2695,7 +2718,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
 
     const status = onLeave
       ? { label: 'On Leave', bg: '#ef4444' }
-      : workloadStatus(displayHours, isMonthlyBlock);
+      : workloadStatus(loadHours, isMonthlyBlock);
 
     // Build grouped tasks for dropdown (tab-relevant tasks only, exclude task closed)
     const grouped: Record<string, { task: string; project: string; status: string; hours: number; taskUrl: string; bucketSet: string; pmStatus: string; totalHoursVal: string; realBucket: string; _raw: SheetData }[]> = {};
@@ -2723,18 +2746,6 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
 
   const openRow = rows.find(r => r.name === openName);
 
-  // Team Current State summary from rows
-  const stateCount = (label: string) => rows.filter(r => r.status.label === label).length;
-  const stateSummary = [
-    { label: 'Available',          color: '#22c55e' },
-    { label: 'Partially Occupied', color: '#f59e0b' },
-    { label: 'Occupied',           color: '#ea580c' },
-    { label: 'On Leave',           color: '#8b5cf6' },
-    // Only shown when at least one row actually lands in that band
-    ...(rows.some(r => r.status.label === 'Partially Available') ? [{ label: 'Partially Available', color: '#16a34a' }] : []),
-    ...(rows.some(r => r.status.label === 'Overload') ? [{ label: 'Overload', color: '#dc2626' }] : []),
-  ];
-
   return (
     <div ref={gridRef} className="cn-card rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
       {/* Header with tabs + Team Current State summary */}
@@ -2752,15 +2763,6 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
               </button>
             ))}
           </div>
-        </div>
-        {/* Team Current State badges */}
-        <div className="flex items-center gap-3 pb-3 border-b flex-wrap" style={{ borderColor: 'var(--cn-border)' }}>
-          {stateSummary.map(({ label, color }) => (
-            <div key={label} className="flex items-center gap-1.5">
-              <span className="text-[11px] font-bold tabular-nums" style={{ color }}>{stateCount(label)}</span>
-              <span className="text-[11px]" style={{ color: 'var(--cn-text-muted)' }}>{label}</span>
-            </div>
-          ))}
         </div>
       </div>
       <div className="h-2" />
@@ -2791,8 +2793,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold truncate" style={{ color: 'var(--cn-text-primary)' }}>{row.name}</p>
                   <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0"
-                      style={{ background: row.status.bg + '22', color: row.status.bg }}>{row.status.label}</span>
+                    <WorkloadBar status={row.status} width={56} />
                     {row.tabCount > 0 && (
                       <span className="text-[10px] font-semibold truncate" style={{ color: '#f59e0b' }}>
                         {row.tabCount} Tasks · {formatHoursClock(row.displayHours)}h
@@ -2855,9 +2856,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-semibold truncate" style={{ color: 'var(--cn-text-primary)' }}>{openRow.name}</p>
-                  <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: openRow.status.bg, color: '#fff' }}>
-                    {openRow.status.label}
-                  </span>
+                  <WorkloadBar status={openRow.status} />
                 </div>
                 <p className="text-[11px] truncate mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>{teamDesignation(openRow.name) || '—'}</p>
               </div>
@@ -3018,6 +3017,8 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
   const getStatus       = (r: SheetData) => statusCol       ? String(r[statusCol]       ?? '').trim().toLowerCase() : '';
   const getBucket       = (r: SheetData) => bucketCol       ? String(r[bucketCol]       ?? '').trim().toLowerCase() : '';
   const getTime         = (r: SheetData) => timeEstCol      ? parseHours(String(r[timeEstCol] ?? '').trim()) : 0;
+  const timeLoggedCol = findCol(sheet1Headers, 'time logged');
+  const getLogged = (r: SheetData) => timeLoggedCol ? parseHours(String(r[timeLoggedCol] ?? '').trim()) : 0;
   const getTask         = (r: SheetData) => taskCol         ? String(r[taskCol]         ?? '').trim() : '';
   const getProject      = (r: SheetData) => projectCol      ? String(r[projectCol]      ?? '').trim() : '';
   const getTaskUrl      = (r: SheetData) => taskUrlCol      ? String(r[taskUrlCol]      ?? '').trim() : '';
@@ -3044,6 +3045,7 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
     const SUBMITTED_STATUSES = ['submitted to client', 'submitted to pm', 'submitted to akash', 'submitted to admin'];
     const activeTasks = todayTasks.filter(r => !SUBMITTED_STATUSES.includes(getStatus(r)));
     const displayHours = activeTasks.reduce((s, r) => s + getTime(r), 0);
+    const loadHours = isWebMemberName(name) ? activeTasks.reduce((s, r) => s + remainingOf(getTime(r), getLogged(r)), 0) : displayHours;
 
     let onLeave = false;
     let leaveDeduction = 0;
@@ -3058,7 +3060,7 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
 
     const status = onLeave
       ? { label: 'On Leave', bg: '#8b5cf6' }
-      : workloadStatus(displayHours, isMonthlyBlock);
+      : workloadStatus(loadHours, isMonthlyBlock);
 
     // Bandwidth — same "headroom left before Overload"
     // formula as PM Projects, just against this person's own daily (7h)
@@ -3066,7 +3068,7 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
     // leave entry knocks its hours off too, so someone on Full Day Leave
     // (or worse) shows 0 instead of their full untouched cap.
     const cap = isMonthlyBlock ? 125 : 7;
-    const availableHours = Math.max(0, cap - displayHours - leaveDeduction);
+    const availableHours = Math.max(0, cap - loadHours - leaveDeduction);
 
     // All of this person's tasks for the month, flat — not grouped by
     // project — so opening the card shows the whole picture, not just
@@ -3140,9 +3142,6 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
                     style={{ background: `linear-gradient(135deg, ${bg}cc, ${bg}66)` }}>{initials}</div>
                 )}
                 <p className="text-sm font-semibold truncate min-w-0 flex-1" style={{ color: 'var(--cn-text-primary)' }}>{c.name}</p>
-                <span className="text-[10px] font-bold px-2 py-1 rounded-full shrink-0" style={{ background: c.status.bg + '22', color: c.status.bg }}>
-                  {c.status.label}
-                </span>
                 {c.tasks.length > 0 && (
                   <span
                     className="shrink-0 w-6 h-6 rounded-lg inline-flex items-center justify-center"
@@ -3152,6 +3151,7 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
                   </span>
                 )}
               </div>
+              <div className="px-3.5 pb-3"><WorkloadBar status={c.status} fill /></div>
               <div className="grid grid-cols-2 gap-px" style={{ background: 'var(--cn-border)', borderTop: '1px solid var(--cn-border)' }}>
                 <div className="flex flex-col gap-1 px-3.5 py-2.5" style={{ background: 'var(--cn-bg-card)' }}>
                   <div className="flex items-center gap-1.5">
@@ -3283,6 +3283,8 @@ export function MyWorkloadSummary({ sheet1Data, sheet1Headers, availData, availH
   const getStatus  = (r: SheetData) => statusCol  ? String(r[statusCol]  ?? '').trim() : '';
   const getBucket  = (r: SheetData) => bucketCol  ? String(r[bucketCol]  ?? '').trim().toLowerCase() : '';
   const getTime    = (r: SheetData) => timeEstCol ? parseHours(String(r[timeEstCol] ?? '').trim()) : 0;
+  const timeLoggedCol = findCol(sheet1Headers, 'time logged');
+  const getLogged = (r: SheetData) => timeLoggedCol ? parseHours(String(r[timeLoggedCol] ?? '').trim()) : 0;
   const getProj    = (r: SheetData) => projectCol ? String(r[projectCol] ?? '').trim() : '';
   const getTask    = (r: SheetData) => taskCol    ? String(r[taskCol] ?? '').trim() : '';
   const getTaskUrl = (r: SheetData) => taskUrlCol ? String(r[taskUrlCol] ?? '').trim() : '';
@@ -3301,6 +3303,7 @@ export function MyWorkloadSummary({ sheet1Data, sheet1Headers, availData, availH
   const SUBMITTED_STATUSES = ['submitted to client', 'submitted to pm', 'submitted to akash', 'submitted to admin'];
   const activeTasks = todayTasks.filter(r => !SUBMITTED_STATUSES.includes(getStatus(r).toLowerCase()));
   const displayHours = activeTasks.reduce((s, r) => s + getTime(r), 0);
+  const loadHours = isWebMemberName(personName) ? activeTasks.reduce((s, r) => s + remainingOf(getTime(r), getLogged(r)), 0) : displayHours;
 
   let onLeave = false;
   if (availData && availNameCol && availStatusCol) {
@@ -3308,23 +3311,23 @@ export function MyWorkloadSummary({ sheet1Data, sheet1Headers, availData, availH
     if (av) { const v = String(av[availStatusCol] ?? '').trim().toLowerCase(); onLeave = isOnLeaveText(v); }
   }
 
-  const status = onLeave ? { label: 'On Leave', bg: '#ef4444' } : workloadStatus(displayHours, isMonthlyBlock);
+  const status = onLeave ? { label: 'On Leave', bg: '#ef4444' } : workloadStatus(loadHours, isMonthlyBlock);
   // Gauge reads against the Overload threshold — 125h/month for PPC & SEO,
   // 7h/day for everyone else.
   const cap = isMonthlyBlock ? 125 : 7;
-  const pct = Math.min((displayHours / cap) * 100, 100);
+  const pct = Math.min((loadHours / cap) * 100, 100);
   const hoursLabel = isMonthlyBlock
-    ? `${formatHoursClock(displayHours)}h of ${formatHoursClock(cap)}h this month`
-    : `${formatHoursClock(displayHours)}h of ${formatHoursClock(cap)}h today`;
+    ? `${formatHoursClock(loadHours)}h of ${formatHoursClock(cap)}h this month`
+    : `${formatHoursClock(loadHours)}h of ${formatHoursClock(cap)}h today`;
 
   return (
     <div className="space-y-4">
       <div className="cn-card rounded-xl border p-5 flex flex-col gap-4" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>My Workload</p>
-          <span className="text-[10px] font-bold px-2 py-1 rounded-full shrink-0" style={{ background: status.bg + '22', color: status.bg }}>
-            {status.label}
-          </span>
+          {onLeave
+            ? <span className="text-[10px] font-bold px-2 py-1 rounded-full shrink-0" style={{ background: status.bg + '22', color: status.bg }}>On Leave</span>
+            : <span className="text-sm font-bold tabular-nums shrink-0" style={{ color: status.bg }}>{Math.round((loadHours / cap) * 100)}%</span>}
         </div>
         <div className="space-y-1.5">
           <p className="text-xs" style={{ color: 'var(--cn-text-muted)' }}>{hoursLabel}</p>
@@ -3406,6 +3409,8 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
 
   const getBucket = (r: SheetData) => bucketCol  ? String(r[bucketCol]  ?? '').trim().toLowerCase() : '';
   const getTime   = (r: SheetData) => timeEstCol ? parseHours(String(r[timeEstCol] ?? '').trim()) : 0;
+  const timeLoggedCol = findCol(sheet1Headers, 'time logged');
+  const getLogged = (r: SheetData) => timeLoggedCol ? parseHours(String(r[timeLoggedCol] ?? '').trim()) : 0;
   const getStatus = (r: SheetData) => statusCol  ? String(r[statusCol]  ?? '').trim().toLowerCase() : '';
 
   const names = fullRosterFor([...new Set(sheet1Data.map(r => String(r[resourceCol] ?? '').trim()).filter(Boolean))]);
@@ -3413,9 +3418,10 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
   const rows = names.map(name => {
     // Closed tasks no longer count toward someone's bandwidth — a task
     // marked Task Closed shouldn't keep occupying their hours.
-    const displayHours = sheet1Data
-      .filter(r => String(r[resourceCol] ?? '').trim() === name && ['today', 'everyday'].includes(getBucket(r)) && !SKIP_STATUSES.includes(getStatus(r)))
-      .reduce((s, r) => s + getTime(r), 0);
+    const todayTasksOf = sheet1Data
+      .filter(r => String(r[resourceCol] ?? '').trim() === name && ['today', 'everyday'].includes(getBucket(r)) && !SKIP_STATUSES.includes(getStatus(r)));
+    const displayHours = todayTasksOf.reduce((s, r) => s + getTime(r), 0);
+    const loadHours = isWebMemberName(name) ? todayTasksOf.reduce((s, r) => s + remainingOf(getTime(r), getLogged(r)), 0) : displayHours;
 
     let onLeave = false;
     let leaveDeduction = 0;
@@ -3431,55 +3437,33 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
     const isMonthlyBlock = MONTHLY_BLOCK_MARKETING_NAMES.has(name.trim().toLowerCase());
     const status = onLeave
       ? { label: 'On Leave', bg: '#8b5cf6' }
-      : workloadStatus(displayHours, isMonthlyBlock);
+      : workloadStatus(loadHours, isMonthlyBlock);
 
     // Bandwidth — same "headroom left before Overload"
     // formula as PM Projects, against this person's own daily (7h) or
     // monthly-retainer (125h) ceiling instead of the PM 450h one, minus
     // whatever a leave entry knocks off.
     const cap = isMonthlyBlock ? 125 : 7;
-    const availableHours = Math.max(0, cap - displayHours - leaveDeduction);
+    const availableHours = Math.max(0, cap - loadHours - leaveDeduction);
 
     return { name, displayHours, availableHours, status };
   }).sort((a, b) => a.displayHours - b.displayHours);
-
-  // Grouped into columns by status — lets an admin scan straight to
-  // "who's Available" instead of hunting through one long wrapped row.
-  const GROUP_ORDER = ['Available', 'Partially Available', 'Partially Occupied', 'Occupied', 'Overload', 'On Leave'];
-  const GROUP_COLORS: Record<string, string> = {
-    'Available': '#22c55e', 'Partially Available': '#16a34a', 'Partially Occupied': '#f59e0b',
-    'Occupied': '#ea580c', 'Overload': '#dc2626', 'On Leave': '#8b5cf6',
-  };
-  const groups = GROUP_ORDER
-    .map(label => ({ label, color: GROUP_COLORS[label], members: rows.filter(r => r.status.label === label) }))
-    .filter(g => g.members.length > 0);
 
   return (
     <div className="rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
       <div className="px-4 py-2.5 border-b" style={{ borderColor: 'var(--cn-border)', background: 'var(--cn-bg-input)' }}>
         <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>Resource Bandwidth</p>
       </div>
-      <div className="flex flex-wrap gap-px" style={{ background: 'var(--cn-border)' }}>
-        {groups.map(g => (
-          <div key={g.label} className="flex-1 min-w-[200px] flex flex-col gap-2 p-3" style={{ background: 'var(--cn-bg-card)' }}>
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: g.color }}>{g.label}</span>
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full tabular-nums" style={{ background: g.color + '18', color: g.color }}>{g.members.length}</span>
-            </div>
-            <div className="flex flex-col gap-1">
-              {g.members.map(m => (
-                <div key={m.name} className="flex items-center justify-between gap-2 text-[12px] px-2 py-1.5 rounded-lg border" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
-                  <span className="flex items-center gap-1.5 min-w-0">
-                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: m.status.bg }} />
-                    <span className="truncate" style={{ color: 'var(--cn-text-primary)' }}>{m.name}</span>
-                  </span>
-                  <span className="flex items-center gap-2 shrink-0 tabular-nums">
-                    <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{formatHoursClock(m.displayHours)}h</span>
-                    <span style={{ color: '#22c55e' }}>{formatHoursClock(m.availableHours)}h avail</span>
-                  </span>
-                </div>
-              ))}
-            </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 p-3">
+        {rows.map(m => (
+          <div key={m.name} className="flex items-center justify-between gap-3 text-[12px] px-3 py-2 rounded-lg border" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+            <span className="flex flex-col min-w-0">
+              <span className="truncate font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{m.name}</span>
+              <span className="tabular-nums text-[11px]" style={{ color: 'var(--cn-text-muted)' }}>
+                {formatHoursClock(m.displayHours)}h · <span style={{ color: '#22c55e' }}>{formatHoursClock(m.availableHours)}h avail</span>
+              </span>
+            </span>
+            <WorkloadBar status={m.status} />
           </div>
         ))}
       </div>
@@ -3517,11 +3501,13 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
   const getBucket  = (r: SheetData) => bucketCol   ? String(r[bucketCol]   ?? '').trim().toLowerCase() : '';
   const getProject = (r: SheetData) => projectCol  ? String(r[projectCol]  ?? '').trim() : '';
   const getHours   = (r: SheetData) => timeEstCol  ? parseHours(String(r[timeEstCol] ?? '').trim()) : 0;
+  const timeLoggedCol = findCol(sheet1Headers, 'time logged');
+  const getLogged  = (r: SheetData) => timeLoggedCol ? parseHours(String(r[timeLoggedCol] ?? '').trim()) : 0;
   const getPerson  = (r: SheetData) => resourceCol ? String(r[resourceCol] ?? '').trim() : '';
 
   // ── Team Current State ──
   const allNames = [...new Set(sheet1Data.map(getPerson).filter(Boolean))];
-  let available = 0, partiallyAvailable = 0, occupied = 0, onLeave = 0;
+  let onLeave = 0;
   allNames.forEach(name => {
     const isLeave = (() => {
       if (!availData || !availNameCol || !availStatusCol) return false;
@@ -3534,9 +3520,6 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
     const todayH = sheet1Data
       .filter(r => getPerson(r) === name && (getBucket(r) === 'today' || getBucket(r) === 'everyday'))
       .reduce((s, r) => s + getHours(r), 0);
-    if (todayH === 0) available++;
-    else if (todayH <= 4) partiallyAvailable++;
-    else occupied++;
   });
 
   // ── Project State ──
@@ -3584,7 +3567,8 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
         if (!(b === 'today' || b === 'everyday')) return false;
         return !BANDWIDTH_SUBMITTED_STATUSES.includes(st);
       })
-      .reduce((s, r) => s + getHours(r), 0);
+      // Web: what is left of each task (Time Estimation - Time Logged On AC)
+      .reduce((s, r) => s + (isWebMemberName(name) ? remainingOf(getHours(r), getLogged(r)) : getHours(r)), 0);
     let leaveDeduction = 0;
     if (availData && availNameCol && availStatusCol) {
       const av = availData.find(r => String(r[availNameCol] ?? '').trim().toLowerCase() === name.toLowerCase());
@@ -3665,12 +3649,6 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
       {/* Team Current State */}
       {showTeam && <div className="flex-1 min-w-0">
       <Section title="Team Current State">
-        <IC label="Available" value={available} sub={`of ${allNames.length} members · 0h today`} color="#22c55e"
-          icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>} />
-        <IC label="Partially Available" value={partiallyAvailable} sub="≤4h today" color="#f59e0b"
-          icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>} />
-        <IC label="Occupied" value={occupied} sub=">4h today" color="#ef4444"
-          icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>} />
         <IC label="On Leave" value={onLeave} sub="from availability sheet" color="#8b5cf6"
           icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>} />
       </Section>

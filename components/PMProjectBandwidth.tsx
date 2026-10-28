@@ -12,6 +12,7 @@ import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { downloadTableXlsx, type TableExport } from '@/lib/tableExport';
 import { downloadDetailsPdf, type DetailPdfProject, type ReportPdfSummary } from '@/lib/projectReportPdf';
 import { isFlaggedStatus } from '@/lib/statusFlags';
+import WorkloadBar from './WorkloadBar';
 import DownloadReportDialog, { ALL_DOWNLOAD_PDF_KEYS } from './DownloadReportDialog';
 
 const PAGE_SIZE = 50;
@@ -350,7 +351,12 @@ const PM_BANDWIDTH_CAPACITY = 300;
 
 // PM workload badge — bands on raw Total Hours (not a rate, not net of
 // current-month progress; deliberately simple per explicit request).
-function pmWorkloadStatus(totalHours: number): { label: string; bg: string } {
+// The screens show the percentage (Total Hours / the 300h ceiling), not the label;
+// the band only picks the bar's colour.
+function pmWorkloadStatus(totalHours: number): { label: string; bg: string; pct: number } {
+  return { ...pmWorkloadBand(totalHours), pct: Math.round((totalHours / PM_BANDWIDTH_CAPACITY) * 100) };
+}
+function pmWorkloadBand(totalHours: number): { label: string; bg: string } {
   if (totalHours < 100) return { label: 'Available', bg: '#22c55e' };
   if (totalHours < 180) return { label: 'Partially Available', bg: '#f59e0b' };
   if (totalHours < 230) return { label: 'Partially Occupied', bg: '#f59e0b' };
@@ -1875,14 +1881,9 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, onC
                         style={{ background: `linear-gradient(135deg, ${bg}cc, ${bg}66)` }}>{initials}</div>
                     )}
                     <p className="text-sm font-semibold truncate min-w-0 flex-1" style={{ color: 'var(--cn-text-primary)' }}>{pm.name}</p>
-                    {/* Workload status is a "right now" concept — doesn't
-                        make sense against a past month's totals, so it's
-                        hidden on the historical-only Previous Months tab. */}
-                    {defaultToCurrentMonth && (
-                      <span className="text-[10px] font-bold px-2 py-1 rounded-full shrink-0" style={{ background: workload.bg + '22', color: workload.bg }}>
-                        {workload.label}
-                      </span>
-                    )}
+                    {/* Workload: Total Hours as a 0-100% bar (300h = 100%), on every
+                        tab — Current Month, Previous Months and My Projects */}
+                    <WorkloadBar status={workload} />
                   </div>
                   {activeMetrics.length > 0 && (
                     <div className={`grid ${metricsGridCols} gap-px`} style={{ background: 'var(--cn-border)', borderTop: '1px solid var(--cn-border)' }}>
