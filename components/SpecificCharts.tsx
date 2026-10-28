@@ -3091,7 +3091,8 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
         _raw: r,
       }));
 
-    return { name, status, displayHours, availableHours, tasks };
+    // "Assigned" is the time the bar is built from, so the figure and the % always agree
+    return { name, status, displayHours: loadHours, availableHours, tasks };
   });
 
   // Marketing rosters get SEO/PPC/SMM tabs, Web rosters get UIUX/Front End/
@@ -3455,7 +3456,8 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
     const cap = isMonthlyBlock ? 125 : 7;
     const availableHours = Math.max(0, cap - loadHours - leaveDeduction);
 
-    return { name, displayHours, availableHours, status };
+    // the hours shown are the time the bar is built from, so the figure and the % agree
+    return { name, displayHours: loadHours, availableHours, status };
   }).sort((a, b) => a.displayHours - b.displayHours);
 
   return (
