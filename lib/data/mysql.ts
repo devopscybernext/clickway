@@ -131,6 +131,64 @@ export async function insertRow(
   }
 }
 
+// Copies one row as a new row at the end of the same dataset, sheet and tab. overrides
+// replaces some of the copied cells (a duplicate gets a fresh Timestamp). Logged in change_log.
+export async function duplicateRow(
+  sheetId: string, tab: string, row: number, overrides: Record<string, string>, actor: string
+): Promise<number> {
+  const ds = datasetFor(sheetId, tab);
+  const picks = ds.headers.map(h => (h in overrides ? '?' : q(columnName(h))));
+  const params = [...ds.headers.filter(h => h in overrides).map(h => overrides[h]), row, sheetId, tab];
+  const conn = await getPool().getConnection();
+  try {
+    await conn.beginTransaction();
+    const [res] = await conn.query<mysql.ResultSetHeader>(
+      `INSERT INTO ${q(ds.table)} (sheet_id, sheet_tab, source_ref, ${cols(ds).join(', ')})
+       SELECT sheet_id, sheet_tab, NULL, ${picks.join(', ')} FROM ${q(ds.table)} WHERE id = ? AND sheet_id = ? AND sheet_tab = ?`,
+      params
+    );
+    if (res.affectedRows === 0) throw new DataError('Row not found', 404);
+    await conn.query(
+      'INSERT INTO change_log (changed_by, table_name, row_id, column_name, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)',
+      [actor, ds.table, res.insertId, 'Row duplicated', `#${row}`, null]
+    );
+    await conn.commit();
+    return res.insertId;
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
+// Removes one row. What it held is kept in change_log (as JSON), so a deletion can be
+// traced and, if need be, put back by hand.
+export async function deleteRow(sheetId: string, tab: string, row: number, actor: string): Promise<void> {
+  const ds = datasetFor(sheetId, tab);
+  const conn = await getPool().getConnection();
+  try {
+    await conn.beginTransaction();
+    const [found] = await conn.query<mysql.RowDataPacket[][]>({
+      sql: `SELECT ${cols(ds).join(', ')} FROM ${q(ds.table)} WHERE id = ? AND sheet_id = ? AND sheet_tab = ? FOR UPDATE`,
+      rowsAsArray: true,
+    }, [row, sheetId, tab]);
+    if (found.length === 0) throw new DataError('Row not found', 404);
+    const content = Object.fromEntries(ds.headers.map((h, i) => [h, found[0][i] ?? '']));
+    await conn.query(`DELETE FROM ${q(ds.table)} WHERE id = ?`, [row]);
+    await conn.query(
+      'INSERT INTO change_log (changed_by, table_name, row_id, column_name, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)',
+      [actor, ds.table, row, 'Row deleted', JSON.stringify(content), null]
+    );
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
 // ─── Schema ─────────────────────────────────────────────────────────────────
 // Tables are generated from lib/data/datasets.ts, so the registry is the one
 // place a column is added. Every data column is TEXT holding the cell exactly

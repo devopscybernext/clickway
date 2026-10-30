@@ -573,6 +573,24 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     setBandwidthData(prev => prev.map(r => r['__id'] === row['__id'] ? { ...r, [colName]: newValue } : r));
   };
 
+  // Duplicate or delete a whole row (Tasks Assigned, PM Projects), then reload what's on screen.
+  // The row says which spreadsheet / tab it belongs to.
+  const changeRow = async (action: 'duplicate' | 'delete', spreadsheetId: string, sheetName: string, row: SheetData) => {
+    const res = await fetch('/api/rows', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, spreadsheetId, sheetName, row: Number(row['__row']) }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.success) throw new Error(json.error || (action === 'delete' ? 'Could not delete the row' : 'Could not duplicate the row'));
+    await fetchAll();
+    setEntryRefreshKey(k => k + 1);
+  };
+  const taskRowSheet = (row: SheetData) => tasksAssignedTeam === 'marketing'
+    ? { id: MARKETING_TEAM_SHEET_ID, tab: String(row['__sheet'] ?? TAB_MARKETING_TASKS) }
+    : { id: SHEET_IDS['1'], tab: String(row['__sheet'] ?? TAB_BANDWIDTH) };
+  const pmRowSheet = (row: SheetData) => ({ id: String(row['__sheetId'] ?? PM_BANDWIDTH_SHEET_ID), tab: String(row['__sheetTab'] ?? '') });
+
   const handlePmBandwidthChange = async (row: SheetData, colName: string, newValue: string) => {
     const rowNum = Number(row['__row']);
     // __pm is now the row's resolved PM identity (from its Email Address,
@@ -976,6 +994,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 allowPushToAdmin={isAdmin}
                 showCopy={isAdmin}
                 rowCopy={isAdmin}
+                canManageRows={isAdmin || isPmTier || isTeamAdmin}
+                onDuplicateRow={row => changeRow('duplicate', taskRowSheet(row).id, taskRowSheet(row).tab, row)}
+                onDeleteRow={row => changeRow('delete', taskRowSheet(row).id, taskRowSheet(row).tab, row)}
               />
             )}
           </section>
@@ -1175,6 +1196,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   headers={pmBandwidthHeaders}
                   canEdit={effectivePmBandwidthSubTab === 'mine' || canEditPmTab}
                   popupEdit={canEditPmTab}
+                  canManageRows={effectivePmBandwidthSubTab === 'mine' || (isAdmin && effectivePmBandwidthSubTab === 'current')}
+                  onDuplicateRow={row => changeRow('duplicate', pmRowSheet(row).id, pmRowSheet(row).tab, row)}
+                  onDeleteRow={row => changeRow('delete', pmRowSheet(row).id, pmRowSheet(row).tab, row)}
                   onCellChange={effectivePmBandwidthSubTab === 'mine' || canEditPmTab ? handlePmBandwidthChange : undefined}
                   allData={pmBandwidthData}
                   allPmNames={pmUsers.map(u => u.displayName).filter(Boolean)}

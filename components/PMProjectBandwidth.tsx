@@ -6,6 +6,7 @@ import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronLeft, ChevronRight, P
 import { SheetData } from '@/lib/dataStore';
 import { MultiSelect } from './FilteredDataTable';
 import { currentRosterNames } from '@/lib/roster';
+import RowActions from './RowActions';
 import { parseHHMM, formatHHMM, hhmmToDecimalHours, DURATION_MINUTE_OPTIONS, formatHoursClock } from './SpecificCharts';
 import { memberPhoto, memberColor } from '@/lib/memberColors';
 import ClampedText from './ClampedText';
@@ -1121,6 +1122,10 @@ interface Props {
   // control entirely instead of offering tiers that don't add much value
   // at this scale.
   lockShowDataFull?: boolean;
+  /** In edit mode every row also gets Duplicate and Delete icons (Current Month for admins, My Projects for PMs) */
+  canManageRows?: boolean;
+  onDuplicateRow?: (row: SheetData) => Promise<void>;
+  onDeleteRow?: (row: SheetData) => Promise<void>;
   /** Edit one project at a time in a popup (like My Projects) without locking the table to Full — for admins on Current / Previous Months */
   popupEdit?: boolean;
   // True for "Previous Months" — every sheet column (including the
@@ -1379,7 +1384,7 @@ export async function downloadProjectsPdf({ rows, headers, include, eyebrow, fil
   await downloadDetailsPdf(projects, fileName, summary, eyebrow);
 }
 
-export default function PMProjectBandwidth({ data, headers, canEdit = false, popupEdit = false, onCellChange, allData, defaultToCurrentMonth = true, hideYearMonthFilter = false, lockShowDataFull = false, showAllColumns = false, allowReportDownload = false, reportName = 'Report', hidePmFilter = false, hidePmSummary = false, allPmNames = [] }: Props) {
+export default function PMProjectBandwidth({ data, headers, canEdit = false, popupEdit = false, canManageRows = false, onDuplicateRow, onDeleteRow, onCellChange, allData, defaultToCurrentMonth = true, hideYearMonthFilter = false, lockShowDataFull = false, showAllColumns = false, allowReportDownload = false, reportName = 'Report', hidePmFilter = false, hidePmSummary = false, allPmNames = [] }: Props) {
   const optionSourceData = allData ?? data;
   // Cells only become editable after clicking "Edit", same pattern as Tasks Assigned
   const [editMode, setEditMode] = useState(false);
@@ -2090,7 +2095,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, pop
         <table className="w-full text-xs text-left">
           <thead>
             <tr style={{ background: 'var(--cn-bg-input)', borderColor: 'var(--cn-border)' }} className="border-b">
-              {(popupEditing || viewEnabled) && <th className="px-2 py-2 w-10" aria-label="Row actions" />}
+              {(popupEditing || viewEnabled) && <th className={`px-2 py-2 ${popupEditing && canManageRows ? 'w-28' : 'w-10'}`} aria-label="Row actions" />}
               <th style={{ color: 'var(--cn-text-muted)' }} className="px-4 py-2 font-semibold uppercase tracking-wide text-[10px] w-12">#</th>
               {showPmCol && (
                 <th style={{ color: 'var(--cn-text-muted)' }} className="px-4 py-2 font-semibold uppercase tracking-wide text-[10px] min-w-[100px]">PM</th>
@@ -2136,14 +2141,23 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, pop
                 >
                   {popupEditing && (
                     <td className="px-2 py-2">
-                      <button
-                        onClick={e => { e.stopPropagation(); setPopupRow(row); }}
-                        title="Edit this project"
-                        className="w-7 h-7 rounded-lg inline-flex items-center justify-center cursor-pointer transition-colors hover:opacity-80"
-                        style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-accent)', border: '1px solid var(--cn-border)' }}
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={e => { e.stopPropagation(); setPopupRow(row); }}
+                          title="Edit this project"
+                          className="w-7 h-7 rounded-lg inline-flex items-center justify-center cursor-pointer transition-colors hover:opacity-80"
+                          style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-accent)', border: '1px solid var(--cn-border)' }}
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        {canManageRows && onDuplicateRow && onDeleteRow && (
+                          <RowActions
+                            what={(projectCol ? String(row[projectCol] ?? '').trim() : '') || 'this project'}
+                            onDuplicate={() => onDuplicateRow(row)}
+                            onDelete={() => onDeleteRow(row)}
+                          />
+                        )}
+                      </div>
                     </td>
                   )}
                   {!popupEditing && viewEnabled && (

@@ -4,6 +4,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronDown as ChevDown, ChevronLeft, ChevronRight, Copy, Check, Pencil, Send } from 'lucide-react';
 import { SheetData } from '@/lib/dataStore';
 import { pmRowTint } from '@/lib/pmRowTint';
+import RowActions from './RowActions';
 import { totalTimeRow, totalRowHtml, totalRowText } from '@/lib/copyTotals';
 import { STATUS_COLORS, formatHHMM, toHM, DURATION_HOUR_OPTIONS, DURATION_MINUTE_OPTIONS, hhmmToDecimalHours, addLoggedToTotal } from './SpecificCharts';
 
@@ -676,6 +677,10 @@ interface Props {
   // Shows a "Push to Admin" button that moves the Time Logged On AC of the
   // listed tasks onto Total Time/Hours (same action as a resource's own card).
   allowPushToAdmin?: boolean;
+  // Edit mode also gets Duplicate and Delete icons on every row
+  canManageRows?: boolean;
+  onDuplicateRow?: (row: SheetData) => Promise<void>;
+  onDeleteRow?: (row: SheetData) => Promise<void>;
 }
 
 const BUCKET_OPTIONS = ['Today', 'Tomorrow', 'Day After Tomorrow', 'Everyday', 'No Action Taken', 'Submitted', 'To Be Expected'];
@@ -702,7 +707,7 @@ function parseTimestamp(v: string): number {
   return new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s)).getTime();
 }
 
-export default function FilteredDataTable({ data, headers, sheetNum, onStatusChange, readOnlyStatus, readOnlyPmStatus, showCopy, defaultPersonFilter, editPersonBucket, readOnlyBucket, readOnlyAssigned, rowCopy, restrictToBucketEdit, editStatusUpdation, editProjectTask, hiddenCols, onlyColTerms, hiddenFilterTerms, statusOptions, todayBucketSetOptions, assignedPersonOptions, allowPushToAdmin }: Props) {
+export default function FilteredDataTable({ data, headers, sheetNum, onStatusChange, readOnlyStatus, readOnlyPmStatus, showCopy, defaultPersonFilter, editPersonBucket, readOnlyBucket, readOnlyAssigned, rowCopy, restrictToBucketEdit, editStatusUpdation, editProjectTask, hiddenCols, onlyColTerms, hiddenFilterTerms, statusOptions, todayBucketSetOptions, assignedPersonOptions, allowPushToAdmin, canManageRows, onDuplicateRow, onDeleteRow }: Props) {
   const [copiedRow, setCopiedRow] = useState<string | null>(null);
   const effectiveStatusOptions = statusOptions ?? STATUS_OPTIONS;
   const effectiveStatusOptionsLower = effectiveStatusOptions.map(s => s.toLowerCase());
@@ -711,7 +716,10 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
   // Cells only become editable after clicking "Edit Task" — avoids accidental
   // edits from a stray click while just browsing the table.
   const [editMode, setEditMode] = useState(false);
-  const hasAnyEditPermission = !!editPersonBucket || !!editStatusUpdation || !!editProjectTask || !readOnlyPmStatus || !readOnlyStatus;
+  const projectNameHeader = headers.find(h => h.toLowerCase().includes('project name'));
+  const taskNameHeader = headers.find(h => h.toLowerCase().includes('task name'));
+  const rowActions = !!canManageRows && !!onDuplicateRow && !!onDeleteRow;
+  const hasAnyEditPermission = rowActions || !!editPersonBucket || !!editStatusUpdation || !!editProjectTask || !readOnlyPmStatus || !readOnlyStatus;
   const canEditPersonBucket    = !!editPersonBucket && editMode;
   const canEditStatusUpdation  = !!(editPersonBucket || editStatusUpdation) && editMode;
   const canEditPmStatus        = !readOnlyPmStatus && editMode;
@@ -1208,12 +1216,13 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                   </div>
                 </th>
               ))}
+              {rowActions && editMode && <th className="px-3 py-2 w-24"><span className="sr-only">Duplicate or delete</span></th>}
             </tr>
           </thead>
           <tbody>
             {pageData.length === 0 ? (
               <tr>
-                <td colSpan={visibleHeaders.length + 1} style={{ color: 'var(--cn-text-muted)' }} className="text-center py-12">
+                <td colSpan={visibleHeaders.length + 2} style={{ color: 'var(--cn-text-muted)' }} className="text-center py-12">
                   No records found
                 </td>
               </tr>
@@ -1412,6 +1421,15 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                         </td>
                       );
                     })}
+                    {rowActions && editMode && (
+                      <td className="px-3 py-2">
+                        <RowActions
+                          what={[row[projectNameHeader ?? ''], row[taskNameHeader ?? '']].map(v => String(v ?? '').trim()).filter(Boolean).join(' — ') || 'this task'}
+                          onDuplicate={() => onDuplicateRow!(row)}
+                          onDelete={() => onDeleteRow!(row)}
+                        />
+                      </td>
+                    )}
                   </tr>
                 );
               })

@@ -21,6 +21,17 @@ export function fetchSheetTabNames(sheetId: string): Promise<string[]> {
   return db.fetchSheetTabNames(sheetId);
 }
 
+// Copies a row as a new row (overrides replaces some cells) / removes a row. row is the
+// __row handle. Both are recorded in change_log.
+export function duplicateSheetRow(
+  sheetId: string, tab: string, row: number, overrides: Record<string, string>, actor: string
+): Promise<number> {
+  return db.duplicateRow(sheetId, tab, row, overrides, actor);
+}
+export function deleteSheetRow(sheetId: string, tab: string, row: number, actor: string): Promise<void> {
+  return db.deleteRow(sheetId, tab, row, actor);
+}
+
 // Writes one cell. row is the __row handle (the row's MySQL id) a
 // fetchSheetData() row carries; colIndex indexes the headers that same call
 // returned. actor is recorded in change_log. Returns a short description of

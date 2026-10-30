@@ -146,3 +146,34 @@ test('Admin Portal: a user added to a department shows in that team\'s form, and
   await page.getByRole('dialog', { name: 'Remove account' }).getByRole('button', { name: 'Remove' }).click();
   await waitForDb(async () => (await query<Row[]>('SELECT id FROM users WHERE username = ?', [username])).length === 0, 'user removed');
 });
+
+test('Tasks Assigned: a row can be duplicated and deleted, and a team member is refused', async ({ page }) => {
+  await login(page, USERS.admin);
+  const project = uniqueMark('Row Project');
+  const created = await page.request.post('/api/forms', {
+    data: {
+      form: 'web-task', submissionId: randomUUID(),
+      answers: { 'Project Name': project, 'Task Name': 'QA Testing', 'Task URL': 'https://example.invalid/e2e-rows', 'Task Priority': 'Low', 'Team Required': 'QA' },
+    },
+  });
+  expect(created.status()).toBe(200);
+  const { id } = await created.json();
+
+  const sheet = (await query<Row[]>('SELECT sheet_id FROM web_tasks WHERE id = ?', [id]))[0].sheet_id as string;
+  const call = (action: string, row: number) => page.request.post('/api/rows', { data: { action, spreadsheetId: sheet, sheetName: 'Current Month Tasks', row } });
+
+  const dup = await call('duplicate', id);
+  expect(dup.status()).toBe(200);
+  const copyId = (await dup.json()).id as number;
+  const rows = await query<Row[]>('SELECT * FROM web_tasks WHERE project_name = ?', [project]);
+  expect(rows).toHaveLength(2);
+  expect(rows.find(r => r.id === copyId)?.task_name).toBe('QA Testing');
+
+  expect((await call('delete', copyId)).status()).toBe(200);
+  expect(await query<Row[]>('SELECT id FROM web_tasks WHERE project_name = ?', [project])).toHaveLength(1);
+
+  // A team member may not change rows
+  await login(page, USERS.team);
+  expect((await call('delete', id)).status()).toBe(403);
+  expect(await query<Row[]>('SELECT id FROM web_tasks WHERE id = ?', [id])).toHaveLength(1);
+});
