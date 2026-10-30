@@ -142,6 +142,11 @@ function findCol(headers: string[], term: string): string | undefined {
   return headers.find(h => h.toLowerCase().includes(t));
 }
 
+// The sheet's "Time Estimation" column is called "Daily Time" on screen: the time a task takes
+// per day, next to "Total Time Est" for the whole task. Only the label changes — the column,
+// and everything that reads it, still goes by "Time Estimation".
+const columnLabel = (h: string) => (h.trim().toLowerCase() === 'time estimation' ? 'Daily Time' : h);
+
 // ─── Multi-Select Dropdown ───────────────────────────────────────────────────
 interface MultiSelectProps {
   label: string;
@@ -149,9 +154,11 @@ interface MultiSelectProps {
   selected: string[];
   onChange: (vals: string[]) => void;
   accent?: boolean;
+  /** how an option is written on screen, when that differs from its value */
+  renderOption?: (option: string) => string;
 }
 
-export function MultiSelect({ label, options, selected, onChange, accent = false }: MultiSelectProps) {
+export function MultiSelect({ label, options, selected, onChange, accent = false, renderOption = o => o }: MultiSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const ref = useRef<HTMLDivElement>(null);
@@ -167,14 +174,14 @@ export function MultiSelect({ label, options, selected, onChange, accent = false
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const filtered = options.filter(o => o.toLowerCase().includes(search.toLowerCase()));
+  const filtered = options.filter(o => renderOption(o).toLowerCase().includes(search.toLowerCase()));
   const isActive = selected.length > 0 && selected.length < options.length;
   const btnLabel = selected.length === 0
     ? 'All'
     : selected.length === options.length
     ? 'All'
     : selected.length === 1
-    ? (selected[0].length > 16 ? selected[0].slice(0, 16) + '…' : selected[0])
+    ? (renderOption(selected[0]).length > 16 ? renderOption(selected[0]).slice(0, 16) + '…' : renderOption(selected[0]))
     : `${selected.length} selected`;
 
   const toggle = (val: string) =>
@@ -235,7 +242,7 @@ export function MultiSelect({ label, options, selected, onChange, accent = false
                     onChange={() => toggle(opt)}
                     className="rounded accent-[#FE4A23] cursor-pointer"
                   />
-                  <span style={{ color: 'var(--cn-text-primary)' }} className="text-sm truncate">{opt}</span>
+                  <span style={{ color: 'var(--cn-text-primary)' }} className="text-sm truncate">{renderOption(opt)}</span>
                 </label>
               ))
             )}
@@ -1090,6 +1097,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
           options={allCols}
           selected={selectedCols}
           onChange={setSelectedCols}
+          renderOption={columnLabel}
           accent
         />
 
@@ -1205,7 +1213,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                   className="px-4 py-2 font-semibold uppercase tracking-wide text-[10px] cursor-pointer hover:text-[var(--cn-text-primary)] select-none group min-w-[120px]"
                 >
                   <div className="flex items-center gap-1">
-                    {h}
+                    {columnLabel(h)}
                     {sortCol === h ? (
                       sortDir === 'asc'
                         ? <ChevronUp className="w-3 h-3 text-[#FE4A23]" />

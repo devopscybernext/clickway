@@ -67,6 +67,8 @@ export interface EntryFormDef {
   // start as "No Action Taken" (what the team set by hand in the sheet), so
   // they pass Tasks Assigned's default filters and show up right away.
   initialValues?: Record<string, string>;
+  // An answer that is also written to other columns (question header -> column headers)
+  alsoStoreIn?: Record<string, string[]>;
 }
 
 const NEW_TASK_VALUES = {
@@ -92,6 +94,8 @@ export const ENTRY_FORMS: Record<FormKey, EntryFormDef> = {
     order: 'dmy',
     emailHeader: 'Email address',
     initialValues: NEW_TASK_VALUES,
+    // The time filled in here is the task's Daily Time and also its Total Time Est
+    alsoStoreIn: { 'Time Estimation': ['Total Time Est'] },
     fields: [
       { header: 'Project Name', type: 'dropdown', required: true, allowOther: true, fromSheet: true, options: [
         'Cybernext', 'Vigora Bloom', 'IHE', 'YDB', 'Strongsuit', 'Sean Doyle Windows', 'KataZoom', 'Studio Amelia',
@@ -312,6 +316,9 @@ export function answersToValues(def: EntryFormDef, answers: Answers): Record<str
     if (raw === undefined) continue;
     const list = (Array.isArray(raw) ? raw : [raw]).map(v => String(v).trim()).filter(Boolean);
     if (list.length) values[f.header] = formatAnswer(list.join(', '), def.order);
+  }
+  for (const [from, targets] of Object.entries(def.alsoStoreIn ?? {})) {
+    if (values[from] !== undefined) for (const t of targets) values[t] = values[from];
   }
   return values;
 }
