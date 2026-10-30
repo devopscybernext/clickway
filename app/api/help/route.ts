@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySession, COOKIE_NAME } from '@/lib/session';
-import { fetchSheetData, updateSheetCell, DataError } from '@/lib/dataStore';
+import { fetchSheetData, updateSheetCell, deleteSheetRow, DataError } from '@/lib/dataStore';
 import { HELP_SHEET_ID, TAB_HELP } from '@/lib/config';
 import { canManageHelp } from '@/lib/auth';
 import { HELP_STATUSES, HelpRequest, MAX_COMMENT } from '@/lib/help';
@@ -47,6 +47,27 @@ export async function GET(req: NextRequest) {
     .sort((a, b) => b.id - a.id);
 
   return NextResponse.json({ success: true, canManage, requests });
+}
+
+// Super Admin: remove a query (what it held stays in the change log)
+export async function DELETE(req: NextRequest) {
+  const user = verifySession(req.cookies.get(COOKIE_NAME)?.value);
+  if (!user || !canManageHelp(user.role)) {
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+  }
+  const { id } = await req.json().catch(() => ({})) as { id?: number };
+  if (!id || id < 1) {
+    return NextResponse.json({ success: false, error: 'Missing request' }, { status: 400 });
+  }
+  try {
+    await deleteSheetRow(HELP_SHEET_ID, TAB_HELP, Number(id), user.username);
+    return NextResponse.json({ success: true });
+  } catch (err: unknown) {
+    return NextResponse.json(
+      { success: false, error: err instanceof Error ? err.message : 'Unknown error' },
+      { status: err instanceof DataError ? err.status : 500 }
+    );
+  }
 }
 
 // Super Admin: change a request's status and / or write the comment its sender will see

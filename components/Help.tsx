@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search, X, MessageSquarePlus } from 'lucide-react';
 import EntryForm from './EntryForm';
+import RowActions from './RowActions';
 import { HELP_STATUSES, HELP_TYPES, HelpRequest, MAX_COMMENT } from '@/lib/help';
 
 export type HelpSubTab = 'apply' | 'queries';
@@ -150,6 +151,13 @@ function Queries() {
     (!typeFilter || r.type === typeFilter) &&
     (!q || [r.subject, r.details, r.name, r.area, r.type, String(r.id)].some(v => v.toLowerCase().includes(q))));
 
+  const removeRequest = async (r: HelpRequest) => {
+    const res = await fetch('/api/help', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id }) });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.success) throw new Error(json.error || 'Could not delete the query');
+    setRequests(prev => prev.filter(x => x.id !== r.id));
+  };
+
   const setComment = async (r: HelpRequest, comment: string) => {
     setSaveError('');
     try {
@@ -255,6 +263,7 @@ function Queries() {
               <th className={th}>Details</th>
               <th className={th}>Comment</th>
               <th className={th}>Status</th>
+              {canManage && <th className={th} aria-label="Delete" />}
             </tr>
           </thead>
           <tbody>
@@ -300,6 +309,11 @@ function Queries() {
                       <Pill color={STATUS_COLORS[r.status] ?? '#6b7280'}>{r.status}</Pill>
                     )}
                   </td>
+                  {canManage && (
+                    <td className="px-4 py-3">
+                      <RowActions what={`query #${r.id} — ${r.subject}`} onDelete={() => removeRequest(r)} />
+                    </td>
+                  )}
                 </tr>
               );
             })}

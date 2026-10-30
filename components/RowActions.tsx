@@ -10,7 +10,7 @@ import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 // messages, e.g. "Cybernext — Weekly Maintenance".
 export default function RowActions({ what, onDuplicate, onDelete }: {
   what: string;
-  onDuplicate: () => Promise<void>;
+  onDuplicate?: () => Promise<void>;
   onDelete: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState<'duplicate' | 'delete' | null>(null);
@@ -28,7 +28,7 @@ export default function RowActions({ what, onDuplicate, onDelete }: {
   const btn = 'w-7 h-7 rounded-lg inline-flex items-center justify-center cursor-pointer transition-colors hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed';
   return (
     <div className="flex items-center gap-1.5">
-      <button
+      {onDuplicate && <button
         type="button"
         onClick={e => { e.stopPropagation(); void run('duplicate', onDuplicate); }}
         disabled={busy !== null}
@@ -40,7 +40,7 @@ export default function RowActions({ what, onDuplicate, onDelete }: {
         {busy === 'duplicate'
           ? <span className="w-3 h-3 border border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--cn-accent)' }} />
           : <CopyPlus className="w-3.5 h-3.5" />}
-      </button>
+      </button>}
       <button
         type="button"
         onClick={e => { e.stopPropagation(); setError(''); setConfirming(true); }}

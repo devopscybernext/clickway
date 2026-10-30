@@ -1216,7 +1216,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                   </div>
                 </th>
               ))}
-              {rowActions && editMode && <th className="px-3 py-2 w-24"><span className="sr-only">Duplicate or delete</span></th>}
+              {rowActions && editMode && <th className="px-3 py-2 w-24" aria-label="Duplicate or delete" />}
             </tr>
           </thead>
           <tbody>

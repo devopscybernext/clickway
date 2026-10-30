@@ -275,11 +275,11 @@ export default function EntryForm({ formKey, onSubmitted, compact = false, optio
                 <table className="text-sm w-full" style={{ color: 'var(--cn-text-primary)' }}>
                   <thead>
                     <tr>
-                      <th className="text-left font-medium py-1 pr-3" style={{ color: 'var(--cn-text-muted)' }}><span className="sr-only">Row</span></th>
+                      <th className="text-left font-medium py-1 pr-3" aria-label="Row" />
                       {f.options!.map(col => (
                         <th key={col} className="font-semibold px-1.5 py-1 text-center text-xs" style={{ color: 'var(--cn-text-muted)' }}>{col}</th>
                       ))}
-                      <th><span className="sr-only">Clear</span></th>
+                      <th aria-label="Clear" />
                     </tr>
                   </thead>
                   <tbody>

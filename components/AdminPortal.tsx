@@ -174,7 +174,7 @@ export default function AdminPortal({ currentUsername, onChanged }: { currentUse
               <th className={th} style={{ color: 'var(--cn-text-secondary)' }}>Role</th>
               <th className={th} style={{ color: 'var(--cn-text-secondary)' }}>Department</th>
               <th className={th} style={{ color: 'var(--cn-text-secondary)' }}>Sub Department</th>
-              {editMode && <th className={th} style={{ color: 'var(--cn-text-secondary)' }}><span className="sr-only">Remove</span></th>}
+              {editMode && <th className={th} style={{ color: 'var(--cn-text-secondary)' }} aria-label="Remove" />}
             </tr>
           </thead>
           <tbody>
