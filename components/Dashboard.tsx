@@ -992,8 +992,6 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 editPersonBucket={isAdmin || isPmTier || isTeamAdmin}
                 editProjectTask={isAdmin || isPmTier || isTeamAdmin}
                 allowPushToAdmin={isAdmin}
-                showCopy={isAdmin}
-                rowCopy={isAdmin}
                 canManageRows={isAdmin || isPmTier || isTeamAdmin}
                 onDuplicateRow={row => changeRow('duplicate', taskRowSheet(row).id, taskRowSheet(row).tab, row)}
                 onDeleteRow={row => changeRow('delete', taskRowSheet(row).id, taskRowSheet(row).tab, row)}
