@@ -121,11 +121,15 @@ const SHEET1_COL_ORDER = [
 ];
 
 // Returns default visible columns per sheet
+// Left unticked in the Columns picker until someone ticks them (Total Time is called Total Hours on
+// the Marketing sheet). Total Time Est stays on.
+const SHEET1_HIDDEN_BY_DEFAULT = ['total time', 'total hours', 'time logged on ac'];
+
 function getDefaultCols(allCols: string[], sheetNum: '1' | '2'): string[] {
   if (sheetNum === '1') {
     return allCols.filter(h => {
       const lower = h.toLowerCase();
-      return SHEET1_COL_ORDER.some(t => lower.includes(t));
+      return SHEET1_COL_ORDER.some(t => lower.includes(t)) && !SHEET1_HIDDEN_BY_DEFAULT.includes(lower.trim());
     });
   }
   // Sheet 2 — Resource Availability
