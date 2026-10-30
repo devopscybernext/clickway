@@ -197,13 +197,13 @@ export default function EntryForm({ formKey, onSubmitted, compact = false, optio
             </label>
 
             {(f.type === 'text' || f.type === 'date') && (
-              <input id={`${id}-input`} type={f.type === 'date' ? 'date' : 'text'} value={s.value}
+              <input id={`${id}-input`} type={f.type === 'date' ? 'date' : 'text'} value={s.value} maxLength={f.maxLength}
                 onChange={e => update(f.header, { value: e.target.value })}
                 className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none" style={inputStyle} />
             )}
 
             {f.type === 'paragraph' && (
-              <textarea id={`${id}-input`} rows={3} value={s.value}
+              <textarea id={`${id}-input`} rows={f.maxLength && f.maxLength > 1000 ? 6 : 3} value={s.value} maxLength={f.maxLength}
                 onChange={e => update(f.header, { value: e.target.value })}
                 className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none resize-y" style={inputStyle} />
             )}

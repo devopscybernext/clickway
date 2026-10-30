@@ -8,6 +8,7 @@ import { AuthUser, SheetId, Team, NavLeaf, getFirstNavLeaf, isAdminTierRole, isP
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import InHouse, { type InHouseSubTab } from './InHouse';
+import Help, { type HelpSubTab } from './Help';
 import NextBot from './NextBot';
 import SpecificCharts, { ResourceOverview, PmStatusOverview, KpiCards, ResourceStatusGrid, TeamWorkloadCards, MyWorkloadSummary, InsightCards, PmStatusChart, ResourceBandwidthChips, SubDept } from './SpecificCharts';
 import FilteredDataTable from './FilteredDataTable';
@@ -326,6 +327,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [analysisSubTab, setAnalysisSubTab] = useState<'resources' | 'pm'>('resources');
   const [toolsSubTab, setToolsSubTab] = useState<'clock' | 'holiday' | 'ai'>('clock');
   const [inHouseSubTab, setInHouseSubTab] = useState<InHouseSubTab | 'nextbot'>('websites');
+  const [helpSubTab, setHelpSubTab] = useState<HelpSubTab>('apply');
   const [pmBandwidthSubTab, setPmBandwidthSubTab] = useState<'current' | 'archive' | 'mine' | 'closed'>(
     firstLeaf.id === '11' && firstLeaf.subTab ? firstLeaf.subTab as 'current' | 'archive' | 'mine' | 'closed' : 'current');
   const [showAddProjectForm, setShowAddProjectForm] = useState(false);
@@ -621,6 +623,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     if (leaf.id === '11' && leaf.subTab) setPmBandwidthSubTab(leaf.subTab as 'current' | 'archive' | 'mine' | 'closed');
     if (leaf.id === '14' && leaf.subTab) setToolsSubTab(leaf.subTab as 'clock' | 'holiday' | 'ai');
     if (leaf.id === '17' && leaf.subTab) setInHouseSubTab(leaf.subTab as InHouseSubTab | 'nextbot');
+    if (leaf.id === '18' && leaf.subTab) setHelpSubTab(leaf.subTab as HelpSubTab);
     setSearchTerm('');
     // tableKey intentionally NOT incremented here so filters persist across tab switches
     if (leaf.id === '6') setFormSubmitted(false);
@@ -643,6 +646,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const isAdminPortal       = selectedSheet === '15';
   const isReport            = selectedSheet === '16';
   const isInHouse           = selectedSheet === '17';
+  const isHelp              = selectedSheet === '18';
 
   // "Add New Project" form — PM-tier users and the admin tier
   // Admin / HM / Mod can add and edit projects too (PMs do on My Projects and can add)
@@ -770,6 +774,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
         selectedPmSubTab={pmBandwidthSubTab}
         selectedToolsSubTab={toolsSubTab}
         selectedInHouseSubTab={inHouseSubTab}
+        selectedHelpSubTab={helpSubTab}
         user={user}
         onSheetChange={handleSheetChange}
         onLogout={onLogout}
@@ -1100,6 +1105,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               ? <section className="cn-card rounded-lg border transition-colors" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}><NextBot /></section>
               : <InHouse subTab={subTab} refreshKey={lastUpdated} />;
           })()}
+
+          {/* ── Help: the Apply form and the table of queries ── */}
+          {isHelp && <Help subTab={helpSubTab} onOpenQueries={() => setHelpSubTab('queries')} />}
 
           {isAdminPortal && canManageUsers(user.role) && (
             <section

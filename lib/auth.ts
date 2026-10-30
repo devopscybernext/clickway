@@ -1,4 +1,4 @@
-export type SheetId = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | '11' | '12' | '14' | '15' | '16' | '17';
+export type SheetId = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | '11' | '12' | '14' | '15' | '16' | '17' | '18';
 
 // New role taxonomy (2026 rollout) — kept alongside legacy role slugs so
 // accounts that haven't been migrated in the UserDetails sheet keep working
@@ -66,6 +66,13 @@ export function canSeeInHouseFull(role: Role): boolean {
 // use this one check.
 export function canManageUsers(role: Role): boolean {
   return INHOUSE_FULL_ROLES.includes(role);
+}
+// Help tab: the Super Admin (role Admin, and the legacy "admin") sees every request
+// and sets its status. Everyone else only sees their own. The menu, the page and
+// /api/help all use this one check.
+const HELP_ADMIN_ROLES: Role[] = ['Admin', 'admin'];
+export function canManageHelp(role: Role): boolean {
+  return HELP_ADMIN_ROLES.includes(role);
 }
 export function isPmTierRole(role: Role): boolean {
   return PM_TIER_ROLES.includes(role);
@@ -274,7 +281,20 @@ const MARKETING_TEAM_NAV: NavItem[] = [
   { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 
-export const ROLE_NAV: Record<Role, NavItem[]> = {
+// Help is in everyone's menu, last: Apply (the form) and the table of queries —
+// "My Queries" for most people, "All Queries" for the Super Admin.
+const HELP_NAV: NavItem = {
+  label: 'Help',
+  children: [{ id: '18', subTab: 'apply', label: 'Apply' }, { id: '18', subTab: 'queries', label: 'My Queries' }],
+};
+const HELP_NAV_ADMIN: NavItem = {
+  label: 'Help',
+  children: [{ id: '18', subTab: 'apply', label: 'Apply' }, { id: '18', subTab: 'queries', label: 'All Queries' }],
+};
+const withHelp = (nav: Record<Role, NavItem[]>): Record<Role, NavItem[]> =>
+  Object.fromEntries((Object.keys(nav) as Role[]).map(role => [role, [...nav[role], canManageHelp(role) ? HELP_NAV_ADMIN : HELP_NAV]])) as Record<Role, NavItem[]>;
+
+export const ROLE_NAV: Record<Role, NavItem[]> = withHelp({
   HM:    ADMIN_NAV,
   Admin: ADMIN_NAV,
   Mod:   MOD_NAV,
@@ -294,7 +314,7 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
   admin:    ADMIN_NAV,
   high:     ADMIN_NAV,
   mod:      MOD_NAV,
-};
+});
 
 export const SHEET_LABELS: Record<SheetId, string> = {
   '1': 'Tasks Assigned',
@@ -313,6 +333,7 @@ export const SHEET_LABELS: Record<SheetId, string> = {
   '15': 'Admin Portal',
   '16': 'Report',
   '17': 'Cybernext InHouse',
+  '18': 'Help',
 };
 
 export function getSheetLabel(id: SheetId, role: Role): string {
@@ -324,7 +345,7 @@ export function getSheetLabel(id: SheetId, role: Role): string {
 // The sidebar's top-level order, the same for every role (a role simply lacks the
 // items it can't open). The page a role lands on after login is the first page of
 // this menu too (getFirstNavLeaf).
-const MENU_ORDER = ['PM Projects', 'Marketing', 'Web', 'Leave Status', 'Cybernext InHouse', 'Tools'];
+const MENU_ORDER = ['PM Projects', 'Marketing', 'Web', 'Leave Status', 'Cybernext InHouse', 'Tools', 'Help'];
 const menuRank = (item: NavItem): number => {
   const label = isNavParent(item) ? item.label : SHEET_LABELS[item.id];
   const i = MENU_ORDER.indexOf(label);

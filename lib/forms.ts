@@ -1,6 +1,8 @@
 import {
   SHEET_IDS, MARKETING_TEAM_SHEET_ID, PM_BANDWIDTH_SHEET_ID, TAB_BANDWIDTH, TAB_MARKETING_TASKS, TAB_LEADERBOARD,
+  HELP_SHEET_ID, TAB_HELP,
 } from './config';
+import { HELP_TYPES, HELP_AREAS } from './help';
 import type { RosterNames } from './roster';
 
 // The dashboard's own entry forms — they replaced the Google Forms that used
@@ -29,6 +31,7 @@ export interface FormField {
   allowOther?: boolean;      // dropdown / choice / checkboxes: adds "Other" with a text box
   asDropdown?: boolean;      // checkboxes only: a dropdown you tick several entries in, not a list
   fromSheet?: boolean;       // dropdown: also offer the values already used in the sheet (e.g. project names)
+  maxLength?: number;        // text / paragraph: longest answer accepted
   roster?: 'web' | 'marketing' | 'all'; // the options are the people on that team (Admin Portal accounts); `options` is the fallback
   rosterPrefix?: string[];   // entries that come before the people (e.g. "No Action Taken")
 }
@@ -73,7 +76,7 @@ const NEW_TASK_VALUES = {
   'Today Bucket Set': 'No Action Taken',
 };
 
-export type FormKey = 'web-task' | 'marketing-task' | 'pm-project' | 'leaderboard';
+export type FormKey = 'web-task' | 'marketing-task' | 'pm-project' | 'leaderboard' | 'help';
 
 // The PM spreadsheet's current-month tab (single tab, see lib/config.ts).
 export const TAB_PM_CURRENT = 'CurrentMonth';
@@ -176,6 +179,23 @@ export const ENTRY_FORMS: Record<FormKey, EntryFormDef> = {
       { header: 'Comments', type: 'paragraph' },
     ],
   },
+  // Help tab: anyone can ask for help, suggest something or complain about the dashboard.
+  // The sender's name, username and role are added by /api/forms; new requests start as "New".
+  'help': {
+    key: 'help',
+    title: 'Help',
+    sheetId: HELP_SHEET_ID,
+    tab: TAB_HELP,
+    order: 'mdy',
+    emailHeader: 'Email',
+    initialValues: { Status: 'New' },
+    fields: [
+      { header: 'Type', type: 'choice', required: true, options: [...HELP_TYPES] },
+      { header: 'Subject', type: 'text', required: true, maxLength: 120 },
+      { header: 'Area', type: 'dropdown', required: true, options: HELP_AREAS },
+      { header: 'Details', type: 'paragraph', required: true, maxLength: 3000 },
+    ],
+  },
   // "Web Special Points" — manual points for the Leaderboard (P = plus,
   // M = minus; see components/Leaderboard.tsx). The resource list is the
   // current Web team: the Google Form's list misspelt Dhruv as "Dhurv" (so
@@ -239,7 +259,7 @@ export function validateAnswers(def: EntryFormDef, answers: Answers, names?: Ros
       if (f.required) errors[f.header] = 'This question is required';
       continue;
     }
-    if (values.some(v => v.length > MAX_TEXT)) { errors[f.header] = 'Answer is too long'; continue; }
+    if (values.some(v => v.length > (f.maxLength ?? MAX_TEXT))) { errors[f.header] = 'Answer is too long'; continue; }
     if (f.type !== 'checkboxes' && values.length > 1) { errors[f.header] = 'Choose one answer'; continue; }
     if (f.type === 'duration') {
       if (!parseDuration(values[0])) errors[f.header] = `Choose hours (0-${DURATION_MAX_HOURS}) and minutes (0-${DURATION_MAX_MINUTES})`;

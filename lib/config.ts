@@ -123,6 +123,12 @@ export const MARKETING_STATUS_OPTIONS = [
 // Today Bucket Set for Marketing includes "No Action Taken" as an explicit option
 export const MARKETING_TODAY_BUCKET_SET_OPTIONS = ['No Action Taken', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'URGENT'];
 
+// Help tab — requests, suggestions and complaints about the dashboard. Not a spreadsheet:
+// the id is just this dataset's key. Never readable through the generic /api/data proxy
+// (see lib/sheetAccess.ts); /api/help is its only reader and updater.
+export const HELP_SHEET_ID = 'help-requests';
+export const TAB_HELP = 'Help Requests';
+
 // "Cybernext InHouse" — Cybernext's own portfolio, in a separate spreadsheet.
 // "Websites Details" (Website Name, Website Link, Platform, Status, Industry) feeds
 // the Websites sub-tab; "Live Portfolio links" (Website Name, Website Link, Platform,

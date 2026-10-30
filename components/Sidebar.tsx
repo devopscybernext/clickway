@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CalendarOff, Menu, X, ChevronDown, Globe, Megaphone, Briefcase, Wrench, ShieldCheck, Building2 } from 'lucide-react';
+import { CalendarOff, Menu, X, ChevronDown, Globe, Megaphone, Briefcase, Wrench, ShieldCheck, Building2, CircleHelp } from 'lucide-react';
 import { AuthUser, SheetId, Team, NavLeaf, isNavParent, getNavItems, getSheetLabel } from '@/lib/auth';
 import { memberPhoto } from '@/lib/memberColors';
 
@@ -11,6 +11,7 @@ interface SidebarProps {
   selectedPmSubTab?: string;
   selectedToolsSubTab?: string;
   selectedInHouseSubTab?: string;
+  selectedHelpSubTab?: string;
   user: AuthUser;
   onSheetChange: (leaf: NavLeaf) => void;
   onLogout: () => void;
@@ -25,6 +26,7 @@ const PARENT_ICONS: Record<string, React.ReactNode> = {
   'PM Projects': <Briefcase className="w-4 h-4 shrink-0" />,
   Tools:        <Wrench     className="w-4 h-4 shrink-0" />,
   'Cybernext InHouse': <Building2 className="w-4 h-4 shrink-0" />,
+  Help:         <CircleHelp className="w-4 h-4 shrink-0" />,
 };
 const LEAF_ICONS: Partial<Record<SheetId, React.ReactNode>> = {
   '2': <CalendarOff className="w-4 h-4 shrink-0" />,
@@ -64,7 +66,7 @@ function getUserDesignation(username: string, role: string): string {
   return ROLE_LABELS[role] ?? role;
 }
 
-export default function Sidebar({ selectedSheet, selectedTeam, selectedPmSubTab, selectedToolsSubTab, selectedInHouseSubTab, user, onSheetChange, isAdmin }: SidebarProps) {
+export default function Sidebar({ selectedSheet, selectedTeam, selectedPmSubTab, selectedToolsSubTab, selectedInHouseSubTab, selectedHelpSubTab, user, onSheetChange, isAdmin }: SidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const navItems = getNavItems(user);
 
@@ -72,7 +74,7 @@ export default function Sidebar({ selectedSheet, selectedTeam, selectedPmSubTab,
     if (selectedSheet !== leaf.id) return false;
     if (leaf.team !== undefined && leaf.team !== selectedTeam) return false;
     if (leaf.subTab !== undefined) {
-      const activeSubTab = leaf.id === '11' ? selectedPmSubTab : leaf.id === '14' ? selectedToolsSubTab : leaf.id === '17' ? selectedInHouseSubTab : undefined;
+      const activeSubTab = leaf.id === '11' ? selectedPmSubTab : leaf.id === '14' ? selectedToolsSubTab : leaf.id === '17' ? selectedInHouseSubTab : leaf.id === '18' ? selectedHelpSubTab : undefined;
       if (leaf.subTab !== activeSubTab) return false;
     }
     return true;

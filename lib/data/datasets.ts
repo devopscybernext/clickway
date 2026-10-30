@@ -1,6 +1,6 @@
 import {
   SHEET_IDS, TOOLS_SHEET_ID, USER_DETAILS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, PM_BANDWIDTH_ALL_DATA_SHEET_ID,
-  LEAVE_SHEET_ID, MARKETING_TEAM_SHEET_ID, INHOUSE_SHEET_ID,
+  LEAVE_SHEET_ID, MARKETING_TEAM_SHEET_ID, INHOUSE_SHEET_ID, HELP_SHEET_ID, TAB_HELP,
   TAB_USERS, TAB_LEAVE, TAB_NEWS, TAB_HOLIDAY, TAB_AI_TOOLS, TAB_LEADERBOARD, TAB_QA_TESTING, TAB_AVAILABILITY,
 } from '../config';
 
@@ -94,6 +94,11 @@ export const DATASETS: Dataset[] = [
     table: 'users',
     sources: [{ sheetId: USER_DETAILS_SHEET_ID, tab: TAB_USERS }],
     headers: ['Username', 'Password Hash', 'Role', 'Display Name', 'Email', 'Department', 'Sub Department'],
+  },
+  {
+    table: 'help_requests',
+    sources: [{ sheetId: HELP_SHEET_ID, tab: TAB_HELP }],
+    headers: ['Timestamp', 'Email', 'Username', 'Name', 'Role', 'Type', 'Subject', 'Area', 'Details', 'Status'],
   },
   {
     table: 'leave_status',

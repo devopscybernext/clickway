@@ -17,6 +17,7 @@ export const runtime = 'nodejs';
 // feedback only for the roles in canAddLeaderboardFeedback who see the
 // Leaderboard (so nobody awards themselves points).
 function canUseForm(user: AuthUser, key: FormKey): boolean {
+  if (key === 'help') return true; // everyone may write to the Help desk
   if (key === 'pm-project') return isPmTierRole(user.role) || isAdminTierRole(user.role);
   const leaves = getNavItems(user).flatMap(item => (isNavParent(item) ? item.children : [item]));
   if (key === 'leaderboard') return canAddLeaderboardFeedback(user.role) && leaves.some(leaf => leaf.id === '7');
@@ -58,6 +59,12 @@ export async function POST(req: NextRequest) {
   const values = { ...def.initialValues, ...answersToValues(def, answers) };
   values['Timestamp'] = formatTimestamp(new Date(), def.order, process.env.FORM_TIMEZONE || 'Asia/Kolkata');
   values[def.emailHeader] = user.email ?? '';
+  // Help requests record who sent them, so the sender can find them again and the Super Admin knows who to answer
+  if (def.key === 'help') {
+    values['Username'] = user.username;
+    values['Name'] = user.displayName;
+    values['Role'] = user.role;
+  }
 
   try {
     const { id, duplicate } = await insertRow(def.sheetId, def.tab, values, `dashboard:${def.key}:${body.submissionId}`);

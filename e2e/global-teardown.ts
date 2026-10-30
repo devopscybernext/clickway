@@ -11,5 +11,6 @@ export default async function globalTeardown() {
   await query("DELETE FROM marketing_tasks WHERE email_address LIKE 'e2e-%@example.invalid' OR source_ref LIKE '%:e2e-%'");
   await query("DELETE FROM pm_projects WHERE email_address LIKE 'e2e-%@example.invalid' OR source_ref LIKE '%:e2e-%'");
   await query("DELETE FROM leaderboard_feedback WHERE email_address LIKE 'e2e-%@example.invalid' OR source_ref LIKE '%:e2e-%'");
+  await query("DELETE FROM help_requests WHERE email LIKE 'e2e-%@example.invalid' OR source_ref LIKE '%:e2e-%'");
   await query("DELETE FROM change_log WHERE changed_by LIKE 'e2e\\_%'");
 }
