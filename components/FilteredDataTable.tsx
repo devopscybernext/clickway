@@ -1209,6 +1209,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
             <tr style={{ background: 'var(--cn-bg-input)', borderColor: 'var(--cn-border)' }} className="border-b">
               <th style={{ color: 'var(--cn-text-muted)' }} className="px-4 py-2 font-semibold uppercase tracking-wide text-[10px] w-12">#</th>
               {rowCopy && <th className="px-3 py-2 w-20" />}
+              {rowActions && editMode && <th className="px-3 py-2 w-24" aria-label="Duplicate or delete" />}
               {visibleHeaders.map(h => (
                 <th
                   key={h}
@@ -1228,7 +1229,6 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                   </div>
                 </th>
               ))}
-              {rowActions && editMode && <th className="px-3 py-2 w-24" aria-label="Duplicate or delete" />}
             </tr>
           </thead>
           <tbody>
@@ -1262,6 +1262,15 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                     <td style={{ color: 'var(--cn-text-faint)' }} className="px-4 py-2 tabular-nums">
                       {(currentPage - 1) * PAGE_SIZE + i + 1}
                     </td>
+                    {rowActions && editMode && (
+                      <td className="px-3 py-2">
+                        <RowActions
+                          what={[row[projectNameHeader ?? ''], row[taskNameHeader ?? '']].map(v => String(v ?? '').trim()).filter(Boolean).join(' — ') || 'this task'}
+                          onDuplicate={() => onDuplicateRow!(row)}
+                          onDelete={() => onDeleteRow!(row)}
+                        />
+                      </td>
+                    )}
                     {rowCopy && (
                       <td className="px-2 py-2 text-center">
                         <button
@@ -1433,15 +1442,6 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                         </td>
                       );
                     })}
-                    {rowActions && editMode && (
-                      <td className="px-3 py-2">
-                        <RowActions
-                          what={[row[projectNameHeader ?? ''], row[taskNameHeader ?? '']].map(v => String(v ?? '').trim()).filter(Boolean).join(' — ') || 'this task'}
-                          onDuplicate={() => onDuplicateRow!(row)}
-                          onDelete={() => onDeleteRow!(row)}
-                        />
-                      </td>
-                    )}
                   </tr>
                 );
               })
