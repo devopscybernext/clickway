@@ -3,7 +3,8 @@ import { verifySession, COOKIE_NAME } from '@/lib/session';
 import { fetchSheetData, updateSheetCell, DataError } from '@/lib/dataStore';
 import { HELP_SHEET_ID, TAB_HELP } from '@/lib/config';
 import { canManageHelp } from '@/lib/auth';
-import { HELP_STATUSES, HelpRequest } from '@/lib/help';
+import { HELP_STATUSES, HelpRequest, MAX_COMMENT } from '@/lib/help';
+import { formatTimestamp } from '@/lib/forms';
 import { isDirectBrowserNavigation } from '@/lib/blockDirectAccess';
 
 export const runtime = 'nodejs';
@@ -40,29 +41,48 @@ export async function GET(req: NextRequest) {
       area: s(r, 'Area'),
       details: s(r, 'Details'),
       status: s(r, 'Status') || 'New',
+      comment: s(r, 'Admin Comment'),
+      commentedAt: s(r, 'Commented At'),
     }))
     .sort((a, b) => b.id - a.id);
 
   return NextResponse.json({ success: true, canManage, requests });
 }
 
-// Super Admin: change a request's status
+// Super Admin: change a request's status and / or write the comment its sender will see
 export async function PATCH(req: NextRequest) {
   const user = verifySession(req.cookies.get(COOKIE_NAME)?.value);
   if (!user || !canManageHelp(user.role)) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { id, status } = await req.json().catch(() => ({})) as { id?: number; status?: string };
-  if (!id || id < 1 || !status || !(HELP_STATUSES as readonly string[]).includes(status)) {
+  const { id, status, comment } = await req.json().catch(() => ({})) as { id?: number; status?: string; comment?: string };
+  if (!id || id < 1) {
+    return NextResponse.json({ success: false, error: 'Missing request' }, { status: 400 });
+  }
+  if (status === undefined && comment === undefined) {
+    return NextResponse.json({ success: false, error: 'Nothing to change' }, { status: 400 });
+  }
+  if (status !== undefined && !(HELP_STATUSES as readonly string[]).includes(status)) {
     return NextResponse.json({ success: false, error: 'Choose a valid status' }, { status: 400 });
+  }
+  if (comment !== undefined && (typeof comment !== 'string' || comment.trim().length > MAX_COMMENT)) {
+    return NextResponse.json({ success: false, error: `A comment can be ${MAX_COMMENT} characters at most` }, { status: 400 });
   }
 
   try {
     const { headers } = await fetchSheetData(HELP_SHEET_ID, RANGE);
-    const colIndex = headers.indexOf('Status');
-    if (colIndex === -1) return NextResponse.json({ success: false, error: 'Column not found' }, { status: 400 });
-    await updateSheetCell(HELP_SHEET_ID, TAB_HELP, Number(id), colIndex, status, user.username);
+    const write = async (header: string, value: string) => {
+      const colIndex = headers.indexOf(header);
+      if (colIndex === -1) throw new DataError('Column not found', 400);
+      await updateSheetCell(HELP_SHEET_ID, TAB_HELP, Number(id), colIndex, value, user.username);
+    };
+    if (status !== undefined) await write('Status', status);
+    if (comment !== undefined) {
+      const text = comment.trim();
+      await write('Admin Comment', text);
+      await write('Commented At', text ? formatTimestamp(new Date(), 'mdy', process.env.FORM_TIMEZONE || 'Asia/Kolkata') : '');
+    }
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
     return NextResponse.json(

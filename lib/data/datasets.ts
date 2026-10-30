@@ -98,7 +98,7 @@ export const DATASETS: Dataset[] = [
   {
     table: 'help_requests',
     sources: [{ sheetId: HELP_SHEET_ID, tab: TAB_HELP }],
-    headers: ['Timestamp', 'Email', 'Username', 'Name', 'Role', 'Type', 'Subject', 'Area', 'Details', 'Status'],
+    headers: ['Timestamp', 'Email', 'Username', 'Name', 'Role', 'Type', 'Subject', 'Area', 'Details', 'Status', 'Admin Comment', 'Commented At'],
   },
   {
     table: 'leave_status',

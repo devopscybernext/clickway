@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search, X, MessageSquarePlus } from 'lucide-react';
 import EntryForm from './EntryForm';
-import { HELP_STATUSES, HELP_TYPES, HelpRequest } from '@/lib/help';
+import { HELP_STATUSES, HELP_TYPES, HelpRequest, MAX_COMMENT } from '@/lib/help';
 
 export type HelpSubTab = 'apply' | 'queries';
 
@@ -17,6 +17,58 @@ function friendlyDate(raw: string): string {
   const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   if (!m) return raw || '—';
   return new Date(Number(m[3]), Number(m[1]) - 1, Number(m[2])).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// The Super Admin's comment on a request. The sender reads it; the Super Admin can
+// add, edit or clear it.
+function CommentCell({ request, canManage, onSave }: { request: HelpRequest; canManage: boolean; onSave: (text: string) => Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    try { await onSave(draft.trim()); setEditing(false); }
+    catch { /* the table shows why */ }
+    finally { setSaving(false); }
+  };
+
+  if (editing) {
+    return (
+      <div className="space-y-1.5 min-w-[220px]">
+        <textarea autoFocus rows={3} value={draft} maxLength={MAX_COMMENT} disabled={saving} aria-label={`Comment on request ${request.id}`}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Escape') setEditing(false); }}
+          className="w-full text-xs rounded-lg px-2.5 py-2 focus:outline-none focus:ring-1 focus:ring-[#FE4A23] resize-y"
+          style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }} />
+        <div className="flex items-center gap-2">
+          <button onClick={save} disabled={saving} className="px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer disabled:opacity-60" style={{ background: 'var(--cn-accent)', color: '#fff' }}>
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+          <button onClick={() => setEditing(false)} disabled={saving} className="px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer disabled:opacity-60"
+            style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>Cancel</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="min-w-[200px] max-w-xs">
+      {request.comment ? (
+        <div className="rounded-lg px-3 py-2 text-xs" style={{ background: 'rgba(254, 74, 35, 0.07)', border: '1px solid var(--cn-border)' }}>
+          <p className="whitespace-pre-wrap break-words" style={{ color: 'var(--cn-text-primary)' }}>{request.comment}</p>
+          {request.commentedAt && <p className="mt-1 text-[10px]" style={{ color: 'var(--cn-text-muted)' }}>{friendlyDate(request.commentedAt)}</p>}
+        </div>
+      ) : (
+        !canManage && <span style={{ color: 'var(--cn-text-faint)' }}>—</span>
+      )}
+      {canManage && (
+        <button onClick={() => { setDraft(request.comment); setEditing(true); }}
+          className="mt-1 text-xs font-semibold cursor-pointer hover:opacity-80" style={{ color: 'var(--cn-accent)' }}>
+          {request.comment ? 'Edit comment' : 'Add comment'}
+        </button>
+      )}
+    </div>
+  );
 }
 
 function Pill({ color, children }: { color: string; children: React.ReactNode }) {
@@ -98,6 +150,20 @@ function Queries() {
     (!typeFilter || r.type === typeFilter) &&
     (!q || [r.subject, r.details, r.name, r.area, r.type, String(r.id)].some(v => v.toLowerCase().includes(q))));
 
+  const setComment = async (r: HelpRequest, comment: string) => {
+    setSaveError('');
+    try {
+      const res = await fetch('/api/help', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id, comment }) });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) throw new Error(json.error || 'Save failed');
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : 'Save failed');
+      throw e;
+    }
+    // shown now; the exact time comes back on the next load
+    setRequests(prev => prev.map(x => x.id === r.id ? { ...x, comment, commentedAt: comment ? new Date().toLocaleDateString('en-US') : '' } : x));
+  };
+
   const setStatus = async (r: HelpRequest, status: string) => {
     const previous = r.status;
     setSaveError('');
@@ -135,8 +201,8 @@ function Queries() {
         <h2 className="font-semibold text-base" style={{ color: 'var(--cn-text-primary)' }}>{canManage ? 'All Queries' : 'My Queries'}</h2>
         <p className="text-xs mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>
           {canManage
-            ? 'Everything people have sent from the Apply form. Change a status to let them know where it stands.'
-            : 'The help requests, suggestions and complaints you have sent, and where each one stands.'}
+            ? 'Everything people have sent from the Apply form. Change a status and add a comment to let them know where it stands.'
+            : 'The help requests, suggestions and complaints you have sent, where each one stands, and any comment from the team.'}
         </p>
       </div>
 
@@ -187,6 +253,7 @@ function Queries() {
               <th className={th}>Subject</th>
               <th className={th}>Area</th>
               <th className={th}>Details</th>
+              <th className={th}>Comment</th>
               <th className={th}>Status</th>
             </tr>
           </thead>
@@ -215,6 +282,9 @@ function Queries() {
                         {open ? 'Show less' : 'Read more'}
                       </button>
                     )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <CommentCell request={r} canManage={canManage} onSave={text => setComment(r, text)} />
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     {canManage ? (

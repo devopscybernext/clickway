@@ -24,4 +24,8 @@ export interface HelpRequest {
   area: string;
   details: string;
   status: string;
+  comment: string;     // the Super Admin's comment, shown to the person who sent the request
+  commentedAt: string;
 }
+
+export const MAX_COMMENT = 1000;
