@@ -58,8 +58,8 @@ test('Web "Add Task": required questions are enforced, then the task is saved an
   expect(row.time_estimation).toBe('02.00 Hours');
   expect(row.total_time_est).toBe('02.00 Hours'); // the same time is also the Total Time Est
   expect(row.preferred_resource).toBe('Pawan');
-  // New tasks start as "No Action Taken", unassigned
-  expect(row).toMatchObject({ task_status_updation: 'No Action Taken', task_daily_bucket: 'No Action Taken', pm_status: 'No Action Taken', today_bucket_set: 'No Action Taken', assigned_person: '' });
+  // New tasks start as "No Action Taken", assigned to the Preferred Resource picked
+  expect(row).toMatchObject({ task_status_updation: 'No Action Taken', task_daily_bucket: 'No Action Taken', pm_status: 'No Action Taken', today_bucket_set: 'No Action Taken', assigned_person: 'Pawan' });
 
   // Listed in Tasks Assigned with the default filters on, ready to be assigned
   await openPage(page, 'Web', 'Tasks Assigned');

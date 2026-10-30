@@ -94,8 +94,9 @@ export const ENTRY_FORMS: Record<FormKey, EntryFormDef> = {
     order: 'dmy',
     emailHeader: 'Email address',
     initialValues: NEW_TASK_VALUES,
-    // The time filled in here is the task's Daily Time and also its Total Time Est
-    alsoStoreIn: { 'Time Estimation': ['Total Time Est'] },
+    // The time filled in here is the task's Daily Time and also its Total Time Est; the
+    // Preferred Resource picked is also the task's Assigned Person
+    alsoStoreIn: { 'Time Estimation': ['Total Time Est'], 'Preferred Resource': ['Assigned Person'] },
     fields: [
       { header: 'Project Name', type: 'dropdown', required: true, allowOther: true, fromSheet: true, options: [
         'Cybernext', 'Vigora Bloom', 'IHE', 'YDB', 'Strongsuit', 'Sean Doyle Windows', 'KataZoom', 'Studio Amelia',
