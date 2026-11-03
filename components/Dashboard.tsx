@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { SheetData } from '@/lib/dataStore';
 import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, PM_BANDWIDTH_ALL_DATA_SHEET_ID, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, TAB_BANDWIDTH, LEAVE_SHEET_ID, TAB_LEAVE, RANGE_LEAVE, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
 
-import { AuthUser, SheetId, Team, NavLeaf, getFirstNavLeaf, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, canSeeInHouseFull, canManageUsers, canAddLeaderboardFeedback } from '@/lib/auth';
+import { AuthUser, SheetId, Team, NavLeaf, getFirstNavLeaf, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, canSeeInHouseFull, canManageUsers, canManageInHouseData, canAddLeaderboardFeedback } from '@/lib/auth';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import InHouse, { type InHouseSubTab } from './InHouse';
@@ -1122,7 +1122,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
             const subTab = canSeeInHouseFull(user.role) ? inHouseSubTab : 'brand-kit';
             return subTab === 'nextbot'
               ? <section className="cn-card rounded-lg border transition-colors" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}><NextBot /></section>
-              : <InHouse subTab={subTab} refreshKey={lastUpdated} />;
+              : <InHouse subTab={subTab} refreshKey={lastUpdated} canUpload={canManageInHouseData(user.role)} />;
           })()}
 
           {/* ── Help: the Apply form and the table of queries ── */}

@@ -74,6 +74,11 @@ const HELP_ADMIN_ROLES: Role[] = ['Admin', 'admin'];
 export function canManageHelp(role: Role): boolean {
   return HELP_ADMIN_ROLES.includes(role);
 }
+// Cybernext InHouse: only the Super Admin can upload Excel sheets into Websites, Case Studies,
+// Brand Kit and Documentations (the buttons and /api/inhouse/import use this one check).
+export function canManageInHouseData(role: Role): boolean {
+  return HELP_ADMIN_ROLES.includes(role);
+}
 export function isPmTierRole(role: Role): boolean {
   return PM_TIER_ROLES.includes(role);
 }

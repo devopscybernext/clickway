@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Search, AlertCircle, X } from 'lucide-react';
+import { Search, AlertCircle, X, Upload } from 'lucide-react';
 import { MultiSelect } from './FilteredDataTable';
+import InHouseUpload from './InHouseUpload';
 
 export type InHouseSubTab = 'websites' | 'case-studies' | 'brand-kit' | 'documentations';
 
@@ -218,16 +219,20 @@ interface Props {
   subTab: InHouseSubTab;
   /** Changes when the dashboard's Refresh button is pressed */
   refreshKey?: string;
+  /** Super Admin: shows "Upload Excel" on every sub-tab */
+  canUpload?: boolean;
 }
 
 // Cybernext InHouse: our own websites and case studies as cards, three per row.
-export default function InHouse({ subTab, refreshKey }: Props) {
+export default function InHouse({ subTab, refreshKey, canUpload = false }: Props) {
   const [websites, setWebsites] = useState<TabData | null>(null);
   const [caseStudies, setCaseStudies] = useState<TabData | null>(null);
   const [brandKit, setBrandKit] = useState<TabData | null>(null);
   const [documentations, setDocumentations] = useState<TabData | null>(null);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   // chosen values per filter, remembered separately for each sub-tab
   const [chosen, setChosen] = useState<Partial<Record<InHouseSubTab, Record<string, string[]>>>>({});
 
@@ -246,7 +251,7 @@ export default function InHouse({ subTab, refreshKey }: Props) {
       })
       .catch(() => { if (!cancelled) setError('Could not load the portfolio.'); });
     return () => { cancelled = true; };
-  }, [refreshKey]);
+  }, [refreshKey, reloadKey]);
 
   const tab = { 'websites': websites, 'case-studies': caseStudies, 'brand-kit': brandKit, 'documentations': documentations }[subTab];
   const filters = FILTERS[subTab] ?? [];
@@ -295,6 +300,17 @@ export default function InHouse({ subTab, refreshKey }: Props) {
             {blurb}{tab ? ` Showing ${rows.length} of ${tab.data.length}.` : ''}
           </p>
         </div>
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+        {canUpload && (
+          <button
+            onClick={() => setUploading(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg cursor-pointer transition-all text-xs font-semibold shrink-0"
+            style={{ background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }}
+          >
+            <Upload className="w-3.5 h-3.5" />
+            Upload Excel
+          </button>
+        )}
         <div className="relative w-full sm:w-72">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--cn-text-muted)' }} />
           <input
@@ -306,7 +322,10 @@ export default function InHouse({ subTab, refreshKey }: Props) {
             style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', borderColor: 'var(--cn-border)' }}
           />
         </div>
+        </div>
       </div>
+
+      {uploading && <InHouseUpload tab={subTab} onClose={() => setUploading(false)} onImported={() => setReloadKey(k => k + 1)} />}
 
       {tab && filters.length > 0 && (
         <div className="flex flex-wrap items-end gap-3 mb-5">
