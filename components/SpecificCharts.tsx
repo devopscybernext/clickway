@@ -1306,6 +1306,85 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
 
 
 // ─── Flat Tasks Table (all resources' tasks in a single table, no grouping) ────
+interface ClosedTask { id: string; when: string; person: string; project: string; task: string; url: string; est: string; total: string; pmStatus: string }
+
+// Closed Tasks — everything the person (or, for a PM, everything they assigned) has closed. Read-only.
+function ClosedTasksTable({ tasks, showPerson }: { tasks: ClosedTask[]; showPerson: boolean }) {
+  const PAGE = 25;
+  const [page, setPage] = useState(1);
+  const pages = Math.max(1, Math.ceil(tasks.length / PAGE));
+  const current = Math.min(page, pages);
+  const shown = tasks.slice((current - 1) * PAGE, current * PAGE);
+  const th = 'text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px] whitespace-nowrap';
+  const when = (raw: string) => {
+    const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    return m ? raw.split(' ')[0] : raw || '—';
+  };
+  return (
+    <div className="space-y-2">
+      <p className="text-[11px]" style={{ color: 'var(--cn-text-muted)' }}>
+        <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{tasks.length}</span> closed task{tasks.length === 1 ? '' : 's'}
+      </p>
+      <div className="rounded-xl border overflow-x-auto" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+        <table className="text-xs w-full" style={{ minWidth: 760 }}>
+          <thead>
+            <tr style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}>
+              <th className={th}>Added</th>
+              {showPerson && <th className={th}>Assigned Person</th>}
+              <th className={th}>Project</th>
+              <th className={th}>Task</th>
+              <th className={th}>Link</th>
+              <th className={th}>Est.</th>
+              <th className={th}>Total Hours</th>
+              <th className={th}>PM Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map(t => {
+              const pmC = PM_STATUS_COLORS_RO[t.pmStatus.toLowerCase()] ?? '#6b7280';
+              return (
+                <tr key={t.id} style={{ borderTop: '1px solid var(--cn-border-light, var(--cn-border))' }}>
+                  <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>{when(t.when)}</td>
+                  {showPerson && <td className="px-4 py-2 whitespace-nowrap font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{t.person || '—'}</td>}
+                  <td className="px-4 py-2" style={{ color: 'var(--cn-text-muted)' }}>{t.project || '—'}</td>
+                  <td className="px-4 py-2" style={{ color: 'var(--cn-text-primary)' }}>{t.task || '—'}</td>
+                  <td className="px-4 py-2">
+                    {t.url ? (
+                      <a href={t.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                        style={{ color: 'var(--cn-accent)', background: 'rgba(254, 74, 35, 0.08)' }}>Open ↗</a>
+                    ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>}
+                  </td>
+                  <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>{t.est.trim() ? formatHHMM(toHM(t.est).h, toHM(t.est).m) : '—'}</td>
+                  <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>{t.total.trim() ? formatHHMM(toHM(t.total).h, toHM(t.total).m) : '—'}</td>
+                  <td className="px-4 py-2">
+                    {t.pmStatus ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: pmC + '20', color: pmC }}>
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: pmC }} />{t.pmStatus}
+                      </span>
+                    ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {tasks.length === 0 && (
+          <p className="text-center py-8 text-sm" style={{ color: 'var(--cn-text-muted)' }}>No closed tasks.</p>
+        )}
+      </div>
+      {pages > 1 && (
+        <div className="flex items-center justify-end gap-2 text-xs" style={{ color: 'var(--cn-text-muted)' }}>
+          <button onClick={() => setPage(Math.max(1, current - 1))} disabled={current === 1} className="px-3 py-1.5 rounded-lg font-semibold cursor-pointer disabled:opacity-40"
+            style={{ background: 'var(--cn-bg-input)', border: '1px solid var(--cn-border)', color: 'var(--cn-text-primary)' }}>Previous</button>
+          <span>Page {current} of {pages}</span>
+          <button onClick={() => setPage(Math.min(pages, current + 1))} disabled={current === pages} className="px-3 py-1.5 rounded-lg font-semibold cursor-pointer disabled:opacity-40"
+            style={{ background: 'var(--cn-bg-input)', border: '1px solid var(--cn-border)', color: 'var(--cn-text-primary)' }}>Next</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus = true, statusColName, timeLoggedColName, canEditStatus = false, canCopy = false, currentUserName, pmEmailCol, currentUserEmail, vinayQaMode = false, showMarketingCols = false, showTotalHours = false, bucketColName }: {
   rows: ResourceRow[];
   onStatusChange?: (row: SheetData, col: string, val: string) => Promise<void>;
@@ -1574,7 +1653,7 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
 
 export function ResourceOverview({ data, headers, availData = [], availHeaders = [], onStatusChange, pmStatusColName, currentUserName, currentUserEmail, showFilter, canEditPmStatus = true, canEditStatus = false, canCopy = false, restrictToMine = false, hideAllTasks = false, defaultFilter = 'all', restrictPmStatusToOwn = false, vinayQaMode = false, showQaTab = false, qaData = [], qaHeaders = [], onQaCellChange }: { data: SheetData[]; headers: string[]; availData?: SheetData[]; availHeaders?: string[]; onStatusChange?: (row: SheetData, col: string, val: string) => Promise<void>; pmStatusColName?: string; currentUserName?: string; currentUserEmail?: string; showFilter?: boolean; canEditPmStatus?: boolean; canEditStatus?: boolean; canCopy?: boolean; restrictToMine?: boolean; hideAllTasks?: boolean; defaultFilter?: 'all' | 'me'; restrictPmStatusToOwn?: boolean; vinayQaMode?: boolean; showQaTab?: boolean; qaData?: SheetData[]; qaHeaders?: string[]; onQaCellChange?: (row: SheetData, colName: string, value: string) => Promise<void> }) {
   const [openName, setOpenName] = useState<string | null>(null);
-  const [pmFilter, setPmFilter] = useState<'all' | 'me' | 'today' | 'me-today' | 'flat' | 'qa'>(restrictToMine || (hideAllTasks && !vinayQaMode) ? 'me' : vinayQaMode ? 'flat' : defaultFilter);
+  const [pmFilter, setPmFilter] = useState<'all' | 'me' | 'today' | 'me-today' | 'flat' | 'qa' | 'closed'>(restrictToMine || (hideAllTasks && !vinayQaMode) ? 'me' : vinayQaMode ? 'flat' : defaultFilter);
   const [search, setSearch] = useState('');
   // Column filters next to the search box (empty = no filtering on that column)
   const [bucketFilter, setBucketFilter] = useState<string[]>([]);
@@ -1582,7 +1661,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
 
   // Close all rows whenever the filter switches
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const handleFilterChange = (f: 'all' | 'me' | 'today' | 'me-today' | 'flat' | 'qa') => { setPmFilter(f); setOpenName(null); };
+  const handleFilterChange = (f: 'all' | 'me' | 'today' | 'me-today' | 'flat' | 'qa' | 'closed') => { setPmFilter(f); setOpenName(null); };
 
   // Find the email column in the sheet (used to match tasks to the logged-in PM)
   const emailCol = headers.find(h => h.toLowerCase().includes('email'));
@@ -1800,6 +1879,48 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
         .filter(row => row.pendingTasks.length > 0)
     : filteredRows;
 
+  // Closed Tasks: the tasks closed by this person (their own assigned work) or, for a PM / admin
+  // with no tasks of their own, the tasks they assigned (matched on the task's email). Read-only.
+  const timestampCol = headers.find(h => h.toLowerCase().includes('timestamp'));
+  const stampMs = (v: string) => {
+    const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}):(\d{2}))?/);
+    if (!m) return 0;
+    const [day, month] = isMarketingSheet ? [Number(m[2]), Number(m[1])] : [Number(m[1]), Number(m[2])];
+    return new Date(Number(m[3]), month - 1, day, Number(m[4] ?? 0), Number(m[5] ?? 0), Number(m[6] ?? 0)).getTime();
+  };
+  const isMineClosed = (r: SheetData) => {
+    if (myNameMatch) {
+      const n = String(r[resourceCol] ?? '').trim().toLowerCase(), u = currentUserName!.trim().toLowerCase();
+      return !!n && (n === u || n.includes(u) || u.includes(n));
+    }
+    if (emailCol && currentUserEmail) return String(r[emailCol] ?? '').trim().toLowerCase() === currentUserEmail.trim().toLowerCase();
+    return false;
+  };
+  const closedTasks: ClosedTask[] = pmFilter !== 'closed' ? [] : data
+    .filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'task closed' && isMineClosed(r))
+    .map(r => ({
+      id: String(r['__id'] ?? r['__row'] ?? ''),
+      when: timestampCol ? String(r[timestampCol] ?? '').trim() : '',
+      person: String(r[resourceCol] ?? '').trim(),
+      project: projectCol ? String(r[projectCol] ?? '').trim() : '',
+      task: taskCol ? String(r[taskCol] ?? '').trim() : '',
+      url: taskUrlCol ? String(r[taskUrlCol] ?? '').trim() : '',
+      est: timeEstCol ? String(r[timeEstCol] ?? '').trim() : '',
+      total: totalHoursCol ? String(r[totalHoursCol] ?? '').trim() : '',
+      pmStatus: pmStatusCol ? String(r[pmStatusCol] ?? '').trim() : '',
+    }))
+    .filter(t =>
+      (pmStatusFilter.length === 0 || pmStatusFilter.some(p => p.toLowerCase() === (t.pmStatus.toLowerCase() || 'no action taken'))) &&
+      (!searchQ || [t.person, t.project, t.task, t.pmStatus].some(v => v.toLowerCase().includes(searchQ))))
+    .sort((a, b) => stampMs(b.when) - stampMs(a.when));
+  const closedTab = (
+    <button
+      onClick={() => handleFilterChange('closed')}
+      className="px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer"
+      style={pmFilter === 'closed' ? { background: 'var(--cn-accent)', color: '#fff' } : { background: 'transparent', color: 'var(--cn-text-muted)' }}
+    >Closed Tasks</button>
+  );
+
   const flatSearchedRows = narrowing
     ? rows.map(row => ({ ...row, pendingTasks: row.pendingTasks.filter(t => keepTask(t, row.name)) }))
     : rows;
@@ -1837,6 +1958,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
                   className="px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer"
                   style={pmFilter === 'qa' ? { background: '#7c3aed', color: '#fff' } : { background: 'transparent', color: 'var(--cn-text-muted)' }}
                 >QA Testing</button>
+                {closedTab}
               </>
             ) : restrictToMine ? (
               <>
@@ -1850,6 +1972,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
                   className="px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer"
                   style={pmFilter === 'me-today' ? { background: '#16a34a', color: '#fff' } : { background: 'transparent', color: 'var(--cn-text-muted)' }}
                 >Today&apos;s Tasks</button>
+                {closedTab}
               </>
             ) : (
               <>
@@ -1867,6 +1990,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
                     style={pmFilter === 'me' ? { background: 'var(--cn-accent)', color: '#fff' } : { background: 'transparent', color: 'var(--cn-text-muted)' }}
                   >My Tasks</button>
                 )}
+                {closedTab}
               </>
             )}
           </div>
@@ -1902,7 +2026,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
           </button>
         )}
       </div>
-      {bucketOptions.length > 0 && (
+      {pmFilter !== 'closed' && bucketOptions.length > 0 && (
         <MiniMultiSelect label="Task Daily Buckets" emptyLabel="Daily Bucket" options={bucketOptions} selected={bucketFilter} onChange={setBucketFilter} />
       )}
       <MiniMultiSelect label="PM Statuses" emptyLabel="PM Status" options={pmStatusOptions} selected={pmStatusFilter} onChange={setPmStatusFilter} alignRight />
@@ -1912,6 +2036,8 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
       {/* Cards / flat table */}
       {pmFilter === 'qa' ? (
         <QATesting data={qaData} headers={qaHeaders} onCellChange={onQaCellChange ?? (async () => {})} canEdit={vinayQaMode} />
+      ) : pmFilter === 'closed' ? (
+        <ClosedTasksTable key={`${searchQ}|${pmStatusFilter.join(',')}`} tasks={closedTasks} showPerson={!myNameMatch} />
       ) : pmFilter === 'flat' ? (
         <FlatTasksTable
           rows={flatSearchedRows}
