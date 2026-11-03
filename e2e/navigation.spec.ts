@@ -11,7 +11,7 @@ const ADMIN_PAGES: [string, string?][] = [
   ['Leave Status'],
   ['Cybernext InHouse', 'Websites'], ['Cybernext InHouse', 'Case Studies'], ['Cybernext InHouse', 'Brand Kit'],
   ['Cybernext InHouse', 'Documentations'],
-  ['Tools', 'Clock Room'], ['Tools', 'Holiday Calendar'], ['Tools', 'AI Tools'],
+  ['Cybernext InHouse', 'Clock Room'], ['Cybernext InHouse', 'Holiday Calendar'], ['Cybernext InHouse', 'AI Tools'],
 ];
 
 test('every admin page loads without errors', async ({ page }) => {

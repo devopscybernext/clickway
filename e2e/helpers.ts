@@ -68,7 +68,18 @@ export async function login(page: Page, user: E2EUser): Promise<void> {
 // Web and Marketing), so the page link is looked up inside its own section.
 // Clicking a section heading toggles it, so it's only clicked when that
 // section's pages aren't already showing.
+// Cybernext InHouse and Help are dropdowns in the top bar, not in the sidebar. Opens one and,
+// if a page is named, clicks it.
+export const TOP_BAR_MENUS = ['Cybernext InHouse', 'Help'];
+export async function openTopMenu(page: Page, menu: string, leaf?: string): Promise<void> {
+  const button = page.getByRole('banner').getByRole('button', { name: menu, exact: true });
+  await expect(button).toBeVisible();
+  await button.click();
+  if (leaf) await page.getByRole('menuitem', { name: leaf, exact: true }).click();
+}
+
 export async function openPage(page: Page, section: string, leaf?: string): Promise<void> {
+  if (TOP_BAR_MENUS.includes(section)) return openTopMenu(page, section, leaf);
   const nav = page.getByRole('navigation');
   const heading = nav.getByRole('button', { name: section, exact: true });
   // Let the sidebar finish rendering (e.g. after a reload) before deciding

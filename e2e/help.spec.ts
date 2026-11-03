@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { USERS, login, query, uniqueMark, waitForDb } from './helpers';
+import { USERS, login, openTopMenu, query, uniqueMark, waitForDb } from './helpers';
 
 // The Help tab: anyone can send a request; the sender sees their own in My Queries
 // and only the Super Admin can change a status.
@@ -8,9 +8,7 @@ type Row = Record<string, string | number>;
 
 test('Help: a request is saved, its sender sees it, and only the Super Admin can change its status', async ({ page }) => {
   await login(page, USERS.team);
-  const nav = page.getByRole('navigation');
-  await nav.getByRole('button', { name: 'Help', exact: true }).click();
-  await nav.getByRole('button', { name: 'Apply', exact: true }).click();
+  await openTopMenu(page, 'Help', 'Apply');
 
   const subject = uniqueMark('Help');
   await page.getByLabel('Complaint', { exact: true }).check();
@@ -24,7 +22,7 @@ test('Help: a request is saved, its sender sees it, and only the Super Admin can
   expect(row).toMatchObject({ type: 'Complaint', area: 'Tools', status: 'New', username: USERS.team.username, name: USERS.team.displayName });
 
   // The sender finds it under My Queries
-  await nav.getByRole('button', { name: 'My Queries', exact: true }).click();
+  await openTopMenu(page, 'Help', 'My Queries');
   await expect(page.getByRole('cell', { name: subject })).toBeVisible();
 
   // A team member can't change the status

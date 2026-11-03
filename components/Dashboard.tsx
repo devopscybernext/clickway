@@ -818,6 +818,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           isAdmin={isAdmin}
           canOpenAdminPortal={canManageUsers(user.role)}
           onOpenAdminPortal={() => handleSheetChange({ id: '15' })}
+          isLeafActive={leaf => selectedSheet === leaf.id && (leaf.subTab === undefined || leaf.subTab === (leaf.id === '14' ? toolsSubTab : leaf.id === '17' ? inHouseSubTab : leaf.id === '18' ? helpSubTab : undefined))}
+          onNavigate={handleSheetChange}
         />
 
         <main className="flex-1 px-4 sm:px-6 xl:px-8 pt-6 pb-8 space-y-5">

@@ -122,7 +122,7 @@ export function getLockedTeam(role: Role): Team | undefined {
 // dropdown: Web (Team Bandwidth/Tasks Assigned/Tasks Overview/Leaderboard/
 // Add Task), Marketing (same minus Leaderboard — no Marketing scoring system
 // yet), PM Projects (Current Month/Previous Months/My Projects), then
-// standalone Leave Status, then Tools (Clock Room/Holiday Calendar/AI
+// standalone Leave Status, then Cybernext InHouse (with Clock Room/Holiday Calendar/AI
 // Tools). A NavLeaf is an actual clickable page; `team` scopes its data and
 // `subTab` additionally selects one of a page's own in-page sub-tabs (PM
 // Projects, Tools) — both replace what used to be in-page toggle/tab UI
@@ -199,6 +199,8 @@ const TOOLS_CHILDREN: NavLeaf[] = [
   { id: '14', subTab: 'holiday', label: 'Holiday Calendar' },
   { id: '14', subTab: 'ai', label: 'AI Tools' },
 ];
+// The three tools (Clock Room, Holiday Calendar, AI Tools) live inside Cybernext InHouse, for every
+// role. They are page '14', which the Tools page (components/ClockRoom etc.) renders.
 // Cybernext's own portfolio: websites we built / manage, and our case studies.
 // Read-only. Everyone gets Brand Kit; the rest is HM / Admin only (see
 // canSeeInHouseFull, which the API and the page also use).
@@ -210,9 +212,10 @@ const INHOUSE_FULL_CHILDREN: NavLeaf[] = [
   { id: '17', subTab: 'case-studies', label: 'Case Studies' },
   INHOUSE_BRAND_KIT,
   { id: '17', subTab: 'documentations', label: 'Documentations' },
+  ...TOOLS_CHILDREN,
   INHOUSE_NEXTBOT,
 ];
-const INHOUSE_LIMITED: NavItem = { label: 'Cybernext InHouse', children: [INHOUSE_BRAND_KIT] };
+const INHOUSE_LIMITED: NavItem = { label: 'Cybernext InHouse', children: [INHOUSE_BRAND_KIT, ...TOOLS_CHILDREN] };
 const LEAVE_STATUS: NavLeaf = { id: '2' };
 // User Details (Username/Role/Display Name/Email) editor — HM/Admin/Mod
 // (and their legacy aliases) only, never PM-tier/team-admin/individual
@@ -231,7 +234,6 @@ const ADMIN_NAV: NavItem[] = [
   { label: 'PM Projects', children: PM_PROJECTS_ADMIN },
   LEAVE_STATUS,
   { label: 'Cybernext InHouse', children: INHOUSE_FULL_CHILDREN },
-  { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 // Mod — everything HM / Admin have, except InHouse is just Brand Kit
 const MOD_NAV: NavItem[] = ADMIN_NAV.map(item => (isNavParent(item) && item.label === 'Cybernext InHouse' ? INHOUSE_LIMITED : item));
@@ -244,7 +246,6 @@ const PM_WEB_ADMIN_NAV: NavItem[] = [
   { label: 'PM Projects', children: PM_PROJECTS_FULL },
   LEAVE_STATUS,
   INHOUSE_LIMITED,
-  { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 const PM_MARKETING_ADMIN_NAV: NavItem[] = [
   { label: 'Web', children: WEB_NO_TASKS_ASSIGNED },
@@ -252,7 +253,6 @@ const PM_MARKETING_ADMIN_NAV: NavItem[] = [
   { label: 'PM Projects', children: PM_PROJECTS_FULL },
   LEAVE_STATUS,
   INHOUSE_LIMITED,
-  { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 // legacy "pm" — like ADMIN_NAV but no Tasks Assigned at all, plus "My Projects"
 const PM_LEGACY_NAV: NavItem[] = [
@@ -261,7 +261,6 @@ const PM_LEGACY_NAV: NavItem[] = [
   { label: 'PM Projects', children: PM_PROJECTS_FULL },
   LEAVE_STATUS,
   INHOUSE_LIMITED,
-  { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 // WebAdmin — no Leave Status, no PM Projects; otherwise Web-only, except
 // Tasks Overview also carries a lone cross-team peek at Marketing's (a
@@ -270,13 +269,11 @@ const WEB_ADMIN_NAV: NavItem[] = [
   { label: 'Web', children: WEB_FULL },
   { label: 'Marketing', children: MARKETING_TASKS_OVERVIEW_ONLY },
   INHOUSE_LIMITED,
-  { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 // WebTeam / legacy "resource" — individual contributor, own team
 const WEB_TEAM_NAV: NavItem[] = [
   { label: 'Web', children: WEB_INDIVIDUAL },
   INHOUSE_LIMITED,
-  { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 // MarketingAdmin — no Leave Status, no PM Projects; otherwise
 // Marketing-only, except Tasks Overview also peeks at Web's (mirrors the
@@ -285,13 +282,11 @@ const MARKETING_ADMIN_NAV: NavItem[] = [
   { label: 'Marketing', children: MARKETING_FULL },
   { label: 'Web', children: WEB_TASKS_OVERVIEW_ONLY },
   INHOUSE_LIMITED,
-  { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 // MarketingTeam — individual contributor, own team
 const MARKETING_TEAM_NAV: NavItem[] = [
   { label: 'Marketing', children: MARKETING_INDIVIDUAL },
   INHOUSE_LIMITED,
-  { label: 'Tools', children: TOOLS_CHILDREN },
 ];
 
 // Help is in everyone's menu, last: Apply (the form) and the table of queries —
@@ -342,7 +337,7 @@ export const SHEET_LABELS: Record<SheetId, string> = {
   '10': 'Individual Analysis',
   '11': 'PM Projects',
   '12': 'Team Bandwidth',
-  '14': 'Tools',
+  '14': 'Cybernext InHouse',
   '15': 'Admin Portal',
   '16': 'Report',
   '17': 'Cybernext InHouse',
@@ -359,12 +354,15 @@ export function getSheetLabel(id: SheetId, role: Role): string {
 // The sidebar's top-level order, the same for every role (a role simply lacks the
 // items it can't open). The page a role lands on after login is the first page of
 // this menu too (getFirstNavLeaf).
-const MENU_ORDER = ['PM Projects', 'Marketing', 'Web', 'Leave Status', 'Cybernext InHouse', 'Tools', 'Help'];
+const MENU_ORDER = ['PM Projects', 'Marketing', 'Web', 'Leave Status', 'Cybernext InHouse', 'Help'];
 const menuRank = (item: NavItem): number => {
   const label = isNavParent(item) ? item.label : SHEET_LABELS[item.id];
   const i = MENU_ORDER.indexOf(label);
   return i === -1 ? MENU_ORDER.length : i;
 };
+// Menus shown as dropdowns in the top bar instead of the sidebar. They stay part of ROLE_NAV (so
+// access checks and the page a role may open are unchanged); the sidebar just leaves them out.
+export const TOP_BAR_MENUS = ['Cybernext InHouse', 'Help'];
 export function getNavItems(user: AuthUser): NavItem[] {
   return [...ROLE_NAV[user.role]].sort((a, b) => menuRank(a) - menuRank(b));
 }

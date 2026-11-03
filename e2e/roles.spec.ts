@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { randomUUID } from 'crypto';
-import { USERS, login } from './helpers';
+import { USERS, login, openTopMenu } from './helpers';
 
 // Each role sees only its own pages, and the server refuses the rest even
 // when asked directly.
@@ -26,10 +26,10 @@ test('a team member sees only their own pages, and is refused elsewhere', async 
   const api = page.request;
   const json = { 'sec-fetch-mode': 'cors', 'sec-fetch-dest': 'empty' };
   // Cybernext InHouse is open to everyone, but a team member only gets Brand Kit
-  await nav.getByRole('button', { name: 'Cybernext InHouse', exact: true }).click();
-  await expect(nav.getByRole('button', { name: 'Brand Kit', exact: true })).toBeVisible();
+  await openTopMenu(page, 'Cybernext InHouse');
+  await expect(page.getByRole('menuitem', { name: 'Brand Kit', exact: true })).toBeVisible();
   for (const hidden of ['Websites', 'Case Studies', 'Documentations', 'NextBot']) {
-    await expect(nav.getByRole('button', { name: hidden, exact: true })).toHaveCount(0);
+    await expect(page.getByRole('menuitem', { name: hidden, exact: true })).toHaveCount(0);
   }
   const inhouse = await api.get('/api/inhouse', { headers: json });
   expect(inhouse.status()).toBe(200);

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { CalendarOff, Menu, X, ChevronDown, Globe, Megaphone, Briefcase, Wrench, ShieldCheck, Building2, CircleHelp } from 'lucide-react';
-import { AuthUser, SheetId, Team, NavLeaf, isNavParent, getNavItems, getSheetLabel } from '@/lib/auth';
+import { AuthUser, SheetId, Team, NavLeaf, isNavParent, getNavItems, getSheetLabel, TOP_BAR_MENUS } from '@/lib/auth';
 import { memberPhoto } from '@/lib/memberColors';
 
 interface SidebarProps {
@@ -68,7 +68,8 @@ function getUserDesignation(username: string, role: string): string {
 
 export default function Sidebar({ selectedSheet, selectedTeam, selectedPmSubTab, selectedToolsSubTab, selectedInHouseSubTab, selectedHelpSubTab, user, onSheetChange, isAdmin }: SidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const navItems = getNavItems(user);
+  // Cybernext InHouse and Help are in the top bar (see TopBar)
+  const navItems = getNavItems(user).filter(item => !(isNavParent(item) && TOP_BAR_MENUS.includes(item.label)));
 
   const isLeafActive = (leaf: NavLeaf) => {
     if (selectedSheet !== leaf.id) return false;
