@@ -23,7 +23,7 @@ type ReportId = 'productivity' | 'deadlines' | 'estimation' | 'monthly' | 'aging
 const rosterFor = (team: ReportTeam): string[] => (team === 'web' ? webTeam() : marketingTeam());
 
 // One entry per report. More reports slot in here later.
-// `teams` says which team's Report tab shows the card.
+// `teams` says which team's Report tab shows the card. Only the Productivity Meter is shown for now; an empty list hides a card.
 const REPORTS: { id: ReportId; title: string; description: string; Icon: LucideIcon; teams: ReportTeam[] }[] = [
   {
     id: 'productivity',
@@ -37,35 +37,35 @@ const REPORTS: { id: ReportId; title: string; description: string; Icon: LucideI
     title: 'Deadline Tracker',
     description: 'See which tasks are overdue or due soon, and who is falling behind.',
     Icon: CalendarClock,
-    teams: ['web', 'marketing'],
+    teams: [],
   },
   {
     id: 'estimation',
     title: 'Estimation Accuracy',
     description: 'See whose time estimates run over or under, and by how much.',
     Icon: Target,
-    teams: ['web', 'marketing'],
+    teams: [],
   },
   {
     id: 'monthly',
     title: 'Monthly Team Summary',
     description: 'A one-month view of tasks, time and projects, compared with last month.',
     Icon: CalendarRange,
-    teams: ['web', 'marketing'],
+    teams: [],
   },
   {
     id: 'aging',
     title: 'Aging Tasks',
     description: 'See open tasks that have been waiting the longest.',
     Icon: Hourglass,
-    teams: ['web', 'marketing'],
+    teams: [],
   },
   {
     id: 'blockers',
     title: 'Blockers and Insights',
     description: 'See what is stuck, and what each person plans next.',
     Icon: MessageSquareWarning,
-    teams: ['marketing'],
+    teams: [],
   },
 ];
 

@@ -6,7 +6,7 @@ import { SheetData } from '@/lib/dataStore';
 import { pmRowTint } from '@/lib/pmRowTint';
 import RowActions from './RowActions';
 import { totalTimeRow, totalRowHtml, totalRowText } from '@/lib/copyTotals';
-import { STATUS_COLORS, formatHHMM, toHM, DURATION_HOUR_OPTIONS, DURATION_MINUTE_OPTIONS, hhmmToDecimalHours, addLoggedToTotal } from './SpecificCharts';
+import { STATUS_COLORS, formatHHMM, displayHHMM, toHM, DURATION_HOUR_OPTIONS, DURATION_MINUTE_OPTIONS, hhmmToDecimalHours, addLoggedToTotal } from './SpecificCharts';
 
 const PAGE_SIZE = 30;
 
@@ -644,7 +644,7 @@ function TimeEstDurationCell({ value, row, col, onStatusChange }: {
       >
         {DURATION_HOUR_OPTIONS.map(o => <option key={o} value={o}>{String(o).padStart(2, '0')}</option>)}
       </select>
-      <span style={{ color: 'var(--cn-text-muted)' }}>.</span>
+      <span style={{ color: 'var(--cn-text-muted)' }}>:</span>
       <select
         value={m}
         onChange={e => commit(h, Number(e.target.value))}
@@ -1425,7 +1425,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                               onStatusChange={onStatusChange}
                             />
                           ) : isTimeEst ? (
-                            val.trim() ? <span className="whitespace-nowrap">{formatHHMM(toHM(val).h, toHM(val).m)}</span> : '—'
+                            val.trim() ? <span className="whitespace-nowrap">{displayHHMM(val)}</span> : '—'
                           ) : isTotalTimeEst && onStatusChange && canEditPersonBucket ? (
                             <TimeEstDurationCell
                               value={val}
@@ -1434,9 +1434,9 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                               onStatusChange={onStatusChange}
                             />
                           ) : isTotalTimeEst ? (
-                            val.trim() ? (/^\s*\d/.test(val) ? <span className="whitespace-nowrap">{formatHHMM(toHM(val).h, toHM(val).m)}</span> : val) : '—'
-                          ) : isTotalHours ? (
-                            val.trim() ? <span className="whitespace-nowrap">{formatHHMM(toHM(val).h, toHM(val).m)}</span> : '—'
+                            val.trim() ? (/^\s*\d/.test(val) ? <span className="whitespace-nowrap">{displayHHMM(val)}</span> : val) : '—'
+                          ) : isTotalHours || h.toLowerCase().includes('time logged') ? (
+                            val.trim() ? <span className="whitespace-nowrap">{displayHHMM(val)}</span> : '—'
                           ) : isBucket ? (BUCKET_OPTIONS.find(o => o.toLowerCase() === normalizeBucket(val)) ?? val) || '—'
                           : val || '—'}
                         </td>

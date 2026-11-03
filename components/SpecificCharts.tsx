@@ -633,7 +633,7 @@ function ResourceTimeLoggedEdit({ value, raw, colName, onStatusChange, widthClas
 // ─── Time Logged On AC — HH.MM duration entry for the "Push to Admin"
 // self-logging workflow (own tasks only). Stored as "HH.MM" (e.g. "01.30" =
 // 1h30m) — the "." separates literal hours/minutes, it is not a decimal point.
-export const DURATION_HOUR_OPTIONS = Array.from({ length: 13 }, (_, i) => i); // 0-12
+export const DURATION_HOUR_OPTIONS = Array.from({ length: 501 }, (_, i) => i); // 0-500
 export const DURATION_MINUTE_OPTIONS = Array.from({ length: 60 }, (_, i) => i); // 0-59
 
 export function parseHHMM(val: string): { h: number; m: number } {
@@ -678,6 +678,12 @@ export function toHM(val: string): { h: number; m: number } {
   const m = Math.round((decimal - h) * 60);
   return m === 60 ? { h: h + 1, m: 0 } : { h, m };
 }
+// A time cell as shown on screen: "HH:MM", 00:00 to 500:59. The cell itself stays
+// "HH.MM Hours" (see formatHHMM), so every sum and report reads it unchanged.
+export function displayHHMM(val: string): string {
+  const { h, m } = toHM(val);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
 // Decimal hours -> zero-padded "HH:MM" clock display (e.g. 7.5 -> "07:30").
 // Distinct from formatHHMM's "HH.MM Hours" edit-field notation above — this
 // is for read-only summary/stat figures (Bandwidth, Assigned, etc.).
@@ -709,7 +715,7 @@ function ResourceDurationEdit({ value, raw, colName, onStatusChange }: {
         className="text-[10px] rounded border px-1 py-0.5 focus:outline-none disabled:opacity-60 cursor-pointer" style={selectStyle}>
         {DURATION_HOUR_OPTIONS.map(o => <option key={o} value={o}>{String(o).padStart(2, '0')}</option>)}
       </select>
-      <span style={{ color: 'var(--cn-text-muted)' }}>.</span>
+      <span style={{ color: 'var(--cn-text-muted)' }}>:</span>
       <select value={m} onChange={e => commit(h, Number(e.target.value))} disabled={saving}
         className="text-[10px] rounded border px-1 py-0.5 focus:outline-none disabled:opacity-60 cursor-pointer" style={selectStyle}>
         {DURATION_MINUTE_OPTIONS.map(o => <option key={o} value={o}>{String(o).padStart(2, '0')}</option>)}
@@ -1181,12 +1187,12 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                     </td>
                     {/* Est. */}
                     <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
-                      {t.timeEst.trim() ? formatHHMM(toHM(t.timeEst).h, toHM(t.timeEst).m) : '—'}
+                      {t.timeEst.trim() ? displayHHMM(t.timeEst) : '—'}
                     </td>
                     {/* Total Hours — always read-only, sourced from the sheet */}
                     {showTotalHours && (
                       <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
-                        {t.totalHoursVal.trim() ? formatHHMM(toHM(t.totalHoursVal).h, toHM(t.totalHoursVal).m) : '—'}
+                        {t.totalHoursVal.trim() ? displayHHMM(t.totalHoursVal) : '—'}
                       </td>
                     )}
                     {/* Task Daily Bucket */}
@@ -1251,7 +1257,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                             colName={timeLoggedColName}
                             onStatusChange={onStatusChange}
                           />
-                        ) : (t.timeLogged || '—')}
+                        ) : (t.timeLogged.trim() ? displayHHMM(t.timeLogged) : '—')}
                       </td>
                     )}
                     {/* Status */}
@@ -1354,8 +1360,8 @@ function ClosedTasksTable({ tasks, showPerson }: { tasks: ClosedTask[]; showPers
                         style={{ color: 'var(--cn-accent)', background: 'rgba(254, 74, 35, 0.08)' }}>Open ↗</a>
                     ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>}
                   </td>
-                  <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>{t.est.trim() ? formatHHMM(toHM(t.est).h, toHM(t.est).m) : '—'}</td>
-                  <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>{t.total.trim() ? formatHHMM(toHM(t.total).h, toHM(t.total).m) : '—'}</td>
+                  <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>{t.est.trim() ? displayHHMM(t.est) : '—'}</td>
+                  <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>{t.total.trim() ? displayHHMM(t.total) : '—'}</td>
                   <td className="px-4 py-2">
                     {t.pmStatus ? (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: pmC + '20', color: pmC }}>
@@ -1589,12 +1595,12 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
                   </td>
                   {!vinayQaMode && !showMarketingCols && (
                     <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
-                      {t.timeEst.trim() ? formatHHMM(toHM(t.timeEst).h, toHM(t.timeEst).m) : '—'}
+                      {t.timeEst.trim() ? displayHHMM(t.timeEst) : '—'}
                     </td>
                   )}
                   {showTotalHours && !vinayQaMode && !showMarketingCols && (
                     <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
-                      {t.totalHoursVal.trim() ? formatHHMM(toHM(t.totalHoursVal).h, toHM(t.totalHoursVal).m) : '—'}
+                      {t.totalHoursVal.trim() ? displayHHMM(t.totalHoursVal) : '—'}
                     </td>
                   )}
                   <td className="px-4 py-2">
@@ -3100,7 +3106,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
                                 </td>
                                 {showTotalHours2 && (
                                   <td className="px-3 py-2.5" style={{ minWidth: 60, color: 'var(--cn-text-muted)' }}>
-                                    {t.totalHoursVal.trim() ? formatHHMM(toHM(t.totalHoursVal).h, toHM(t.totalHoursVal).m) : '—'}
+                                    {t.totalHoursVal.trim() ? displayHHMM(t.totalHoursVal) : '—'}
                                   </td>
                                 )}
                                 <td className="px-3 py-2.5" style={{ minWidth: 110 }}>
@@ -3412,10 +3418,10 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
                           ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>}
                         </td>
                         <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
-                          {t.timeEst.trim() ? formatHHMM(toHM(t.timeEst).h, toHM(t.timeEst).m) : '—'}
+                          {t.timeEst.trim() ? displayHHMM(t.timeEst) : '—'}
                         </td>
                         <td className="px-4 py-2 whitespace-nowrap" style={{ color: 'var(--cn-text-muted)' }}>
-                          {t.totalHours.trim() ? formatHHMM(toHM(t.totalHours).h, toHM(t.totalHours).m) : '—'}
+                          {t.totalHours.trim() ? displayHHMM(t.totalHours) : '—'}
                         </td>
                         <td className="px-4 py-2">
                           {t.bucket ? (
