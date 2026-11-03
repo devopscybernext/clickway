@@ -674,15 +674,20 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const canEditPmTab = isAdmin && (effectivePmBandwidthSubTab === 'current' || effectivePmBandwidthSubTab === 'archive');
 
   // ── Team roster filtering (Web/Marketing split for Team Bandwidth & Tasks Overview) ──
-  const filterByRoster = (rows: SheetData[], rowHeaders: string[], roster: string[]) => {
+  const filterByRoster = (rows: SheetData[], rowHeaders: string[], roster: string[], ownEmail?: string) => {
     // 'team' matches the Leave spreadsheet's name column (header literally
     // reads "Team" there, despite holding a person's name)
     const col = rowHeaders.find(h => h.toLowerCase().includes('assigned person') || h.toLowerCase().includes('assigned to') || h.toLowerCase() === 'name' || h.toLowerCase() === 'team');
     if (!col || roster.length === 0) return [];
     const rosterLower = roster.map(r => r.toLowerCase());
-    return rows.filter(r => rosterLower.includes(String(r[col] ?? '').trim().toLowerCase()));
+    // ownEmail also keeps the tasks the viewer added themselves, assigned to someone outside the roster or to nobody
+    const emailCol = ownEmail ? rowHeaders.find(h => h.toLowerCase().includes('email')) : undefined;
+    const mine = (r: SheetData) => !!emailCol && String(r[emailCol] ?? '').trim().toLowerCase() === ownEmail!.trim().toLowerCase();
+    return rows.filter(r => rosterLower.includes(String(r[col] ?? '').trim().toLowerCase()) || mine(r));
   };
   const webBandwidthData = filterByRoster(activeBandwidthData, bandwidthHeaders, webTeam());
+  // Tasks Overview: the same, plus the tasks the viewer added (shown in their My Tasks whether assigned or not)
+  const webOverviewData  = filterByRoster(activeBandwidthData, bandwidthHeaders, webTeam(), user.email);
   const webAvailData     = filterByRoster(availData, availHeaders, webTeam());
 
   // Marketing — tasks come from the separate Marketing Team spreadsheet's
@@ -1328,7 +1333,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               <div className="p-3 sm:p-6">
                 {tasksOverviewTeam === 'web' ? (
                   <ResourceOverview
-                    data={webBandwidthData}
+                    data={webOverviewData}
                     closedData={bandwidthData}
                     headers={bandwidthHeaders}
                     availData={webAvailData}

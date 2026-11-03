@@ -191,6 +191,7 @@ const tooltipStyle = {
 
 // ─── Resource Overview ────────────────────────────────────────────────────────
 const EXCLUDED_PERSONS = ['admin', 'test'];
+const UNASSIGNED = 'Unassigned';
 
 const TEAM_PHOTOS: Record<string, string> = {
   akash: '/team/Akash.png', lovepreet: '/team/Lovepreet.png',
@@ -1726,7 +1727,13 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
 
   if (!resourceCol || !statusCol) return null;
 
-  const names = [...new Set(data.map(r => String(r[resourceCol] ?? '').trim()).filter(Boolean))]
+  // A task the viewer added (the task's email is theirs) is always theirs to see in My Tasks, assigned
+  // or not: with no Assigned Person it sits under "Unassigned" instead of being left out.
+  const isOwnTask = (r: SheetData) =>
+    !!emailCol && !!currentUserEmail && String(r[emailCol] ?? '').trim().toLowerCase() === currentUserEmail.trim().toLowerCase();
+  const personOf = (r: SheetData) => String(r[resourceCol] ?? '').trim() || (isOwnTask(r) ? UNASSIGNED : '');
+
+  const names = [...new Set(data.map(personOf).filter(Boolean))]
     .filter(n => !EXCLUDED_PERSONS.includes(n.toLowerCase()))
     .sort();
 
@@ -1736,7 +1743,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
   const HIDE_FROM_TABLE = ['task closed', 'submitted to client', 'n/a', ''];
 
   const rows: ResourceRow[] = names.map(name => {
-    const myTasks = data.filter(r => String(r[resourceCol] ?? '').trim().toLowerCase() === name.toLowerCase());
+    const myTasks = data.filter(r => personOf(r).toLowerCase() === name.toLowerCase());
     const department = deptCol ? String(myTasks.find(r => String(r[deptCol] ?? '').trim())?.[deptCol] ?? '').trim() : '';
     const getStatus    = (r: SheetData) => String(r[statusCol!]   ?? '').trim().toLowerCase();
     const getProject   = (r: SheetData) => projectCol   ? String(r[projectCol]   ?? '').trim() : '';
@@ -1791,7 +1798,8 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
       .slice(0, 20);
 
     return { name, department, activeProject, activeTasks, onHoldTasks, pendingPM, toBeStarted, testingTasks, totalHours, todayHours, todayLoadHours, todayTasks, pendingTasks };
-  }).filter(r => r.totalHours > 0 || r.activeTasks + r.onHoldTasks + r.pendingPM + r.toBeStarted + r.testingTasks > 0)
+  }).filter(r => r.totalHours > 0 || r.activeTasks + r.onHoldTasks + r.pendingPM + r.toBeStarted + r.testingTasks > 0
+      || r.pendingTasks.some(t => isOwnTask(t._raw)))
     .sort((a, b) => (b.activeTasks + b.onHoldTasks) - (a.activeTasks + a.onHoldTasks));
 
   // Show filter if caller forces it (PM role), we have email to match against, or the
@@ -1814,6 +1822,9 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
     // prefer it over an "Email" column, which on some sheets (e.g. Marketing
     // Tasks' "Email Address") records who submitted the task, not who it's
     // assigned to, and would otherwise silently show zero results.
+    // A PM's My Tasks also holds every task they added, whoever it is assigned to (or nobody)
+    if (pmFilter === 'me' && restrictPmStatusToOwn && emailCol && currentUserEmail)
+      return taskList.filter(t => isOwnTask(t._raw) || (myNameMatch && isMyRow(row)));
     if (pmFilter === 'me' && myNameMatch)
       return isMyRow(row) ? taskList : [];
     if (pmFilter === 'me' && emailCol && currentUserEmail)
