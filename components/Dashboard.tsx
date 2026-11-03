@@ -22,6 +22,7 @@ import PMProjectBandwidth from './PMProjectBandwidth';
 import ClosedProjects from './ClosedProjects';
 import ProjectReport from './ProjectReport';
 import Reports from './Reports';
+import ImportData from './ImportData';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import LeaveStatus from './LeaveStatus';
 import EntryForm from './EntryForm';
@@ -665,6 +666,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const isReport            = selectedSheet === '16';
   const isInHouse           = selectedSheet === '17';
   const isHelp              = selectedSheet === '18';
+  const isImportData        = selectedSheet === '19';
 
   // "Add New Project" form — PM-tier users and the admin tier
   // Admin / HM / Mod can add and edit projects too (PMs do on My Projects and can add)
@@ -1114,6 +1116,11 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 />
               )}
             </section>
+          )}
+
+          {/* ── Import Data (Web / Marketing; Super Admin, HM, Mod): Excel upload of tasks ── */}
+          {isImportData && isAdmin && (
+            <ImportData key={navTeam} team={navTeam} onImported={() => { void fetchAll(); setEntryRefreshKey(k => k + 1); }} />
           )}
 
           {/* ── Cybernext InHouse: our websites and case studies as cards (no panel behind them) ── */}

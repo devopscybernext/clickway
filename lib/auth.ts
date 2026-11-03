@@ -1,4 +1,4 @@
-export type SheetId = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | '11' | '12' | '14' | '15' | '16' | '17' | '18';
+export type SheetId = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | '11' | '12' | '14' | '15' | '16' | '17' | '18' | '19';
 
 // New role taxonomy (2026 rollout) — kept alongside legacy role slugs so
 // accounts that haven't been migrated in the UserDetails sheet keep working
@@ -221,10 +221,15 @@ const LEAVE_STATUS: NavLeaf = { id: '2' };
 // roles, since it can change anyone's access level. It has no sidebar entry any
 // more: admins open it from the Admin Portal item in the profile menu (TopBar).
 
+// Import Data (Excel upload of tasks): the admin tier only - Super Admin, HM and Mod (and their
+// legacy aliases). The page and /api/import use the same isAdminTierRole check.
+const WEB_ADMIN_FULL: NavLeaf[] = [...WEB_FULL, { id: '19', team: 'web', label: 'Import Data' }];
+const MARKETING_ADMIN_FULL: NavLeaf[] = [...MARKETING_FULL, { id: '19', team: 'marketing', label: 'Import Data' }];
+
 // HM / Admin / Mod — full access, both teams in full
 const ADMIN_NAV: NavItem[] = [
-  { label: 'Web', children: WEB_FULL },
-  { label: 'Marketing', children: MARKETING_FULL },
+  { label: 'Web', children: WEB_ADMIN_FULL },
+  { label: 'Marketing', children: MARKETING_ADMIN_FULL },
   { label: 'PM Projects', children: PM_PROJECTS_ADMIN },
   LEAVE_STATUS,
   { label: 'Cybernext InHouse', children: INHOUSE_FULL_CHILDREN },
@@ -344,6 +349,7 @@ export const SHEET_LABELS: Record<SheetId, string> = {
   '16': 'Report',
   '17': 'Cybernext InHouse',
   '18': 'Help',
+  '19': 'Import Data',
 };
 
 export function getSheetLabel(id: SheetId, role: Role): string {
