@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { SheetData } from '@/lib/dataStore';
 import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, PM_BANDWIDTH_ALL_DATA_SHEET_ID, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, TAB_BANDWIDTH, LEAVE_SHEET_ID, TAB_LEAVE, RANGE_LEAVE, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
 
-import { AuthUser, SheetId, Team, NavLeaf, getFirstNavLeaf, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, canSeeInHouseFull, canManageUsers, canManageInHouseData, canAddLeaderboardFeedback } from '@/lib/auth';
+import { AuthUser, SheetId, Team, NavLeaf, getFirstNavLeaf, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, canSeeInHouseFull, canManageUsers, canManageInHouseData, canDeletePmProjects, canAddLeaderboardFeedback } from '@/lib/auth';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import InHouse, { type InHouseSubTab } from './InHouse';
@@ -1194,9 +1194,10 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   headers={pmBandwidthHeaders}
                   canEdit={effectivePmBandwidthSubTab === 'mine' || canEditPmTab}
                   popupEdit={canEditPmTab}
-                  canManageRows={effectivePmBandwidthSubTab === 'mine' || (isAdmin && effectivePmBandwidthSubTab === 'current')}
-                  onDuplicateRow={row => changeRow('duplicate', pmRowSheet(row).id, pmRowSheet(row).tab, row)}
-                  onDeleteRow={row => changeRow('delete', pmRowSheet(row).id, pmRowSheet(row).tab, row)}
+                  onDuplicateRow={effectivePmBandwidthSubTab === 'mine' || (isAdmin && effectivePmBandwidthSubTab === 'current')
+                    ? row => changeRow('duplicate', pmRowSheet(row).id, pmRowSheet(row).tab, row) : undefined}
+                  onDeleteRow={canDeletePmProjects(user.role) && (effectivePmBandwidthSubTab === 'current' || effectivePmBandwidthSubTab === 'archive' || effectivePmBandwidthSubTab === 'mine')
+                    ? row => changeRow('delete', pmRowSheet(row).id, pmRowSheet(row).tab, row) : undefined}
                   onCellChange={effectivePmBandwidthSubTab === 'mine' || canEditPmTab ? handlePmBandwidthChange : undefined}
                   allData={pmBandwidthData}
                   allPmNames={pmUsers.map(u => u.displayName).filter(Boolean)}

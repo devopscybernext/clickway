@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifySession, COOKIE_NAME } from '@/lib/session';
 import { fetchSheetData, duplicateSheetRow, deleteSheetRow, DataError } from '@/lib/dataStore';
 import { findDataset } from '@/lib/data/datasets';
-import { isAdminTierRole, isPmTierRole, Role } from '@/lib/auth';
+import { isAdminTierRole, isPmTierRole, canDeletePmProjects, Role } from '@/lib/auth';
 import { formatTimestamp, DateOrder } from '@/lib/forms';
 
 export const runtime = 'nodejs';
@@ -11,8 +11,9 @@ export const runtime = 'nodejs';
 // Who may, per table:
 //   Web tasks        — Admin / HM / Mod, PMWebAdmin, WebAdmin
 //   Marketing tasks  — Admin / HM / Mod, PMMarketingAdmin, MarketingAdmin
-//   PM projects      — Admin / HM / Mod (any row); a PM only their own rows (matched on the
-//                      row's Email Address, so they can't touch another PM's projects)
+//   PM projects      — duplicate: Admin / HM / Mod (any row) or a PM on their own rows (matched on
+//                      the row's Email Address, so they can't touch another PM's projects);
+//                      delete: HM and Admin only
 // A duplicate is the same row again at the end of the table with a fresh Timestamp.
 function mayChangeRows(role: Role, table: string): boolean {
   if (isAdminTierRole(role)) return table === 'web_tasks' || table === 'marketing_tasks' || table === 'pm_projects';
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
   }
   const ds = findDataset(spreadsheetId, sheetName);
-  if (!ds || !mayChangeRows(user.role, ds.table)) {
+  if (!ds || !mayChangeRows(user.role, ds.table) || (ds.table === 'pm_projects' && action === 'delete' && !canDeletePmProjects(user.role))) {
     return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
   }
 

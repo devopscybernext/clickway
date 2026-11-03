@@ -74,6 +74,11 @@ const HELP_ADMIN_ROLES: Role[] = ['Admin', 'admin'];
 export function canManageHelp(role: Role): boolean {
   return HELP_ADMIN_ROLES.includes(role);
 }
+// PM Projects: only HM and Admin can delete a project row (Current Month and Previous Months).
+// The table's delete icon and /api/rows use this one check.
+export function canDeletePmProjects(role: Role): boolean {
+  return INHOUSE_FULL_ROLES.includes(role);
+}
 // Cybernext InHouse: only the Super Admin can upload Excel sheets into Websites, Case Studies,
 // Brand Kit and Documentations (the buttons and /api/inhouse/import use this one check).
 export function canManageInHouseData(role: Role): boolean {

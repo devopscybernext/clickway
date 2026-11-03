@@ -11,7 +11,7 @@ import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 export default function RowActions({ what, onDuplicate, onDelete }: {
   what: string;
   onDuplicate?: () => Promise<void>;
-  onDelete: () => Promise<void>;
+  onDelete?: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState<'duplicate' | 'delete' | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -41,7 +41,7 @@ export default function RowActions({ what, onDuplicate, onDelete }: {
           ? <span className="w-3 h-3 border border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--cn-accent)' }} />
           : <CopyPlus className="w-3.5 h-3.5" />}
       </button>}
-      <button
+      {onDelete && <button
         type="button"
         onClick={e => { e.stopPropagation(); setError(''); setConfirming(true); }}
         disabled={busy !== null}
@@ -51,9 +51,9 @@ export default function RowActions({ what, onDuplicate, onDelete }: {
         style={{ background: 'var(--cn-bg-input)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }}
       >
         <Trash2 className="w-3.5 h-3.5" />
-      </button>
+      </button>}
       {error && !confirming && <span role="alert" className="text-[10px] font-medium max-w-[140px]" style={{ color: '#ef4444' }}>{error}</span>}
-      {confirming && (
+      {confirming && onDelete && (
         <ConfirmDelete
           what={what}
           busy={busy === 'delete'}
