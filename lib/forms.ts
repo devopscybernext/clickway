@@ -19,6 +19,7 @@ export type FieldType =
   | 'text'        // one line
   | 'paragraph'   // several lines
   | 'date'
+  | 'images'      // optional screenshots: picked, dropped or pasted; uploaded after the form is saved (uploadTo)
   | 'duration'    // Hours : Minutes dropdowns, stored as "HH.MM Hours" like every other time cell
   | 'grid';       // one choice per row; each row is its own column, "Header [Row]"
 
@@ -32,6 +33,8 @@ export interface FormField {
   asDropdown?: boolean;      // checkboxes only: a dropdown you tick several entries in, not a list
   fromSheet?: boolean;       // dropdown: also offer the values already used in the sheet (e.g. project names)
   maxLength?: number;        // text / paragraph: longest answer accepted
+  maxFiles?: number;         // images: how many
+  uploadTo?: string;         // images: where each file is sent once the row exists (multipart: helpId, file)
   roster?: 'web' | 'marketing' | 'all'; // the options are the people on that team (Admin Portal accounts); `options` is the fallback
   rosterPrefix?: string[];   // entries that come before the people (e.g. "No Action Taken")
 }
@@ -199,6 +202,7 @@ export const ENTRY_FORMS: Record<FormKey, EntryFormDef> = {
       { header: 'Subject', type: 'text', required: true, maxLength: 120 },
       { header: 'Area', type: 'dropdown', required: true, options: HELP_AREAS },
       { header: 'Details', type: 'paragraph', required: true, maxLength: 3000 },
+      { header: 'Screenshots', type: 'images', maxFiles: 3, uploadTo: '/api/help/attachments' },
     ],
   },
   // "Web Special Points" — manual points for the Leaderboard (P = plus,

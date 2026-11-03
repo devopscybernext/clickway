@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Search, X, MessageSquarePlus } from 'lucide-react';
 import EntryForm from './EntryForm';
 import RowActions from './RowActions';
@@ -72,6 +73,33 @@ function CommentCell({ request, canManage, onSave }: { request: HelpRequest; can
   );
 }
 
+const shotUrl = (id: number) => `/api/help/attachments?id=${id}`;
+
+// A screenshot, larger, in front of the page
+function ScreenshotViewer({ shot, onClose }: { shot: { id: number; name: string }; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-label="Screenshot" className="max-w-5xl max-h-full flex flex-col gap-2" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3 text-xs" style={{ color: '#fff' }}>
+          <span className="truncate">{shot.name}</span>
+          <span className="flex items-center gap-3 shrink-0">
+            <a href={shotUrl(shot.id)} target="_blank" rel="noopener noreferrer" className="font-semibold underline">Open in new tab</a>
+            <button onClick={onClose} aria-label="Close" className="cursor-pointer"><X className="w-4 h-4" /></button>
+          </span>
+        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={shotUrl(shot.id)} alt={shot.name} className="max-h-[80vh] max-w-full object-contain rounded-lg bg-white" />
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 function Pill({ color, children }: { color: string; children: React.ReactNode }) {
   return (
     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap" style={{ background: color + '20', color }}>
@@ -124,6 +152,7 @@ function Queries() {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState<number | null>(null);
   const [saveError, setSaveError] = useState('');
+  const [viewing, setViewing] = useState<{ id: number; name: string } | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -285,6 +314,16 @@ function Queries() {
                   <td className="px-4 py-3 whitespace-nowrap" style={{ color: 'var(--cn-text-secondary)' }}>{r.area || '—'}</td>
                   <td className="px-4 py-3 min-w-[240px] max-w-md" style={{ color: 'var(--cn-text-secondary)' }}>
                     <p className={`whitespace-pre-wrap break-words ${long && !open ? 'line-clamp-2' : ''}`}>{r.details}</p>
+                    {r.attachments.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {r.attachments.map(a => (
+                          <button key={a.id} onClick={() => setViewing(a)} title={`View ${a.name}`} aria-label={`View screenshot ${a.name}`} className="cursor-pointer">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={shotUrl(a.id)} alt={a.name} loading="lazy" className="h-12 w-16 object-cover rounded-md" style={{ border: '1px solid var(--cn-border)' }} />
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     {long && (
                       <button onClick={() => setExpanded(prev => { const n = new Set(prev); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n; })}
                         className="mt-1 text-xs font-semibold cursor-pointer hover:opacity-80" style={{ color: 'var(--cn-accent)' }}>
@@ -319,6 +358,7 @@ function Queries() {
             })}
           </tbody>
         </table>
+        {viewing && <ScreenshotViewer shot={viewing} onClose={() => setViewing(null)} />}
         {shown.length === 0 && (
           <div className="p-8 text-center text-sm" style={{ color: 'var(--cn-text-muted)' }}>
             {requests.length === 0

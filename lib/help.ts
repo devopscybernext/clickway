@@ -26,6 +26,7 @@ export interface HelpRequest {
   status: string;
   comment: string;     // the Super Admin's comment, shown to the person who sent the request
   commentedAt: string;
+  attachments: { id: number; name: string }[];   // screenshots (served by /api/help/attachments)
 }
 
 export const MAX_COMMENT = 1000;

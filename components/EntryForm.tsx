@@ -67,15 +67,81 @@ function MultiDropdown({ id, options, checked, onChange }: {
   );
 }
 
+const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+
+// Big screenshots are shrunk (max 1920 px wide, JPEG) so they upload quickly and stay under the 2 MB limit.
+async function prepareImage(file: File): Promise<File> {
+  if (file.size <= 900 * 1024 || file.type === 'image/gif') return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, 1920 / bitmap.width);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return file;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob: Blob | null = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
+    if (blob && blob.size < file.size) return new File([blob], file.name.replace(/\.[^.]*$/, '') + '.jpg', { type: 'image/jpeg' });
+  } catch { /* keep the original */ }
+  return file;
+}
+
+// Optional screenshots: choose, drag in, or paste (Ctrl+V anywhere in the form). Shown as thumbnails.
+function ImagePicker({ id, files, max, onAdd, onRemove }: {
+  id: string; files: File[]; max: number; onAdd: (list: File[]) => void; onRemove: (index: number) => void;
+}) {
+  const [over, setOver] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const urls = useMemo(() => files.map(f => URL.createObjectURL(f)), [files]);
+  useEffect(() => () => urls.forEach(u => URL.revokeObjectURL(u)), [urls]);
+  return (
+    <div className="space-y-2">
+      <div
+        onDragOver={e => { e.preventDefault(); setOver(true); }}
+        onDragLeave={() => setOver(false)}
+        onDrop={e => { e.preventDefault(); setOver(false); onAdd(Array.from(e.dataTransfer.files)); }}
+        className="rounded-lg px-3 py-4 text-center text-xs"
+        style={{ border: `1px dashed ${over ? 'var(--cn-accent)' : 'var(--cn-border)'}`, background: over ? 'rgba(254, 74, 35, 0.06)' : 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}
+      >
+        <button type="button" onClick={() => inputRef.current?.click()} disabled={files.length >= max}
+          className="font-semibold cursor-pointer disabled:opacity-50" style={{ color: 'var(--cn-accent)' }}>
+          Add screenshot
+        </button>
+        {' '}— or drop an image here, or paste one with Ctrl+V. Up to {max} images, 2 MB each.
+        <input id={`${id}-input`} ref={inputRef} type="file" accept={IMAGE_TYPES.join(',')} multiple className="hidden" aria-label="Screenshots"
+          onChange={e => { onAdd(Array.from(e.target.files ?? [])); e.target.value = ''; }} />
+      </div>
+      {files.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {files.map((f, i) => (
+            <div key={i} className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={urls[i]} alt={f.name} className="h-20 w-28 object-cover rounded-lg" style={{ border: '1px solid var(--cn-border)' }} />
+              <button type="button" onClick={() => onRemove(i)} aria-label={`Remove ${f.name}`}
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full text-[11px] leading-none cursor-pointer"
+                style={{ background: '#ef4444', color: '#fff' }}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface FieldState {
   value: string;      // choice/dropdown/text/paragraph/date ("__other__" when Other is picked)
   checked: string[];  // checkboxes
   other: string;      // the "Other: ___" text
   grid: Record<string, string>; // grid: row → chosen column
+  files: File[];      // images
 }
 
 const emptyState = (fields: FormField[]): Record<string, FieldState> =>
-  Object.fromEntries(fields.map(f => [f.header, { value: '', checked: [], other: '', grid: {} }]));
+  Object.fromEntries(fields.map(f => [f.header, { value: '', checked: [], other: '', grid: {}, files: [] }]));
 
 // A grid's errors are keyed by its rows' own columns ("Header [Row]").
 const fieldError = (f: FormField, errors: Record<string, string>): string | undefined =>
@@ -87,7 +153,9 @@ function toAnswers(fields: FormField[], state: Record<string, FieldState>): Answ
   const answers: Answers = {};
   for (const f of fields) {
     const s = state[f.header];
-    if (f.type === 'grid') {
+    if (f.type === 'images') {
+      continue; // screenshots aren't an answer; they are uploaded once the row is saved
+    } else if (f.type === 'grid') {
       for (const [row, v] of Object.entries(s.grid)) if (v) answers[gridKey(f.header, row)] = v;
     } else if (f.type === 'checkboxes') {
       const list = s.checked.filter(v => v !== OTHER);
@@ -130,6 +198,31 @@ export default function EntryForm({ formKey, onSubmitted, compact = false, optio
   const [submissionId, setSubmissionId] = useState(newSubmissionId);
   const ids = useMemo(() => Object.fromEntries(def.fields.map((f, i) => [f.header, `${formKey}-q${i}`])), [def, formKey]);
 
+  const imagesField = def.fields.find(f => f.type === 'images');
+  const [imageError, setImageError] = useState('');
+  const addImages = async (list: File[]) => {
+    if (!imagesField) return;
+    setImageError('');
+    const max = imagesField.maxFiles ?? 3;
+    const have = state[imagesField.header].files;
+    const next = [...have];
+    for (const raw of list) {
+      if (!IMAGE_TYPES.includes(raw.type)) { setImageError('Only PNG, JPEG, GIF or WebP images can be added.'); continue; }
+      if (next.length >= max) { setImageError(`You can add up to ${max} screenshots.`); break; }
+      const file = await prepareImage(raw);
+      if (file.size > MAX_IMAGE_BYTES) { setImageError(`${raw.name || 'That image'} is over 2 MB even after shrinking.`); continue; }
+      next.push(file);
+    }
+    update(imagesField.header, { files: next });
+  };
+  const onPaste = (e: React.ClipboardEvent) => {
+    if (!imagesField) return;
+    const pasted = Array.from(e.clipboardData.files).filter(f => f.type.startsWith('image/'));
+    if (pasted.length === 0) return;
+    e.preventDefault();
+    void addImages(pasted);
+  };
+
   const update = (header: string, patch: Partial<FieldState>) => {
     setState(prev => ({ ...prev, [header]: { ...prev[header], ...patch } }));
     setErrors(prev => {
@@ -170,10 +263,25 @@ export default function EntryForm({ formKey, onSubmitted, compact = false, optio
         setMessage({ kind: 'error', text: json.error ?? `Could not save the form (error ${res.status}). Please try again.` });
         return;
       }
+      // Screenshots go up one by one now that the row exists
+      let failed = 0;
+      const toUpload = imagesField && json.id ? state[imagesField.header].files : [];
+      for (const file of toUpload) {
+        const body = new FormData();
+        body.append('helpId', String(json.id));
+        body.append('file', file);
+        try {
+          const up = await fetch(imagesField!.uploadTo!, { method: 'POST', body });
+          if (!up.ok) failed++;
+        } catch { failed++; }
+      }
       setState(emptyState(def.fields));
       setErrors({});
+      setImageError('');
       setSubmissionId(newSubmissionId());
-      setMessage({ kind: 'ok', text: 'Submitted. Your response has been recorded.' });
+      setMessage(failed > 0
+        ? { kind: 'error', text: `Submitted, but ${failed} screenshot${failed === 1 ? '' : 's'} could not be uploaded. Your request is in — you can mention it in a new request if it matters.` }
+        : { kind: 'ok', text: 'Submitted. Your response has been recorded.' });
       onSubmitted?.();
     } catch {
       setMessage({ kind: 'error', text: 'Could not reach the server. Check your connection and try again.' });
@@ -183,7 +291,7 @@ export default function EntryForm({ formKey, onSubmitted, compact = false, optio
   };
 
   return (
-    <form onSubmit={submit} noValidate className={compact ? 'space-y-4' : 'space-y-5'}>
+    <form onSubmit={submit} onPaste={onPaste} noValidate className={compact ? 'space-y-4' : 'space-y-5'}>
       {def.fields.map(f => {
         const s = state[f.header];
         const id = ids[f.header];
@@ -215,6 +323,15 @@ export default function EntryForm({ formKey, onSubmitted, compact = false, optio
                 {optionsFor(f, optionHints).map(o => <option key={o} value={o}>{o}</option>)}
                 {f.allowOther && <option value={OTHER}>Other…</option>}
               </select>
+            )}
+
+            {f.type === 'images' && (
+              <>
+                <ImagePicker id={id} files={s.files} max={f.maxFiles ?? 3}
+                  onAdd={list => void addImages(list)}
+                  onRemove={i => update(f.header, { files: s.files.filter((_, k) => k !== i) })} />
+                {imageError && <p className="text-xs font-medium" style={{ color: '#ef4444' }}>{imageError}</p>}
+              </>
             )}
 
             {f.type === 'duration' && (() => {

@@ -224,12 +224,26 @@ export const CHANGE_LOG_SQL = `CREATE TABLE IF NOT EXISTS \`change_log\` (
   KEY \`idx_row\` (\`table_name\`, \`row_id\`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`;
 
+// Screenshots sent with Help requests (see lib/data/helpAttachments.ts)
+export const HELP_ATTACHMENTS_SQL = `CREATE TABLE IF NOT EXISTS \`help_attachments\` (
+  \`id\` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  \`help_id\` INT UNSIGNED NOT NULL,
+  \`file_name\` VARCHAR(255) NOT NULL,
+  \`mime\` VARCHAR(64) NOT NULL,
+  \`size\` INT UNSIGNED NOT NULL,
+  \`data\` MEDIUMBLOB NOT NULL,
+  \`created_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (\`id\`),
+  KEY \`idx_help\` (\`help_id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`;
+
 // Creates missing tables and adds any registry column a table lacks. Never
 // drops or renames anything. Returns a line per change made.
 export async function ensureSchema(): Promise<string[]> {
   const pool = getPool();
   const log: string[] = [];
   await pool.query(CHANGE_LOG_SQL);
+  await pool.query(HELP_ATTACHMENTS_SQL);
   for (const ds of DATASETS) {
     await pool.query(createTableSql(ds));
     const [existing] = await pool.query<mysql.RowDataPacket[][]>({

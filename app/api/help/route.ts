@@ -5,6 +5,7 @@ import { HELP_SHEET_ID, TAB_HELP } from '@/lib/config';
 import { canManageHelp } from '@/lib/auth';
 import { HELP_STATUSES, HelpRequest, MAX_COMMENT } from '@/lib/help';
 import { formatTimestamp } from '@/lib/forms';
+import { listAttachments, deleteAttachmentsOf } from '@/lib/data/helpAttachments';
 import { isDirectBrowserNavigation } from '@/lib/blockDirectAccess';
 
 export const runtime = 'nodejs';
@@ -28,6 +29,8 @@ export async function GET(req: NextRequest) {
   const { data } = await fetchSheetData(HELP_SHEET_ID, RANGE);
   const s = (r: Record<string, unknown>, k: string) => String(r[k] ?? '').trim();
   const me = user.username.trim().toLowerCase();
+  const mine = data.filter(r => canManage || s(r, 'Username').toLowerCase() === me);
+  const shots = await listAttachments(mine.map(r => Number(r.__row)));
   const requests: HelpRequest[] = data
     .filter(r => canManage || s(r, 'Username').toLowerCase() === me)
     .map(r => ({
@@ -43,6 +46,7 @@ export async function GET(req: NextRequest) {
       status: s(r, 'Status') || 'New',
       comment: s(r, 'Admin Comment'),
       commentedAt: s(r, 'Commented At'),
+      attachments: shots.get(Number(r.__row)) ?? [],
     }))
     .sort((a, b) => b.id - a.id);
 
@@ -61,6 +65,7 @@ export async function DELETE(req: NextRequest) {
   }
   try {
     await deleteSheetRow(HELP_SHEET_ID, TAB_HELP, Number(id), user.username);
+    await deleteAttachmentsOf(Number(id));
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
     return NextResponse.json(
