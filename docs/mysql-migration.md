@@ -39,16 +39,18 @@ Each row carries a **write-back handle** (`__row`), which is its permanent MySQL
 
 | Table | Holds | Rows when copied from Google Sheets (27 Oct 2026) |
 |---|---|---|
-| `web_tasks` | Web tasks: tabs *Current Month Tasks* and *All Web Tasks Tab* | 1,550 |
+| `web_tasks` | Web tasks, all in one tab (*All Web Tasks*) | 1,550 |
 | `leaderboard_feedback` | Leaderboard points ("Web Special Points") | 2 |
 | `qa_tasks` | QA Testing | 48 |
-| `marketing_tasks` | Marketing tasks: *Current Month Tasks* and *All Marketing Tasks* | 40 |
-| `pm_projects` | PM projects: *CurrentMonth* (current) and *All Data PM* (previous months) | 112 |
+| `marketing_tasks` | Marketing tasks, all in one tab (*All Marketing Tasks*) | 40 |
+| `pm_projects` | PM projects of every month, in one tab (*Projects*); the Current Month / Previous Months tabs are worked out from each row's Year and Month | 112 |
 | `users` | Logins (bcrypt password hashes only) | 26 |
 | `leave_status` | Leave Status | 24 |
 | `news`, `ai_tools`, `holidays` | News ticker, AI Tools, Holiday calendar | 10, 54, 12 |
 | `inhouse_case_studies`, `inhouse_websites`, `inhouse_brand_kit`, `inhouse_documentations` | Cybernext InHouse | 23, 117, 7, 2 |
 | `change_log` | One row per edit: who, when, table, row, column, old and new value | n/a |
+
+**One table, one tab.** These three were each split in two on the Google Sheets (current month / earlier). `npm run db:migrate` (`mergeTabs` in `lib/data/mysql.ts`) moves every row into the single tab and does nothing once that is done, so it is safe to run on every deploy. The PM *Current Month* tab shows the projects whose Year/Month is the real current month (or later); *Previous Months* shows the earlier ones.
 
 Every table also has `id` (permanent row id), `sheet_id` and `sheet_tab` (dataset and tab), `source_ref` (submission id for form rows, so a double submit is stored once), and `created_at` / `updated_at`.
 

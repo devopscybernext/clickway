@@ -160,7 +160,7 @@ test('Tasks Assigned: a row can be duplicated and deleted, and a team member is 
   const { id } = await created.json();
 
   const sheet = (await query<Row[]>('SELECT sheet_id FROM web_tasks WHERE id = ?', [id]))[0].sheet_id as string;
-  const call = (action: string, row: number) => page.request.post('/api/rows', { data: { action, spreadsheetId: sheet, sheetName: 'Current Month Tasks', row } });
+  const call = (action: string, row: number) => page.request.post('/api/rows', { data: { action, spreadsheetId: sheet, sheetName: 'All Web Tasks', row } });
 
   const dup = await call('duplicate', id);
   expect(dup.status()).toBe(200);

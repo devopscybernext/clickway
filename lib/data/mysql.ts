@@ -1,6 +1,10 @@
 import mysql from 'mysql2/promise';
 import { DATASETS, Dataset, columnName, findDataset, fixedTabs, wildcardDatasets, tabFromRange } from './datasets';
 import { DataError, SheetResult, normalizeHeaders, toRow } from './rows';
+import {
+  SHEET_IDS, MARKETING_TEAM_SHEET_ID, PM_BANDWIDTH_SHEET_ID, PM_BANDWIDTH_ALL_DATA_SHEET_ID,
+  TAB_BANDWIDTH, TAB_MARKETING_TASKS, TAB_PM_PROJECTS,
+} from '../config';
 
 // One pool per server process — kept on globalThis so dev-mode hot reloads
 // don't open a new pool on every edit.
@@ -237,6 +241,24 @@ export const HELP_ATTACHMENTS_SQL = `CREATE TABLE IF NOT EXISTS \`help_attachmen
   KEY \`idx_help\` (\`help_id\`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`;
 
+// Web tasks, Marketing tasks and PM projects each used to be split in two (current month /
+// everything before). They are one table with one tab now: this moves any row still in the old
+// places into the single tab. Safe to run any number of times — once merged it changes nothing.
+export async function mergeTabs(): Promise<string[]> {
+  const pool = getPool();
+  const log: string[] = [];
+  const moved = async (what: string, sql: string, params: unknown[]) => {
+    const [res] = await pool.query<mysql.ResultSetHeader>(sql, params);
+    if (res.affectedRows > 0) log.push(`${what}: moved ${res.affectedRows} rows into the single tab`);
+  };
+  await moved('web_tasks', 'UPDATE `web_tasks` SET sheet_tab = ? WHERE sheet_id = ? AND sheet_tab <> ?', [TAB_BANDWIDTH, SHEET_IDS['1'], TAB_BANDWIDTH]);
+  await moved('marketing_tasks', 'UPDATE `marketing_tasks` SET sheet_tab = ? WHERE sheet_id = ? AND sheet_tab <> ?', [TAB_MARKETING_TASKS, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS]);
+  await moved('pm_projects',
+    'UPDATE `pm_projects` SET sheet_id = ?, sheet_tab = ? WHERE sheet_id IN (?, ?) AND NOT (sheet_id = ? AND sheet_tab = ?)',
+    [PM_BANDWIDTH_SHEET_ID, TAB_PM_PROJECTS, PM_BANDWIDTH_SHEET_ID, PM_BANDWIDTH_ALL_DATA_SHEET_ID, PM_BANDWIDTH_SHEET_ID, TAB_PM_PROJECTS]);
+  return log;
+}
+
 // Creates missing tables and adds any registry column a table lacks. Never
 // drops or renames anything. Returns a line per change made.
 export async function ensureSchema(): Promise<string[]> {
@@ -259,5 +281,6 @@ export async function ensureSchema(): Promise<string[]> {
       }
     }
   }
+  log.push(...await mergeTabs());
   return log;
 }

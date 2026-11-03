@@ -49,7 +49,7 @@ test('Web "Add Task": required questions are enforced, then the task is saved an
   await expect(page.getByText('Task submitted successfully')).toBeVisible();
 
   const row = await waitForDb(async () => (await query<Row[]>('SELECT * FROM web_tasks WHERE project_name = ?', [project]))[0], 'web task row');
-  expect(row.sheet_tab).toBe('Current Month Tasks');
+  expect(row.sheet_tab).toBe('All Web Tasks');
   expect(row.email_address).toBe(USERS.admin.email);
   expect(row.timestamp).toMatch(DMY_TS);
   expect(row.deadline).toBe('03/11/2026');
@@ -84,7 +84,7 @@ test('Marketing "Add Task": the task is saved in the marketing format and listed
   await expect(page.getByText('Task submitted successfully')).toBeVisible();
 
   const row = await waitForDb(async () => (await query<Row[]>('SELECT * FROM marketing_tasks WHERE task_name = ?', [task]))[0], 'marketing task row');
-  expect(row.sheet_tab).toBe('Current Month Tasks');
+  expect(row.sheet_tab).toBe('All Marketing Tasks');
   expect(row.email_address).toBe(USERS.admin.email);
   expect(row.timestamp).toMatch(MDY_TS);
   expect(row.deadline).toBe('11/3/2026');
@@ -133,7 +133,7 @@ test('PM "Add New Project": the project is saved and appears in My Projects', as
 
   await expect(page.getByRole('heading', { name: 'Add New Project' })).toBeHidden();
   const row = await waitForDb(async () => (await query<Row[]>('SELECT * FROM pm_projects WHERE project_name = ?', [project]))[0], 'pm project row');
-  expect(row.sheet_tab).toBe('CurrentMonth');
+  expect(row.sheet_tab).toBe('Projects');
   expect(row.email_address).toBe(USERS.pm.email);
   expect(row.timestamp).toMatch(MDY_TS);
   expect(row.assigned).toBe('Akash, Pawan');

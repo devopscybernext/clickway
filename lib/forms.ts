@@ -1,6 +1,6 @@
 import {
   SHEET_IDS, MARKETING_TEAM_SHEET_ID, PM_BANDWIDTH_SHEET_ID, TAB_BANDWIDTH, TAB_MARKETING_TASKS, TAB_LEADERBOARD,
-  HELP_SHEET_ID, TAB_HELP,
+  HELP_SHEET_ID, TAB_HELP, TAB_PM_PROJECTS,
 } from './config';
 import { HELP_TYPES, HELP_AREAS } from './help';
 import type { RosterNames } from './roster';
@@ -83,8 +83,7 @@ const NEW_TASK_VALUES = {
 
 export type FormKey = 'web-task' | 'marketing-task' | 'pm-project' | 'leaderboard' | 'help';
 
-// The PM spreadsheet's current-month tab (single tab, see lib/config.ts).
-export const TAB_PM_CURRENT = 'CurrentMonth';
+
 
 const NO_ACTION = 'No Action Taken';
 
@@ -144,7 +143,7 @@ export const ENTRY_FORMS: Record<FormKey, EntryFormDef> = {
     key: 'pm-project',
     title: 'Add New Project',
     sheetId: PM_BANDWIDTH_SHEET_ID,
-    tab: TAB_PM_CURRENT,
+    tab: TAB_PM_PROJECTS,
     order: 'mdy',
     emailHeader: 'Email Address',
     fields: [

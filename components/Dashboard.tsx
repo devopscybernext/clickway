@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SheetData } from '@/lib/dataStore';
-import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, PM_BANDWIDTH_ALL_DATA_SHEET_ID, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, TAB_BANDWIDTH, LEAVE_SHEET_ID, TAB_LEAVE, RANGE_LEAVE, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
+import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, TAB_BANDWIDTH, LEAVE_SHEET_ID, TAB_LEAVE, RANGE_LEAVE, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
 
 import { AuthUser, SheetId, Team, NavLeaf, getFirstNavLeaf, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, canSeeInHouseFull, canManageUsers, canManageInHouseData, canDeletePmProjects, canAddLeaderboardFeedback } from '@/lib/auth';
 import Sidebar from './Sidebar';
@@ -620,7 +620,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
   const handleMarketingTeamChange = async (row: SheetData, colName: string, newValue: string) => {
     const rowNum = Number(row['__row']);
-    // Current Month Tasks + All Marketing Tasks share __row numbering
+    // Marketing tasks are one table now; __row is the row's id and
     // per-tab (like Bandwidth Allocation's archive tabs), so both the write
     // target and the local-state match must go through the row's own tab
     // (__sheet/__id), not just __row.
@@ -684,7 +684,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const webAvailData     = filterByRoster(availData, availHeaders, webTeam());
 
   // Marketing — tasks come from the separate Marketing Team spreadsheet's
-  // Current Month Tasks + All Marketing Tasks tabs, merged server-side like
+  // Marketing tasks (one table), served by /api/marketing-team like
   // Bandwidth Allocation's archive tabs (Department column distinguishes
   // SEO/PPC/SMM), but the Leave spreadsheet covers every resource in one
   // table, so it's the same availData filtered to the Marketing roster.
@@ -1176,7 +1176,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 ) : effectivePmBandwidthSubTab === 'mine' && myProjectsView === 'report' ? (
                   <ProjectReport
                     data={pmBandwidthData.filter(r =>
-                      r['__sheetId'] === PM_BANDWIDTH_SHEET_ID &&
+                      r['__period'] === 'current' &&
                       String(r['__pm'] ?? '').trim().toLowerCase() === user.displayName.trim().toLowerCase())}
                     headers={pmBandwidthHeaders}
                     onCellChange={handlePmBandwidthChange}
@@ -1188,8 +1188,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     effectivePmBandwidthSubTab === 'mine'
                       ? pmBandwidthData.filter(r => String(r['__pm'] ?? '').trim().toLowerCase() === user.displayName.trim().toLowerCase())
                       : effectivePmBandwidthSubTab === 'current'
-                        ? pmBandwidthData.filter(r => r['__sheetId'] === PM_BANDWIDTH_SHEET_ID)
-                        : pmBandwidthData.filter(r => r['__sheetId'] === PM_BANDWIDTH_ALL_DATA_SHEET_ID)
+                        ? pmBandwidthData.filter(r => r['__period'] === 'current')
+                        : pmBandwidthData.filter(r => r['__period'] === 'previous')
                   }
                   headers={pmBandwidthHeaders}
                   canEdit={effectivePmBandwidthSubTab === 'mine' || canEditPmTab}

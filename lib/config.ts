@@ -34,13 +34,10 @@ export const PM_BANDWIDTH_SHEET_ID = '1WBzXb7xfCtzlzeVzxYB6ZtkSCyN4FUzz1Eg9McgPb
 // never match).
 export const PM_BANDWIDTH_ALL_DATA_SHEET_ID = '1QjLPmyVrzWpWIYoKKSsntwYAYFNGDRUyowvz9N8U25s';
 
-// Tab names inside the Sheet 1 spreadsheet. The original "Bandwidth
-// Allocation" tab was renamed to "Current Month Tasks" and a new "All Web
-// Tasks Tab" was added alongside it for prior months' rows — /api/bandwidth-tasks
-// already auto-discovers every non-excluded tab (that's how the periodic
-// "Task - <range>" archive tabs have always been picked up), so this rename
-// needs no route changes, just this constant kept in sync.
-export const TAB_BANDWIDTH    = 'Current Month Tasks';
+// Web tasks live in ONE tab. They used to be split into "Current Month Tasks" and an
+// "All Web Tasks Tab" for prior months; db:migrate (mergeTabs in lib/data/mysql.ts) moved
+// everything into this one, and new tasks are added to it. Nothing on screen is split by tab.
+export const TAB_BANDWIDTH    = 'All Web Tasks';
 // No longer fetched directly (see LEAVE_SHEET_ID below) — kept only so
 // /api/bandwidth-tasks' tab auto-discovery keeps excluding it by name for
 // as long as the tab still exists in the spreadsheet.
@@ -100,7 +97,14 @@ export const WEB_TEAM = ['Akash', 'Dhruv', 'Shubham', 'Lovepreet', 'Pawan', 'Rob
 // Blocker, Next Steps, Time Logged On Ac, Task Status Updation, Today
 // Bucket Set, Total Hours, PM Status
 export const MARKETING_TEAM_SHEET_ID = '1TTfD6-EKMXucucAyI2iNJLd6-P6lbolgQe-QOC1GyXs';
-export const TAB_MARKETING_TASKS = 'Current Month Tasks';
+// ONE tab too (it was "Current Month Tasks" + "All Marketing Tasks"; merged by db:migrate).
+export const TAB_MARKETING_TASKS = 'All Marketing Tasks';
+
+// PM projects: one tab holding every project of every month. "Current Month" and "Previous
+// Months" on screen are worked out from each row's Year and Month, not from where it is stored.
+// (It used to be two spreadsheets — PM_BANDWIDTH_ALL_DATA_SHEET_ID held prior months; db:migrate
+// merged them into PM_BANDWIDTH_SHEET_ID / this tab.)
+export const TAB_PM_PROJECTS = 'Projects';
 
 // Department options (matches the sheet's dropdown validation)
 export const MARKETING_DEPARTMENT_OPTIONS = ['SEO', 'PPC', 'SMM'];
