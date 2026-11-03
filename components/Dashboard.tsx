@@ -1321,6 +1321,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 {tasksOverviewTeam === 'web' ? (
                   <ResourceOverview
                     data={webBandwidthData}
+                    closedData={bandwidthData}
                     headers={bandwidthHeaders}
                     availData={webAvailData}
                     availHeaders={availHeaders}

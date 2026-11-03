@@ -1651,13 +1651,14 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
   );
 }
 
-export function ResourceOverview({ data, headers, availData = [], availHeaders = [], onStatusChange, pmStatusColName, currentUserName, currentUserEmail, showFilter, canEditPmStatus = true, canEditStatus = false, canCopy = false, restrictToMine = false, hideAllTasks = false, defaultFilter = 'all', restrictPmStatusToOwn = false, vinayQaMode = false, showQaTab = false, qaData = [], qaHeaders = [], onQaCellChange }: { data: SheetData[]; headers: string[]; availData?: SheetData[]; availHeaders?: string[]; onStatusChange?: (row: SheetData, col: string, val: string) => Promise<void>; pmStatusColName?: string; currentUserName?: string; currentUserEmail?: string; showFilter?: boolean; canEditPmStatus?: boolean; canEditStatus?: boolean; canCopy?: boolean; restrictToMine?: boolean; hideAllTasks?: boolean; defaultFilter?: 'all' | 'me'; restrictPmStatusToOwn?: boolean; vinayQaMode?: boolean; showQaTab?: boolean; qaData?: SheetData[]; qaHeaders?: string[]; onQaCellChange?: (row: SheetData, colName: string, value: string) => Promise<void> }) {
+export function ResourceOverview({ data, headers, availData = [], availHeaders = [], onStatusChange, pmStatusColName, currentUserName, currentUserEmail, showFilter, canEditPmStatus = true, canEditStatus = false, canCopy = false, restrictToMine = false, hideAllTasks = false, closedData, defaultFilter = 'all', restrictPmStatusToOwn = false, vinayQaMode = false, showQaTab = false, qaData = [], qaHeaders = [], onQaCellChange }: { data: SheetData[]; headers: string[]; availData?: SheetData[]; availHeaders?: string[]; onStatusChange?: (row: SheetData, col: string, val: string) => Promise<void>; pmStatusColName?: string; currentUserName?: string; currentUserEmail?: string; showFilter?: boolean; canEditPmStatus?: boolean; canEditStatus?: boolean; canCopy?: boolean; restrictToMine?: boolean; hideAllTasks?: boolean; closedData?: SheetData[]; defaultFilter?: 'all' | 'me'; restrictPmStatusToOwn?: boolean; vinayQaMode?: boolean; showQaTab?: boolean; qaData?: SheetData[]; qaHeaders?: string[]; onQaCellChange?: (row: SheetData, colName: string, value: string) => Promise<void> }) {
   const [openName, setOpenName] = useState<string | null>(null);
   const [pmFilter, setPmFilter] = useState<'all' | 'me' | 'today' | 'me-today' | 'flat' | 'qa' | 'closed'>(restrictToMine || (hideAllTasks && !vinayQaMode) ? 'me' : vinayQaMode ? 'flat' : defaultFilter);
   const [search, setSearch] = useState('');
   // Column filters next to the search box (empty = no filtering on that column)
   const [bucketFilter, setBucketFilter] = useState<string[]>([]);
   const [pmStatusFilter, setPmStatusFilter] = useState<string[]>([]);
+  const [closedProjectFilter, setClosedProjectFilter] = useState<string[]>([]);
 
   // Close all rows whenever the filter switches
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1896,7 +1897,9 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
     if (emailCol && currentUserEmail) return String(r[emailCol] ?? '').trim().toLowerCase() === currentUserEmail.trim().toLowerCase();
     return false;
   };
-  const closedTasks: ClosedTask[] = pmFilter !== 'closed' ? [] : data
+  // Built from closedData — every task so far, including those of people who are no longer on the
+  // team — when the caller has it, otherwise from the same rows as the rest of the page.
+  const closedBase: ClosedTask[] = pmFilter !== 'closed' ? [] : (closedData ?? data)
     .filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'task closed' && isMineClosed(r))
     .map(r => ({
       id: String(r['__id'] ?? r['__row'] ?? ''),
@@ -1908,8 +1911,11 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
       est: timeEstCol ? String(r[timeEstCol] ?? '').trim() : '',
       total: totalHoursCol ? String(r[totalHoursCol] ?? '').trim() : '',
       pmStatus: pmStatusCol ? String(r[pmStatusCol] ?? '').trim() : '',
-    }))
+    }));
+  const closedProjects = [...new Set(closedBase.map(t => t.project).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const closedTasks: ClosedTask[] = closedBase
     .filter(t =>
+      (closedProjectFilter.length === 0 || closedProjectFilter.includes(t.project)) &&
       (pmStatusFilter.length === 0 || pmStatusFilter.some(p => p.toLowerCase() === (t.pmStatus.toLowerCase() || 'no action taken'))) &&
       (!searchQ || [t.person, t.project, t.task, t.pmStatus].some(v => v.toLowerCase().includes(searchQ))))
     .sort((a, b) => stampMs(b.when) - stampMs(a.when));
@@ -2026,6 +2032,9 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
           </button>
         )}
       </div>
+      {pmFilter === 'closed' && closedProjects.length > 0 && (
+        <MiniMultiSelect label="Projects" emptyLabel="Project Name" options={closedProjects} selected={closedProjectFilter} onChange={setClosedProjectFilter} />
+      )}
       {pmFilter !== 'closed' && bucketOptions.length > 0 && (
         <MiniMultiSelect label="Task Daily Buckets" emptyLabel="Daily Bucket" options={bucketOptions} selected={bucketFilter} onChange={setBucketFilter} />
       )}
@@ -2037,7 +2046,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
       {pmFilter === 'qa' ? (
         <QATesting data={qaData} headers={qaHeaders} onCellChange={onQaCellChange ?? (async () => {})} canEdit={vinayQaMode} />
       ) : pmFilter === 'closed' ? (
-        <ClosedTasksTable key={`${searchQ}|${pmStatusFilter.join(',')}`} tasks={closedTasks} showPerson={!myNameMatch} />
+        <ClosedTasksTable key={`${searchQ}|${pmStatusFilter.join(',')}|${closedProjectFilter.join(',')}`} tasks={closedTasks} showPerson={!myNameMatch} />
       ) : pmFilter === 'flat' ? (
         <FlatTasksTable
           rows={flatSearchedRows}
