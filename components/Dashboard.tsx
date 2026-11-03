@@ -1100,7 +1100,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
           {/* ── Admin Portal: User Details (HM/Admin/Mod only) ── */}
           {/* ── Report (Web / Marketing): cards that generate PDF / Excel reports ── */}
-          {isReport && (isAdmin || isPmTier || isTeamAdmin) && (
+          {isReport && isAdmin && (
             <section
               className="cn-card rounded-lg border transition-colors"
               style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}

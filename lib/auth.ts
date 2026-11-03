@@ -154,14 +154,12 @@ const WEB_FULL: NavLeaf[] = [
   { id: '9', team: 'web', label: 'Tasks Overview' },
   { id: '7', label: 'Leaderboard' },
   { id: '6', team: 'web', label: 'Add Task' },
-  { id: '16', team: 'web', label: 'Report' },
 ];
 const WEB_NO_TASKS_ASSIGNED: NavLeaf[] = [
   { id: '3', team: 'web', label: 'Team Bandwidth' },
   { id: '9', team: 'web', label: 'Tasks Overview' },
   { id: '7', label: 'Leaderboard' },
   { id: '6', team: 'web', label: 'Add Task' },
-  { id: '16', team: 'web', label: 'Report' },
 ];
 const WEB_INDIVIDUAL: NavLeaf[] = [
   { id: '3', team: 'web', label: 'Team Bandwidth' },
@@ -221,10 +219,10 @@ const LEAVE_STATUS: NavLeaf = { id: '2' };
 // roles, since it can change anyone's access level. It has no sidebar entry any
 // more: admins open it from the Admin Portal item in the profile menu (TopBar).
 
-// Import Data (Excel upload of tasks): the admin tier only - Super Admin, HM and Mod (and their
+// Report and Import Data (Excel upload of tasks): the admin tier only - Super Admin, HM and Mod (and their
 // legacy aliases). The page and /api/import use the same isAdminTierRole check.
-const WEB_ADMIN_FULL: NavLeaf[] = [...WEB_FULL, { id: '19', team: 'web', label: 'Import Data' }];
-const MARKETING_ADMIN_FULL: NavLeaf[] = [...MARKETING_FULL, { id: '19', team: 'marketing', label: 'Import Data' }];
+const WEB_ADMIN_FULL: NavLeaf[] = [...WEB_FULL, { id: '16', team: 'web', label: 'Report' }, { id: '19', team: 'web', label: 'Import Data' }];
+const MARKETING_ADMIN_FULL: NavLeaf[] = [...MARKETING_FULL, { id: '16', team: 'marketing', label: 'Report' }, { id: '19', team: 'marketing', label: 'Import Data' }];
 
 // HM / Admin / Mod — full access, both teams in full
 const ADMIN_NAV: NavItem[] = [
