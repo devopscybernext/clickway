@@ -190,6 +190,7 @@ const TASK_STATUS_COLORS: Record<string, string> = {
   'testing':            '#2563eb',
   'on hold':            '#7c3aed',
   'submitted to akash': '#d97706',
+  'submitted to web admin': '#d97706',
   'submitted to pm':    '#10b981',
   'submitted to client':'#6d28d9',
   'n/a':                '#6b7280',

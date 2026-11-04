@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySession, COOKIE_NAME } from '@/lib/session';
 import { insertRow } from '@/lib/data/mysql';
+import { notifyTaskAdded } from '@/lib/data/notifications';
 import { AuthUser, getNavItems, isNavParent, isPmTierRole, isAdminTierRole, canAddLeaderboardFeedback } from '@/lib/auth';
 import { ENTRY_FORMS, FormKey, Answers, validateAnswers, answersToValues, formatTimestamp } from '@/lib/forms';
 import { loadRoster } from '@/lib/rosterServer';
@@ -68,6 +69,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const { id, duplicate } = await insertRow(def.sheetId, def.tab, values, `dashboard:${def.key}:${body.submissionId}`);
+    // A new task tells the assignee, that team's admin and the Super Admin (never breaks the save)
+    const taskTable = def.key === 'web-task' ? 'web_tasks' : def.key === 'marketing-task' ? 'marketing_tasks' : '';
+    if (id && !duplicate && taskTable) {
+      await notifyTaskAdded(taskTable, id, user.username).catch(e => console.error('[notify task-added]', e));
+    }
     return NextResponse.json({ success: true, id, duplicate });
   } catch (err: unknown) {
     console.error('[forms]', err);

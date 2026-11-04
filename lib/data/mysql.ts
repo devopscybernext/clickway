@@ -84,13 +84,16 @@ export async function fetchSheetTabNames(sheetId: string): Promise<string[]> {
 // tab must match the row too, so a stale or forged handle can't edit a row
 // from another dataset. Every change is recorded in change_log.
 export async function updateCell(
-  sheetId: string, tab: string, row: number, colIndex: number, value: string, actor: string
+  sheetId: string, tab: string, row: number, colIndex: number, value: string, actor: string,
+  // called once the change is saved, with what the cell held before (used for notifications)
+  onChange?: (oldValue: string | null) => void | Promise<void>
 ): Promise<string> {
   const ds = datasetFor(sheetId, tab);
   const header = ds.headers[colIndex];
   if (!header) throw new DataError('Column not found', 400);
   const col = columnName(header);
 
+  let oldValue: string | null = null;
   const conn = await getPool().getConnection();
   try {
     await conn.beginTransaction();
@@ -105,11 +108,15 @@ export async function updateCell(
       [actor, ds.table, row, header, found[0][0] ?? null, value]
     );
     await conn.commit();
+    oldValue = found[0][0] === null || found[0][0] === undefined ? null : String(found[0][0]);
   } catch (err) {
     await conn.rollback();
     throw err;
   } finally {
     conn.release();
+  }
+  if (onChange) {
+    try { await onChange(oldValue); } catch (err) { console.error('[updateCell onChange]', err); }
   }
   return `${ds.table}#${row} ${header}`;
 }
@@ -241,6 +248,54 @@ export const HELP_ATTACHMENTS_SQL = `CREATE TABLE IF NOT EXISTS \`help_attachmen
   KEY \`idx_help\` (\`help_id\`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`;
 
+// Notifications: one row per person who should see an event (the bell, kept three days) ...
+export const NOTIFICATIONS_SQL = `CREATE TABLE IF NOT EXISTS \`notifications\` (
+  \`id\` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  \`recipient\` VARCHAR(191) NOT NULL,
+  \`type\` VARCHAR(20) NOT NULL,
+  \`team\` VARCHAR(20) NOT NULL,
+  \`title\` VARCHAR(191) NOT NULL,
+  \`body\` VARCHAR(500) NOT NULL,
+  \`task_ref\` VARCHAR(191) NOT NULL,
+  \`actor\` VARCHAR(191) NOT NULL,
+  \`created_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  \`read_at\` TIMESTAMP NULL,
+  PRIMARY KEY (\`id\`),
+  KEY \`idx_recipient\` (\`recipient\`, \`created_at\`),
+  KEY \`idx_created\` (\`created_at\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`;
+
+// ... and one row per event for the Admin Portal's Notifications tab (kept thirty days)
+export const NOTIFICATION_LOG_SQL = `CREATE TABLE IF NOT EXISTS \`notification_log\` (
+  \`id\` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  \`created_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  \`type\` VARCHAR(20) NOT NULL,
+  \`team\` VARCHAR(20) NOT NULL,
+  \`project\` VARCHAR(255) NOT NULL,
+  \`task\` VARCHAR(255) NOT NULL,
+  \`assignee\` VARCHAR(191) NOT NULL,
+  \`detail\` VARCHAR(100) NOT NULL,
+  \`actor\` VARCHAR(191) NOT NULL,
+  \`recipients\` TEXT NOT NULL,
+  PRIMARY KEY (\`id\`),
+  KEY \`idx_created\` (\`created_at\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`;
+
+// "Submitted To Akash" is now "Submitted To Web Admin": renames the status in rows that still
+// hold the old one. Safe to run any number of times.
+export async function renameSubmittedToAkash(): Promise<string[]> {
+  const pool = getPool();
+  const log: string[] = [];
+  const col = q(columnName('Task Status Updation'));
+  for (const table of ['web_tasks', 'marketing_tasks']) {
+    const [res] = await pool.query<mysql.ResultSetHeader>(
+      `UPDATE ${q(table)} SET ${col} = ? WHERE LOWER(TRIM(${col})) = ?`, ['Submitted To Web Admin', 'submitted to akash']
+    );
+    if (res.affectedRows > 0) log.push(`${table}: renamed "Submitted To Akash" to "Submitted To Web Admin" in ${res.affectedRows} rows`);
+  }
+  return log;
+}
+
 // Web tasks, Marketing tasks and PM projects each used to be split in two (current month /
 // everything before). They are one table with one tab now: this moves any row still in the old
 // places into the single tab. Safe to run any number of times — once merged it changes nothing.
@@ -266,6 +321,8 @@ export async function ensureSchema(): Promise<string[]> {
   const log: string[] = [];
   await pool.query(CHANGE_LOG_SQL);
   await pool.query(HELP_ATTACHMENTS_SQL);
+  await pool.query(NOTIFICATIONS_SQL);
+  await pool.query(NOTIFICATION_LOG_SQL);
   for (const ds of DATASETS) {
     await pool.query(createTableSql(ds));
     const [existing] = await pool.query<mysql.RowDataPacket[][]>({
@@ -282,5 +339,6 @@ export async function ensureSchema(): Promise<string[]> {
     }
   }
   log.push(...await mergeTabs());
+  log.push(...await renameSubmittedToAkash());
   return log;
 }

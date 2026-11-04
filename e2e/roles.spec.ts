@@ -44,7 +44,7 @@ test('a team member sees only their own pages, and is refused elsewhere', async 
 test('a PM can add projects and has My Projects', async ({ page }) => {
   await login(page, USERS.pm);
   const nav = page.getByRole('navigation');
-  await nav.getByRole('button', { name: 'PM Projects', exact: true }).click();
+  // PM Projects is where a PM lands, so its pages are already showing (clicking the heading would close it)
   await expect(nav.getByRole('button', { name: 'My Projects', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '+ Add New Project' })).toBeVisible();
 
@@ -56,7 +56,7 @@ test('a PM can add projects and has My Projects', async ({ page }) => {
 test('an admin has no My Projects, but can add projects', async ({ page }) => {
   await login(page, USERS.admin);
   const nav = page.getByRole('navigation');
-  await nav.getByRole('button', { name: 'PM Projects', exact: true }).click();
+  // PM Projects is where an admin lands, so its pages are already showing
   await expect(nav.getByRole('button', { name: 'Current Month', exact: true })).toBeVisible();
   await expect(nav.getByRole('button', { name: 'My Projects', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '+ Add New Project' })).toBeVisible();

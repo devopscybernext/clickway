@@ -37,7 +37,8 @@ export function deleteSheetRow(sheetId: string, tab: string, row: number, actor:
 // returned. actor is recorded in change_log. Returns a short description of
 // the cell written.
 export function updateSheetCell(
-  sheetId: string, tab: string, row: number, colIndex: number, value: string, actor: string
+  sheetId: string, tab: string, row: number, colIndex: number, value: string, actor: string,
+  onChange?: (oldValue: string | null) => void | Promise<void>
 ): Promise<string> {
-  return db.updateCell(sheetId, tab, row, colIndex, value, actor);
+  return db.updateCell(sheetId, tab, row, colIndex, value, actor, onChange);
 }

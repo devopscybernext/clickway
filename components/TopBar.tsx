@@ -6,6 +6,8 @@ import { SheetId, AuthUser, NavLeaf, NavParent, getSheetLabel, getNavItems, isNa
 import { memberPhoto } from '@/lib/memberColors';
 import ThemeToggle from './ThemeToggle';
 import ChangePasswordDialog from './ChangePasswordDialog';
+import NotificationBell from './NotificationBell';
+import type { NotificationItem } from '@/lib/notifications';
 
 const USER_DESIGNATIONS: Record<string, string> = {
   // Web — Development
@@ -48,6 +50,8 @@ interface TopBarProps {
   /** Is this page the one on screen? (marks the open page in the Cybernext InHouse / Help menus) */
   isLeafActive: (leaf: NavLeaf) => boolean;
   onNavigate: (leaf: NavLeaf) => void;
+  /** A notification in the bell was clicked: open the task it is about */
+  onOpenNotification: (n: NotificationItem) => void;
 }
 
 const MENU_ICONS: Record<string, React.ReactNode> = {
@@ -104,7 +108,7 @@ function TopMenu({ menu, isLeafActive, onNavigate }: { menu: NavParent; isLeafAc
   );
 }
 
-export default function TopBar({ lastUpdated, loading, selectedSheet, onRefresh, user, onLogout, isAdmin, canOpenAdminPortal, onOpenAdminPortal, isLeafActive, onNavigate }: TopBarProps) {
+export default function TopBar({ lastUpdated, loading, selectedSheet, onRefresh, user, onLogout, isAdmin, canOpenAdminPortal, onOpenAdminPortal, isLeafActive, onNavigate, onOpenNotification }: TopBarProps) {
   const menus = getNavItems(user).filter((item): item is NavParent => isNavParent(item) && TOP_BAR_MENUS.includes(item.label));
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
@@ -140,6 +144,7 @@ export default function TopBar({ lastUpdated, loading, selectedSheet, onRefresh,
 
       {/* Right controls */}
       <div className="flex items-center gap-2">
+        <NotificationBell onOpen={onOpenNotification} />
         {menus.map(m => <TopMenu key={m.label} menu={m} isLeafActive={isLeafActive} onNavigate={onNavigate} />)}
 
         <ThemeToggle isAdmin={isAdmin} />

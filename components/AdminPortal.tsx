@@ -6,6 +6,7 @@ import { Pencil, Plus, Trash2, Eye, EyeOff, KeyRound, X, Copy, Check, RefreshCw 
 import { memberPhoto } from '@/lib/memberColors';
 import { DEPARTMENTS, NO_DEPARTMENT, SUB_DEPARTMENTS, type SubDeptKey } from '@/lib/roster';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
+import NotificationsAdmin from './NotificationsAdmin';
 
 interface AdminUser {
   row: number;
@@ -65,7 +66,7 @@ function generatePassword(): string {
 // department) and the department is what puts a person into their team's forms
 // and Team Bandwidth cards. An existing password can't be read back — it is
 // stored hashed — so it can only be set again.
-export default function AdminPortal({ currentUsername, onChanged }: { currentUsername?: string; onChanged?: () => void }) {
+function AccountsPanel({ currentUsername, onChanged }: { currentUsername?: string; onChanged?: () => void }) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -646,5 +647,27 @@ function AddUserDialog({ roleOptions, onClose, onAdded }: {
       </form>
     </div>,
     document.body
+  );
+}
+
+// Admin Portal (HM and Admin): the accounts, and the Notifications log, as two tabs
+export default function AdminPortal({ currentUsername, onChanged }: { currentUsername?: string; onChanged?: () => void }) {
+  const [tab, setTab] = useState<'users' | 'notifications'>('users');
+  const tabs = [{ id: 'users', label: 'Users' }, { id: 'notifications', label: 'Notifications' }] as const;
+  return (
+    <div>
+      <div role="tablist" aria-label="Admin Portal" className="flex flex-wrap gap-2 px-3 sm:px-6 pt-3 sm:pt-5">
+        {tabs.map(t => (
+          <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
+            className="px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all"
+            style={tab === t.id
+              ? { background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }
+              : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {tab === 'users' ? <AccountsPanel currentUsername={currentUsername} onChanged={onChanged} /> : <NotificationsAdmin />}
+    </div>
   );
 }

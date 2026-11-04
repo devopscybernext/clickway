@@ -155,6 +155,7 @@ export const STATUS_COLORS: Record<string, string> = {
   'testing':             '#2563eb',
   'on hold':             '#7c3aed',
   'submitted to akash':  '#d97706',
+  'submitted to web admin': '#d97706',
   'submitted to admin':  '#d97706',
   'submitted to pm':     '#10b981',
   'submitted to client': '#6d28d9',
@@ -337,7 +338,7 @@ function parseDeadlineDate(val: string): Date | null {
 // logged counts 3h; with 4h logged (ran over) it counts 4h. Every task that is not
 // closed counts, submitted ones included. PPC and SEO, who work to a monthly
 // retainer, keep the plain Time Estimation.
-const HANDED_OFF_STATUSES = ['submitted to client', 'submitted to pm', 'submitted to akash', 'submitted to admin'];
+const HANDED_OFF_STATUSES = ['submitted to client', 'submitted to pm', 'submitted to akash', 'submitted to web admin', 'submitted to admin'];
 // Everyone on a daily 7h day (Web and SMM) — i.e. everyone except the monthly-retainer PPC / SEO names
 const usesLoggedTimeRule = (name: string) => !MONTHLY_BLOCK_MARKETING_NAMES.has(name.trim().toLowerCase());
 const webTaskLoad = (estHours: number, loggedHours: number) => Math.max(estHours, loggedHours);
@@ -452,7 +453,7 @@ function ResourcePmSelect({ value, raw, colName, onStatusChange }: {
   );
 }
 
-const STATUS_OPTIONS_RO = ['No Action Taken', 'To Be Started', 'In Progress', 'Testing', 'On Hold', 'Submitted To Akash', 'Submitted To PM'];
+const STATUS_OPTIONS_RO = ['No Action Taken', 'To Be Started', 'In Progress', 'Testing', 'On Hold', 'Submitted To Web Admin', 'Submitted To PM'];
 
 function ResourceStatusSelect({ value, raw, colName, onStatusChange, options = STATUS_OPTIONS_RO }: {
   value: string; raw: SheetData; colName: string;
@@ -888,6 +889,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
     >
       {/* Main row — entire row is clickable */}
       <div
+        data-card-name={row.name}
         className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none"
         onClick={visibleTasks.length > 0 ? onToggle : undefined}
         style={{ cursor: visibleTasks.length > 0 ? 'pointer' : 'default' }}
@@ -1145,7 +1147,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                 return (
                   <tr
                     key={String(t._raw['__id'] ?? t._raw['__row'] ?? i)}
-                    data-row-tint={pmRowTint(t.pmStatus) ? '' : undefined}
+                    data-row-tint={pmRowTint(t.pmStatus) ? '' : undefined} data-task-id={String(t._raw['__id'] ?? '')}
                     style={{ borderTop: '1px solid var(--cn-border-light, var(--cn-border))', ...(pmRowTint(t.pmStatus) && { backgroundColor: pmRowTint(t.pmStatus)!.bg, borderColor: pmRowTint(t.pmStatus)!.border }) }}
                   >
                     {/* Copy row */}
@@ -1262,7 +1264,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                       </td>
                     )}
                     {/* Status */}
-                    <td className="px-4 py-2">
+                    <td data-cell="task-status" className="px-4 py-2">
                       {onStatusChange && statusColName && canEditFields ? (
                         <ResourceStatusSelect
                           value={t.status || 'No Action Taken'}
@@ -1279,7 +1281,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                       )}
                     </td>
                     {/* PM Status */}
-                    <td className="px-4 py-2">
+                    <td data-cell="pm-status" className="px-4 py-2">
                       {onStatusChange && pmStatusColName && rowCanEditPmStatus ? (
                         <ResourcePmSelect
                           value={t.pmStatus || 'No Action Taken'}
@@ -1549,7 +1551,7 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
               return (
                 <tr
                     key={String(t._raw['__id'] ?? t._raw['__row'] ?? i)}
-                    data-row-tint={pmRowTint(t.pmStatus) ? '' : undefined}
+                    data-row-tint={pmRowTint(t.pmStatus) ? '' : undefined} data-task-id={String(t._raw['__id'] ?? '')}
                     style={{ borderTop: '1px solid var(--cn-border-light, var(--cn-border))', ...(pmRowTint(t.pmStatus) && { backgroundColor: pmRowTint(t.pmStatus)!.bg, borderColor: pmRowTint(t.pmStatus)!.border }) }}
                   >
                   {canCopy && (
@@ -1624,7 +1626,7 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
                       ) : <span style={{ color: 'var(--cn-text-muted)' }}>—</span>}
                     </td>
                   )}
-                  <td className="px-4 py-2">
+                  <td data-cell="task-status" className="px-4 py-2">
                     {onStatusChange && statusColName && rowCanEditStatus ? (
                       <ResourceStatusSelect value={t.status || 'No Action Taken'} raw={t._raw} colName={statusColName} onStatusChange={onStatusChange} options={showMarketingCols ? MARKETING_STATUS_OPTIONS_OVERVIEW : undefined} />
                     ) : (
@@ -1635,7 +1637,7 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
                     )}
                   </td>
                   {!vinayQaMode && (
-                  <td className="px-4 py-2">
+                  <td data-cell="pm-status" className="px-4 py-2">
                     {onStatusChange && pmStatusColName && rowCanEditPmStatus ? (
                       <ResourcePmSelect value={t.pmStatus || 'No Action Taken'} raw={t._raw} colName={pmStatusColName} onStatusChange={onStatusChange} />
                     ) : (
@@ -1658,7 +1660,7 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
   );
 }
 
-export function ResourceOverview({ data, headers, availData = [], availHeaders = [], onStatusChange, pmStatusColName, currentUserName, currentUserEmail, showFilter, canEditPmStatus = true, canEditStatus = false, canCopy = false, restrictToMine = false, hideAllTasks = false, closedData, defaultFilter = 'all', restrictPmStatusToOwn = false, vinayQaMode = false, showQaTab = false, qaData = [], qaHeaders = [], onQaCellChange }: { data: SheetData[]; headers: string[]; availData?: SheetData[]; availHeaders?: string[]; onStatusChange?: (row: SheetData, col: string, val: string) => Promise<void>; pmStatusColName?: string; currentUserName?: string; currentUserEmail?: string; showFilter?: boolean; canEditPmStatus?: boolean; canEditStatus?: boolean; canCopy?: boolean; restrictToMine?: boolean; hideAllTasks?: boolean; closedData?: SheetData[]; defaultFilter?: 'all' | 'me'; restrictPmStatusToOwn?: boolean; vinayQaMode?: boolean; showQaTab?: boolean; qaData?: SheetData[]; qaHeaders?: string[]; onQaCellChange?: (row: SheetData, colName: string, value: string) => Promise<void> }) {
+export function ResourceOverview({ data, headers, availData = [], availHeaders = [], onStatusChange, pmStatusColName, currentUserName, currentUserEmail, showFilter, canEditPmStatus = true, canEditStatus = false, canCopy = false, restrictToMine = false, hideAllTasks = false, closedData, defaultFilter = 'all', restrictPmStatusToOwn = false, showUnassigned = false, focusTaskId = null, focusField, focusClicks = 0, onFocusDone, vinayQaMode = false, showQaTab = false, qaData = [], qaHeaders = [], onQaCellChange }: { data: SheetData[]; headers: string[]; availData?: SheetData[]; availHeaders?: string[]; onStatusChange?: (row: SheetData, col: string, val: string) => Promise<void>; pmStatusColName?: string; currentUserName?: string; currentUserEmail?: string; showFilter?: boolean; canEditPmStatus?: boolean; canEditStatus?: boolean; canCopy?: boolean; restrictToMine?: boolean; hideAllTasks?: boolean; closedData?: SheetData[]; defaultFilter?: 'all' | 'me'; restrictPmStatusToOwn?: boolean; showUnassigned?: boolean; focusTaskId?: string | null; focusField?: 'task-added' | 'pm-status' | 'task-status'; focusClicks?: number; onFocusDone?: () => void; vinayQaMode?: boolean; showQaTab?: boolean; qaData?: SheetData[]; qaHeaders?: string[]; onQaCellChange?: (row: SheetData, colName: string, value: string) => Promise<void> }) {
   const [openName, setOpenName] = useState<string | null>(null);
   const [pmFilter, setPmFilter] = useState<'all' | 'me' | 'today' | 'me-today' | 'flat' | 'qa' | 'closed'>(restrictToMine || (hideAllTasks && !vinayQaMode) ? 'me' : vinayQaMode ? 'flat' : defaultFilter);
   const [search, setSearch] = useState('');
@@ -1725,20 +1727,77 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
   // don't get an editable bucket dropdown.
   const editableBucketCol = isMarketingSheet ? bucketCol : undefined;
 
+  // A notification was clicked: show the task and scroll to it. A task of the viewer's own is shown in
+  // My Tasks, anyone else's in All Tasks (the flat table); in My Tasks the person's card is opened too.
+  // The page may still be drawing (or the data arriving), so it keeps looking for the row for a few
+  // seconds instead of trying once. Depends on whether the task is in the data, not on the data array
+  // itself, which is a new array on every render.
+  const focusFound = !!focusTaskId && !!resourceCol && data.some(r => String(r['__id'] ?? '') === focusTaskId);
+  useEffect(() => {
+    if (!focusTaskId || !resourceCol || !focusFound) return;
+    const hit = data.find(r => String(r['__id'] ?? '') === focusTaskId);
+    if (!hit) return;
+    const owner = String(hit[resourceCol] ?? '').trim() || UNASSIGNED;
+    const lcs = (v: unknown) => String(v ?? '').trim().toLowerCase();
+    const mine = (!!emailCol && !!currentUserEmail && lcs(hit[emailCol]) === lcs(currentUserEmail))
+      || (!!currentUserName && lcs(hit[resourceCol]) === lcs(currentUserName));
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    let stopped = false;
+    let tries = 0;
+    const find = () => document.querySelector(`[data-task-id="${CSS.escape(focusTaskId)}"]`);
+    const flash = (row: Element) => {
+      // strong for the first 1.6 s, then fades out by 2 s
+      const held = (strong: Keyframe, gone: Keyframe): Keyframe[] => [{ ...strong, offset: 0 }, { ...strong, offset: 0.8 }, { ...gone, offset: 1 }];
+      const orange = (a: number) => `rgba(254,74,35,${a})`;
+      row.querySelectorAll(':scope > td').forEach(td => td.animate(held({ backgroundColor: orange(0.16) }, { backgroundColor: orange(0) }), { duration: 2000 }));
+      if (focusField && focusField !== 'task-added') {
+        row.querySelector(`[data-cell="${focusField}"]`)?.animate(
+          held({ backgroundColor: orange(0.5), outline: '2px solid #FE4A23', outlineOffset: '-2px' }, { backgroundColor: orange(0), outline: '2px solid transparent', outlineOffset: '-2px' }),
+          { duration: 2000 });
+      }
+      document.querySelector(`[data-card-name="${CSS.escape(owner)}"]`)?.animate(held({ backgroundColor: orange(0.14) }, { backgroundColor: orange(0) }), { duration: 2000 });
+    };
+    const poll = () => {
+      if (stopped) return;
+      const el = find();
+      if (el) {
+        const changed = focusField && focusField !== 'task-added' ? el.querySelector(`[data-cell="${focusField}"]`) : null;
+        // down to the row, and sideways (the table scrolls) to the cell that changed
+        const show = () => { el.scrollIntoView({ block: 'center' }); changed?.scrollIntoView({ block: 'nearest', inline: 'center' }); };
+        show();
+        // The layout can still shift while cards open, so scroll once more, then highlight for 2 seconds:
+        // the row, the cell that changed (PM Status or Task Status) and the card it sits in.
+        timers.push(setTimeout(() => { show(); flash(el); }, 350));
+      } else if (++tries < 40) {
+        timers.push(setTimeout(poll, 150));
+      } else {
+        onFocusDone?.();
+      }
+    };
+    timers.push(setTimeout(() => {
+      setPmFilter(hideAllTasks || restrictToMine || mine ? 'me' : 'flat');
+      setSearch(''); setBucketFilter([]); setPmStatusFilter([]);
+      setOpenName(owner);
+      poll();
+    }, 0));
+    return () => { stopped = true; timers.forEach(clearTimeout); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusTaskId, focusFound, focusClicks]);
+
   if (!resourceCol || !statusCol) return null;
 
   // A task the viewer added (the task's email is theirs) is always theirs to see in My Tasks, assigned
   // or not: with no Assigned Person it sits under "Unassigned" instead of being left out.
   const isOwnTask = (r: SheetData) =>
     !!emailCol && !!currentUserEmail && String(r[emailCol] ?? '').trim().toLowerCase() === currentUserEmail.trim().toLowerCase();
-  const personOf = (r: SheetData) => String(r[resourceCol] ?? '').trim() || (isOwnTask(r) ? UNASSIGNED : '');
+  const personOf = (r: SheetData) => String(r[resourceCol] ?? '').trim() || (isOwnTask(r) || showUnassigned ? UNASSIGNED : '');
 
   const names = [...new Set(data.map(personOf).filter(Boolean))]
     .filter(n => !EXCLUDED_PERSONS.includes(n.toLowerCase()))
     .sort();
 
   // Excluded from hours total (closed/submitted statuses inflate hours)
-  const NON_PENDING = ['task closed', 'submitted to client', 'submitted to pm', 'submitted to akash', 'n/a', ''];
+  const NON_PENDING = ['task closed', 'submitted to client', 'submitted to pm', 'submitted to akash', 'submitted to web admin', 'n/a', ''];
   // Excluded from the task table rows (truly done tasks only)
   const HIDE_FROM_TABLE = ['task closed', 'submitted to client', 'n/a', ''];
 
@@ -1763,7 +1822,7 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
 
     const activeTasks  = myTasks.filter(r => getStatus(r) === 'in progress').length;
     const onHoldTasks  = myTasks.filter(r => getStatus(r) === 'on hold').length;
-    const pendingPM    = myTasks.filter(r => ['submitted to pm', 'submitted to akash'].includes(getStatus(r))).length;
+    const pendingPM    = myTasks.filter(r => ['submitted to pm', 'submitted to akash', 'submitted to web admin'].includes(getStatus(r))).length;
     const toBeStarted  = myTasks.filter(r => getStatus(r) === 'to be started').length;
     const testingTasks = myTasks.filter(r => getStatus(r) === 'testing').length;
     // Sum time estimates for all non-closed tasks (mirrors sheet column C formula)
@@ -1783,8 +1842,10 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
     const inProgressTask = myTasks.find(r => getStatus(r) === 'in progress');
     const activeProject  = inProgressTask ? getProject(inProgressTask) : '';
 
-    const pendingTasks = myTasks
-      .filter(r => !HIDE_FROM_TABLE.includes(getStatus(r)))
+    // Closed and submitted-to-client tasks are left out of the lists, except the one a notification
+    // was just clicked for (otherwise there would be no row to show)
+    let pendingTasks = myTasks
+      .filter(r => !HIDE_FROM_TABLE.includes(getStatus(r)) || (!!focusTaskId && String(r['__id'] ?? '') === focusTaskId))
       .map(r => ({
         task: getTask(r), project: getProject(r),
         status: String(r[statusCol!] ?? '').trim(),
@@ -1794,12 +1855,15 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
         actionTakenToday: getActionTaken(r), performanceSignal: getPerformanceSignal(r),
         blocker: getBlocker(r), nextSteps: getNextSteps(r), deadline: getDeadline(r),
         _raw: r,
-      }))
-      .slice(0, 20);
+      }));
+    // Each card lists the first 20; a task someone just clicked a notification for is always included
+    const top = pendingTasks.slice(0, 20);
+    const focused = focusTaskId ? pendingTasks.slice(20).filter(t => String(t._raw['__id'] ?? '') === focusTaskId) : [];
+    pendingTasks = [...top, ...focused];
 
     return { name, department, activeProject, activeTasks, onHoldTasks, pendingPM, toBeStarted, testingTasks, totalHours, todayHours, todayLoadHours, todayTasks, pendingTasks };
   }).filter(r => r.totalHours > 0 || r.activeTasks + r.onHoldTasks + r.pendingPM + r.toBeStarted + r.testingTasks > 0
-      || r.pendingTasks.some(t => isOwnTask(t._raw)))
+      || r.pendingTasks.some(t => isOwnTask(t._raw) || (!!focusTaskId && String(t._raw['__id'] ?? '') === focusTaskId)))
     .sort((a, b) => (b.activeTasks + b.onHoldTasks) - (a.activeTasks + a.onHoldTasks));
 
   // Show filter if caller forces it (PM role), we have email to match against, or the
@@ -2917,7 +2981,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
       if (SKIP_STATUSES.includes(st)) return;
       const b = getBucket(r);
       let bucket = b;
-      if (['submitted to pm', 'submitted to akash', 'submitted to client'].includes(st)) bucket = 'submitted';
+      if (['submitted to pm', 'submitted to akash', 'submitted to web admin', 'submitted to client'].includes(st)) bucket = 'submitted';
       else if (st === 'in progress') bucket = 'inprogress';
       else if (b === 'tommorow') bucket = 'tomorrow';
       else if (b === 'to be expected') bucket = 'tobeexpected';
@@ -3022,7 +3086,7 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
         const getStatusLower = (t: typeof allTasks[number]) => (t.status || '').toLowerCase();
         const activeTasks  = allTasks.filter(t => getStatusLower(t) === 'in progress').length;
         const onHoldTasks  = allTasks.filter(t => getStatusLower(t) === 'on hold').length;
-        const pendingPM    = allTasks.filter(t => ['submitted to pm', 'submitted to akash'].includes(getStatusLower(t))).length;
+        const pendingPM    = allTasks.filter(t => ['submitted to pm', 'submitted to akash', 'submitted to web admin'].includes(getStatusLower(t))).length;
         const toBeStarted  = allTasks.filter(t => getStatusLower(t) === 'to be started').length;
 
         const bg = memberColor(openRow.name);
@@ -3236,7 +3300,7 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
     // Tasks/Hours/Status reflect only what's still actively pending — a task
     // already handed off (Submitted To PM/Admin/Akash/Client) shouldn't keep
     // counting toward someone's workload.
-    const SUBMITTED_STATUSES = ['submitted to client', 'submitted to pm', 'submitted to akash', 'submitted to admin'];
+    const SUBMITTED_STATUSES = ['submitted to client', 'submitted to pm', 'submitted to akash', 'submitted to web admin', 'submitted to admin'];
     const activeTasks = todayTasks.filter(r => !SUBMITTED_STATUSES.includes(getStatus(r)));
     const displayHours = activeTasks.reduce((s, r) => s + getTime(r), 0);
     const loadHours = usesLoggedTimeRule(name) ? todayTasks.reduce((s, r) => s + webTaskLoad(getTime(r), getLogged(r)), 0) : displayHours;
@@ -3502,7 +3566,7 @@ export function MyWorkloadSummary({ sheet1Data, sheet1Headers, availData, availH
     const b = getBucket(r);
     return b === 'today' || b === 'everyday';
   });
-  const SUBMITTED_STATUSES = ['submitted to client', 'submitted to pm', 'submitted to akash', 'submitted to admin'];
+  const SUBMITTED_STATUSES = ['submitted to client', 'submitted to pm', 'submitted to akash', 'submitted to web admin', 'submitted to admin'];
   const activeTasks = todayTasks.filter(r => !SUBMITTED_STATUSES.includes(getStatus(r).toLowerCase()));
   const displayHours = activeTasks.reduce((s, r) => s + getTime(r), 0);
   const loadHours = usesLoggedTimeRule(personName) ? todayTasks.reduce((s, r) => s + webTaskLoad(getTime(r), getLogged(r)), 0) : displayHours;
@@ -3739,7 +3803,7 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
   const todayCount         = bucketCol  ? data.filter(r => String(r[bucketCol]  ?? '').trim().toLowerCase() === 'today').length : 0;
   const inProgressCount      = statusCol ? data.filter(r => getStatus(r) === 'in progress').length : 0;
   const submittedClientCount = statusCol ? data.filter(r => { const s = getStatus(r); return s === 'submitted to client' || s === 'submitted to approval' || s === 'submitted'; }).length : 0;
-  const submittedAkashCount  = statusCol ? data.filter(r => getStatus(r) === 'submitted to akash').length : 0;
+  const submittedAkashCount  = statusCol ? data.filter(r => ['submitted to akash', 'submitted to web admin'].includes(getStatus(r))).length : 0;
   const submittedPMCount     = statusCol ? data.filter(r => getStatus(r) === 'submitted to pm').length : 0;
   const onHoldCount          = statusCol ? data.filter(r => getStatus(r) === 'on hold').length : 0;
   // Unfiltered roster (scopedData, not the date-filtered `data`) — otherwise
@@ -3869,7 +3933,7 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
           icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>} />
         <IC label="Submitted to Client / Approval" value={submittedClientCount} sub="awaiting client review" color="#10b981"
           icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>} />
-        <IC label="Submitted to Akash" value={submittedAkashCount} sub="pending akash review" color="#d97706"
+        <IC label="Submitted to Web Admin" value={submittedAkashCount} sub="pending web admin review" color="#d97706"
           icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.84 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.77 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8 8.09a16 16 0 0 0 6 6l1.06-1.06a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>} />
         <IC label="On Hold" value={onHoldCount} sub="paused tasks" color="#7c3aed"
           icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/></svg>} />
@@ -3919,7 +3983,7 @@ export function KpiCards({ sheet1Data, sheet1Headers, pmView = false, resourceVi
   const totalTasks     = pmScopedData.length;
   const inProgress     = statusCol ? pmScopedData.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'in progress').length : 0;
   const onHold         = statusCol ? pmScopedData.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'on hold').length : 0;
-  const submittedAkash = statusCol ? pmScopedData.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'submitted to akash').length : 0;
+  const submittedAkash = statusCol ? pmScopedData.filter(r => ['submitted to akash', 'submitted to web admin'].includes(String(r[statusCol] ?? '').trim().toLowerCase())).length : 0;
   const submittedPM    = statusCol ? pmScopedData.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'submitted to pm').length : 0;
   const todayTasks     = bucketCol ? pmScopedData.filter(r => String(r[bucketCol] ?? '').trim().toLowerCase() === 'today').length : 0;
 
@@ -3946,7 +4010,7 @@ export function KpiCards({ sheet1Data, sheet1Headers, pmView = false, resourceVi
       <StatCard label="Everyday Tasks"     value={everydayTasks}  total={totalTasks} color="var(--cn-accent)" icon={<LayoutGrid    className="w-4 h-4" />} adminStyle />
       <StatCard label="In Progress"        value={inProgress}     total={totalTasks} color="#16a34a"          icon={<CheckCircle2  className="w-4 h-4" />} adminStyle />
       <StatCard label="On Hold"            value={onHold}         total={totalTasks} color="#7c3aed"          icon={<PauseCircle   className="w-4 h-4" />} adminStyle />
-      <StatCard label="Submitted to Akash" value={submittedAkash} total={totalTasks} color="#d97706"          icon={<Send          className="w-4 h-4" />} adminStyle />
+      <StatCard label="Submitted to Web Admin" value={submittedAkash} total={totalTasks} color="#d97706"          icon={<Send          className="w-4 h-4" />} adminStyle />
       <StatCard label="Submitted to PM"    value={submittedPM}    total={totalTasks} color="#10b981"          icon={<UserCheck     className="w-4 h-4" />} adminStyle />
       <StatCard label="Today's Tasks"      value={todayTasks}     total={totalTasks} color="#FE4A23"          icon={<CalendarCheck className="w-4 h-4" />} adminStyle />
     </div>
@@ -4182,7 +4246,7 @@ export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = fal
   const totalTasks      = pmScopedData.length;
   const inProgress      = statusCol ? pmScopedData.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'in progress').length : 0;
   const onHold          = statusCol ? pmScopedData.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'on hold').length : 0;
-  const submittedAkash  = statusCol ? pmScopedData.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'submitted to akash').length : 0;
+  const submittedAkash  = statusCol ? pmScopedData.filter(r => ['submitted to akash', 'submitted to web admin'].includes(String(r[statusCol] ?? '').trim().toLowerCase())).length : 0;
   const submittedPM     = statusCol ? pmScopedData.filter(r => String(r[statusCol] ?? '').trim().toLowerCase() === 'submitted to pm').length : 0;
   const todayTasks      = bucketCol ? pmScopedData.filter(r => String(r[bucketCol] ?? '').trim().toLowerCase() === 'today').length : 0;
   const tomorrowTasks   = bucketCol ? pmScopedData.filter(r => { const v = String(r[bucketCol] ?? '').trim().toLowerCase(); return v === 'tomorrow' || v === 'tommorow'; }).length : 0;
@@ -4291,7 +4355,7 @@ export default function SpecificCharts({ sheet1Data, sheet1Headers, pmView = fal
           <StatCard label="Total Tasks"         value={totalTasks}     total={totalTasks} color="var(--cn-accent)" icon={<LayoutGrid    className="w-4 h-4" />} adminStyle={true} />
           <StatCard label="In Progress"         value={inProgress}     total={totalTasks} color="#16a34a"          icon={<CheckCircle2  className="w-4 h-4" />} adminStyle={true} />
           <StatCard label="On Hold"             value={onHold}         total={totalTasks} color="#7c3aed"          icon={<PauseCircle   className="w-4 h-4" />} adminStyle={true} />
-          <StatCard label="Submitted to Akash"  value={submittedAkash} total={totalTasks} color="#d97706"         icon={<Send          className="w-4 h-4" />} adminStyle={true} />
+          <StatCard label="Submitted to Web Admin"  value={submittedAkash} total={totalTasks} color="#d97706"         icon={<Send          className="w-4 h-4" />} adminStyle={true} />
           <StatCard label="Submitted to PM"     value={submittedPM}    total={totalTasks} color="#10b981"         icon={<UserCheck     className="w-4 h-4" />} adminStyle={true} />
           <StatCard label="Today's Tasks"       value={todayTasks}     total={totalTasks} color="#FE4A23"         icon={<CalendarCheck className="w-4 h-4" />} adminStyle={true} />
         </div>

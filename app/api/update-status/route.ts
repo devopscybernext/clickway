@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifySession, COOKIE_NAME } from '@/lib/session';
 import { updateSheetCell, DataError } from '@/lib/dataStore';
 import { isWritableTab } from '@/lib/sheetAccess';
+import { findDataset } from '@/lib/data/datasets';
+import { notifyCellChange, isTaskTable } from '@/lib/data/notifications';
 
 export const runtime = 'nodejs';
 
@@ -30,7 +32,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const range = await updateSheetCell(spreadsheetId, sheetName, Number(row), Number(colIndex), String(value), user.username);
+    // A PM Status or Task Status change on a task may tell someone (lib/data/notifications.ts)
+    const ds = findDataset(spreadsheetId, sheetName);
+    const header = ds?.headers[Number(colIndex)];
+    const onChange = ds && header && isTaskTable(ds.table)
+      ? (oldValue: string | null) => notifyCellChange(ds.table, Number(row), header, oldValue, String(value), user.username)
+      : undefined;
+    const range = await updateSheetCell(spreadsheetId, sheetName, Number(row), Number(colIndex), String(value), user.username, onChange);
     return NextResponse.json({ success: true, range });
   } catch (err: unknown) {
     console.error('[update-status]', err);

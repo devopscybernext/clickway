@@ -84,8 +84,21 @@ export function canDeletePmProjects(role: Role): boolean {
 export function canManageInHouseData(role: Role): boolean {
   return HELP_ADMIN_ROLES.includes(role);
 }
+// Notifications tab in the Admin Portal: HM and Admin see the log and download it as Excel; only
+// the Super Admin (role Admin) can clear every notification at once. /api/notifications/log uses these.
+export function canViewNotificationLog(role: Role): boolean {
+  return INHOUSE_FULL_ROLES.includes(role);
+}
+export function canClearNotifications(role: Role): boolean {
+  return HELP_ADMIN_ROLES.includes(role);
+}
 export function isPmTierRole(role: Role): boolean {
   return PM_TIER_ROLES.includes(role);
+}
+// A new-task notification takes these roles to Tasks Assigned (where they assign it), everyone else to
+// Tasks Overview. WebAdmin / PMWebAdmin for Web, MarketingAdmin / PMMarketingAdmin for Marketing.
+export function opensTasksAssignedForNewTask(role: Role): boolean {
+  return role === 'WebAdmin' || role === 'MarketingAdmin' || role === 'PMWebAdmin' || role === 'PMMarketingAdmin';
 }
 // Leaderboard "Add Feedback" (manual points): Admin / HM / Mod (and their legacy
 // aliases), the project managers (pm, PMWebAdmin, PMMarketingAdmin) and the Web

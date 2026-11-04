@@ -95,7 +95,7 @@ test('Admin Portal: display name and role edits are saved', async ({ page }) => 
   try {
     // Only the temporary test user is edited
     const row = page.getByRole('row').filter({ hasText: USERS.team.displayName });
-    await row.getByRole('button', { name: USERS.team.displayName }).click();
+    await row.getByRole('button', { name: USERS.team.displayName, exact: true }).click();
     const nameInput = page.locator('tbody input:focus');
     await nameInput.fill('E2E Team Renamed');
     await nameInput.press('Enter');
@@ -172,7 +172,8 @@ test('Tasks Assigned: a row can be duplicated and deleted, and a team member is 
   expect((await call('delete', copyId)).status()).toBe(200);
   expect(await query<Row[]>('SELECT id FROM web_tasks WHERE project_name = ?', [project])).toHaveLength(1);
 
-  // A team member may not change rows
+  // A team member may not change rows (sign the admin out first: a logged-in browser skips the login form)
+  await page.context().clearCookies();
   await login(page, USERS.team);
   expect((await call('delete', id)).status()).toBe(403);
   expect(await query<Row[]>('SELECT id FROM web_tasks WHERE id = ?', [id])).toHaveLength(1);

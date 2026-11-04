@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { SheetData } from '@/lib/dataStore';
 import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, TAB_BANDWIDTH, LEAVE_SHEET_ID, TAB_LEAVE, RANGE_LEAVE, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
 
-import { AuthUser, SheetId, Team, NavLeaf, getFirstNavLeaf, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, canSeeInHouseFull, canManageUsers, canManageInHouseData, canDeletePmProjects, canAddLeaderboardFeedback } from '@/lib/auth';
+import { AuthUser, SheetId, Team, NavLeaf, getFirstNavLeaf, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, canSeeInHouseFull, canManageUsers, canManageInHouseData, canDeletePmProjects, canAddLeaderboardFeedback, opensTasksAssignedForNewTask } from '@/lib/auth';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import InHouse, { type InHouseSubTab } from './InHouse';
@@ -23,6 +23,7 @@ import ClosedProjects from './ClosedProjects';
 import ProjectReport from './ProjectReport';
 import Reports from './Reports';
 import ImportData from './ImportData';
+import type { NotificationItem } from '@/lib/notifications';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import LeaveStatus from './LeaveStatus';
 import EntryForm from './EntryForm';
@@ -636,7 +637,26 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     setMarketingTeamData(prev => prev.map(r => r['__id'] === row['__id'] ? { ...r, [colName]: newValue } : r));
   };
 
+  // A notification was clicked: open that team's Tasks Overview and jump to the task. The data may be
+  // a few minutes old (a task added a moment ago), so it is refreshed first; the page waits for the
+  // task to arrive and gives up after a few seconds.
+  const [focusTask, setFocusTask] = useState<string | null>(null);
+  const [focusField, setFocusField] = useState<NotificationItem['type'] | undefined>(undefined);
+  // changes on every click, so clicking the same notification again shows its task again
+  const [focusClicks, setFocusClicks] = useState(0);
+  const openNotification = (n: NotificationItem) => {
+    // New-task notifications take the people who assign tasks to Tasks Assigned, everyone else to Tasks Overview
+    const toAssigned = n.type === 'task-added' && opensTasksAssignedForNewTask(user.role);
+    handleSheetChange({ id: toAssigned ? '1' : '9', team: n.team });
+    setFocusTask(n.taskRef);
+    setFocusField(n.type);
+    setFocusClicks(c => c + 1);
+    void fetchAll();
+    setEntryRefreshKey(k => k + 1);
+  };
+
   const handleSheetChange = (leaf: NavLeaf) => {
+    setFocusTask(null); setFocusField(undefined); // leaving the page ends any "show this task" (openNotification sets it again after)
     setSelectedSheet(leaf.id);
     if (leaf.team) { setNavTeam(leaf.team); setAnalyticsSubDept('all'); }
     if (leaf.id === '11' && leaf.subTab) setPmBandwidthSubTab(leaf.subTab as 'current' | 'archive' | 'mine' | 'closed');
@@ -674,7 +694,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const canEditPmTab = isAdmin && (effectivePmBandwidthSubTab === 'current' || effectivePmBandwidthSubTab === 'archive');
 
   // ── Team roster filtering (Web/Marketing split for Team Bandwidth & Tasks Overview) ──
-  const filterByRoster = (rows: SheetData[], rowHeaders: string[], roster: string[], ownEmail?: string) => {
+  const filterByRoster = (rows: SheetData[], rowHeaders: string[], roster: string[], ownEmail?: string, keepUnassigned = false) => {
     // 'team' matches the Leave spreadsheet's name column (header literally
     // reads "Team" there, despite holding a person's name)
     const col = rowHeaders.find(h => h.toLowerCase().includes('assigned person') || h.toLowerCase().includes('assigned to') || h.toLowerCase() === 'name' || h.toLowerCase() === 'team');
@@ -683,11 +703,11 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     // ownEmail also keeps the tasks the viewer added themselves, assigned to someone outside the roster or to nobody
     const emailCol = ownEmail ? rowHeaders.find(h => h.toLowerCase().includes('email')) : undefined;
     const mine = (r: SheetData) => !!emailCol && String(r[emailCol] ?? '').trim().toLowerCase() === ownEmail!.trim().toLowerCase();
-    return rows.filter(r => rosterLower.includes(String(r[col] ?? '').trim().toLowerCase()) || mine(r));
+    return rows.filter(r => rosterLower.includes(String(r[col] ?? '').trim().toLowerCase()) || mine(r) || (keepUnassigned && !String(r[col] ?? '').trim()));
   };
   const webBandwidthData = filterByRoster(activeBandwidthData, bandwidthHeaders, webTeam());
   // Tasks Overview: the same, plus the tasks the viewer added (shown in their My Tasks whether assigned or not)
-  const webOverviewData  = filterByRoster(activeBandwidthData, bandwidthHeaders, webTeam(), user.email);
+  const webOverviewData  = filterByRoster(activeBandwidthData, bandwidthHeaders, webTeam(), user.email, isAdmin || isTeamAdmin);
   const webAvailData     = filterByRoster(availData, availHeaders, webTeam());
 
   // Marketing — tasks come from the separate Marketing Team spreadsheet's
@@ -820,6 +840,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           onOpenAdminPortal={() => handleSheetChange({ id: '15' })}
           isLeafActive={leaf => selectedSheet === leaf.id && (leaf.subTab === undefined || leaf.subTab === (leaf.id === '14' ? toolsSubTab : leaf.id === '17' ? inHouseSubTab : leaf.id === '18' ? helpSubTab : undefined))}
           onNavigate={handleSheetChange}
+          onOpenNotification={openNotification}
         />
 
         <main className="flex-1 px-4 sm:px-6 xl:px-8 pt-6 pb-8 space-y-5">
@@ -1000,6 +1021,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 defaultPersonFilter={isIndividual ? user.displayName : undefined}
                 editPersonBucket={isAdmin || isPmTier || isTeamAdmin}
                 editProjectTask={isAdmin || isPmTier || isTeamAdmin}
+                focusRowId={focusTask}
+                focusClicks={focusClicks}
                 allowPushToAdmin={isAdmin}
                 canManageRows={isAdmin || isPmTier || isTeamAdmin}
                 onDuplicateRow={row => changeRow('duplicate', taskRowSheet(row).id, taskRowSheet(row).tab, row)}
@@ -1351,6 +1374,11 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     defaultFilter="me"
                     hideAllTasks={isIndividual}
                     restrictPmStatusToOwn={isPmTier}
+                    showUnassigned={isAdmin || isTeamAdmin}
+                    focusTaskId={focusTask}
+                    focusField={focusField}
+                    focusClicks={focusClicks}
+                    onFocusDone={() => setFocusTask(null)}
                     vinayQaMode={isVinay}
                     showQaTab={isAdmin || isPmTier}
                     qaData={qaData}
@@ -1379,6 +1407,11 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     defaultFilter="me"
                     hideAllTasks={isIndividual}
                     restrictPmStatusToOwn={isPmTier}
+                    showUnassigned={isAdmin || isTeamAdmin}
+                    focusTaskId={focusTask}
+                    focusField={focusField}
+                    focusClicks={focusClicks}
+                    onFocusDone={() => setFocusTask(null)}
                   />
                 )}
               </div>

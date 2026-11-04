@@ -6,6 +6,7 @@ import { SheetData } from '@/lib/dataStore';
 import { pmRowTint } from '@/lib/pmRowTint';
 import RowActions from './RowActions';
 import { totalTimeRow, totalRowHtml, totalRowText } from '@/lib/copyTotals';
+import { flashRow } from '@/lib/flashRow';
 import { STATUS_COLORS, formatHHMM, displayHHMM, toHM, DURATION_HOUR_OPTIONS, DURATION_MINUTE_OPTIONS, hhmmToDecimalHours, addLoggedToTotal } from './SpecificCharts';
 
 const PAGE_SIZE = 30;
@@ -473,7 +474,7 @@ const STATUS_OPTIONS: string[] = [
   'In Progress',
   'Testing',
   'On Hold',
-  'Submitted To Akash',
+  'Submitted To Web Admin',
   'Submitted To PM',
   'Task Closed',
 ];
@@ -692,6 +693,9 @@ interface Props {
   canManageRows?: boolean;
   onDuplicateRow?: (row: SheetData) => Promise<void>;
   onDeleteRow?: (row: SheetData) => Promise<void>;
+  // A notification was clicked: filter, page and scroll to this row (its __id), and highlight it
+  focusRowId?: string | null;
+  focusClicks?: number;
 }
 
 const BUCKET_OPTIONS = ['Today', 'Tomorrow', 'Day After Tomorrow', 'Everyday', 'No Action Taken', 'Submitted', 'To Be Expected'];
@@ -718,7 +722,7 @@ function parseTimestamp(v: string): number {
   return new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s)).getTime();
 }
 
-export default function FilteredDataTable({ data, headers, sheetNum, onStatusChange, readOnlyStatus, readOnlyPmStatus, showCopy, defaultPersonFilter, editPersonBucket, readOnlyBucket, readOnlyAssigned, rowCopy, restrictToBucketEdit, editStatusUpdation, editProjectTask, hiddenCols, onlyColTerms, hiddenFilterTerms, statusOptions, todayBucketSetOptions, assignedPersonOptions, allowPushToAdmin, canManageRows, onDuplicateRow, onDeleteRow }: Props) {
+export default function FilteredDataTable({ data, headers, sheetNum, onStatusChange, readOnlyStatus, readOnlyPmStatus, showCopy, defaultPersonFilter, editPersonBucket, readOnlyBucket, readOnlyAssigned, rowCopy, restrictToBucketEdit, editStatusUpdation, editProjectTask, hiddenCols, onlyColTerms, hiddenFilterTerms, statusOptions, todayBucketSetOptions, assignedPersonOptions, allowPushToAdmin, canManageRows, onDuplicateRow, onDeleteRow, focusRowId, focusClicks = 0 }: Props) {
   const [copiedRow, setCopiedRow] = useState<string | null>(null);
   const effectiveStatusOptions = statusOptions ?? STATUS_OPTIONS;
   const effectiveStatusOptionsLower = effectiveStatusOptions.map(s => s.toLowerCase());
@@ -967,6 +971,41 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pageData = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  // A notification was clicked: make sure the task is in the table (clear the filters if they hide it),
+  // go to the page it is on, scroll to it and highlight it. The data may still be arriving, so it keeps
+  // looking for a few seconds. Reads the latest sorted list through a ref, as the filters change under it.
+  const sortedRef = useRef(sorted);
+  useEffect(() => { sortedRef.current = sorted; });
+  const focusFound = !!focusRowId && data.some(r => String(r['__id'] ?? '') === focusRowId);
+  useEffect(() => {
+    if (!focusRowId || !focusFound) return;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    let stopped = false;
+    let tries = 0;
+    let cleared = false;
+    const at = () => sortedRef.current.findIndex(r => String(r['__id'] ?? '') === focusRowId);
+    const poll = () => {
+      if (stopped) return;
+      const idx = at();
+      if (idx < 0 && !cleared) {
+        // hidden by a filter or the sort: show everything, newest first
+        cleared = true;
+        setFilters({}); setSortCol('');
+      } else if (idx >= 0) {
+        setPage(Math.floor(idx / PAGE_SIZE) + 1);
+        const el = document.querySelector(`[data-fdt-id="${CSS.escape(focusRowId)}"]`);
+        if (el) {
+          el.scrollIntoView({ block: 'center' });
+          timers.push(setTimeout(() => { el.scrollIntoView({ block: 'center' }); flashRow(el); }, 350));
+          return;
+        }
+      }
+      if (++tries < 40) timers.push(setTimeout(poll, 150));
+    };
+    timers.push(setTimeout(poll, 0));
+    return () => { stopped = true; timers.forEach(clearTimeout); };
+  }, [focusRowId, focusFound, focusClicks]);
 
   const handleSort = (col: string) => {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -1251,6 +1290,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                     // own row numbering at 2, which was rendering as blank/
                     // duplicated rows via React key collisions.
                     key={String(row['__id'] ?? row['__row'] ?? i)}
+                    data-fdt-id={String(row['__id'] ?? '')}
                     data-row-tint={pmTint ? '' : undefined}
                     style={pmTint
                       ? { backgroundColor: pmTint.bg, borderColor: pmTint.border }
