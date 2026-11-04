@@ -112,14 +112,32 @@ function Pill({ color, children }: { color: string; children: React.ReactNode })
 // Help tab. "Apply": the form anyone can use to ask for help, suggest something or
 // complain about the dashboard. "My Queries" / "All Queries": the table of requests —
 // each person sees their own; the Super Admin sees everyone's and sets the status.
-export default function Help({ subTab, onOpenQueries }: { subTab: HelpSubTab; onOpenQueries: () => void }) {
-  return subTab === 'apply' ? <Apply onOpenQueries={onOpenQueries} /> : <Queries />;
+// The Help page has two sub tabs: Apply (the form) and the table of requests (All Queries for the
+// Super Admin, My Queries for everyone else).
+export default function Help({ subTab, onSubTabChange, canManage }: { subTab: HelpSubTab; onSubTabChange: (t: HelpSubTab) => void; canManage: boolean }) {
+  const tabs: { id: HelpSubTab; label: string }[] = [{ id: 'apply', label: 'Apply' }, { id: 'queries', label: canManage ? 'All Queries' : 'My Queries' }];
+  return (
+    <div className="space-y-4">
+      <div role="tablist" aria-label="Help" className="flex flex-wrap gap-2">
+        {tabs.map(t => (
+          <button key={t.id} role="tab" aria-selected={subTab === t.id} onClick={() => onSubTabChange(t.id)}
+            className="px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all"
+            style={subTab === t.id
+              ? { background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }
+              : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {subTab === 'apply' ? <Apply onOpenQueries={() => onSubTabChange('queries')} /> : <Queries />}
+    </div>
+  );
 }
 
 function Apply({ onOpenQueries }: { onOpenQueries: () => void }) {
   const [sent, setSent] = useState(false);
   return (
-    <section className="cn-card rounded-lg border p-3 sm:p-6 space-y-4 max-w-3xl" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+    <section className="cn-card rounded-lg border p-3 sm:p-6 space-y-4" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
       <div className="flex items-start gap-3">
         <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--cn-accent)' + '18', color: 'var(--cn-accent)' }}>
           <MessageSquarePlus className="w-5 h-5" />

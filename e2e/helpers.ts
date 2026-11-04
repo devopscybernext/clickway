@@ -72,9 +72,16 @@ export async function login(page: Page, user: E2EUser): Promise<void> {
 // if a page is named, clicks it.
 export const TOP_BAR_MENUS = ['Cybernext InHouse', 'Help'];
 export async function openTopMenu(page: Page, menu: string, leaf?: string): Promise<void> {
-  const button = page.getByRole('banner').getByRole('button', { name: menu, exact: true });
+  // Help is a section of the profile dropdown (top right); Cybernext InHouse is its own button
+  const button = menu === 'Help' ? page.getByTestId('profile-menu') : page.getByRole('banner').getByRole('button', { name: menu, exact: true });
   await expect(button).toBeVisible();
   await button.click();
+  if (menu === 'Help') {
+    // one item in the profile dropdown; Apply and the queries are sub tabs on the Help page
+    await page.getByRole('menuitem', { name: 'Help', exact: true }).click();
+    if (leaf) await page.getByRole('tab', { name: leaf, exact: true }).click();
+    return;
+  }
   if (leaf) await page.getByRole('menuitem', { name: leaf, exact: true }).click();
 }
 

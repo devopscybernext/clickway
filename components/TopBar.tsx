@@ -110,6 +110,9 @@ function TopMenu({ menu, isLeafActive, onNavigate }: { menu: NavParent; isLeafAc
 
 export default function TopBar({ lastUpdated, loading, selectedSheet, onRefresh, user, onLogout, isAdmin, canOpenAdminPortal, onOpenAdminPortal, isLeafActive, onNavigate, onOpenNotification }: TopBarProps) {
   const menus = getNavItems(user).filter((item): item is NavParent => isNavParent(item) && TOP_BAR_MENUS.includes(item.label));
+  // Cybernext InHouse is a button next to Refresh; Help is a section of the profile dropdown
+  const inHouseMenu = menus.find(m => m.label === 'Cybernext InHouse');
+  const helpMenu = menus.find(m => m.label === 'Help');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
@@ -145,7 +148,6 @@ export default function TopBar({ lastUpdated, loading, selectedSheet, onRefresh,
       {/* Right controls */}
       <div className="flex items-center gap-2">
         <NotificationBell onOpen={onOpenNotification} />
-        {menus.map(m => <TopMenu key={m.label} menu={m} isLeafActive={isLeafActive} onNavigate={onNavigate} />)}
 
         <ThemeToggle isAdmin={isAdmin} />
 
@@ -158,6 +160,8 @@ export default function TopBar({ lastUpdated, loading, selectedSheet, onRefresh,
             <span>Updated {formattedTime}</span>
           </div>
         )}
+
+        {inHouseMenu && <TopMenu menu={inHouseMenu} isLeafActive={isLeafActive} onNavigate={onNavigate} />}
 
         <button
           onClick={onRefresh}
@@ -175,6 +179,7 @@ export default function TopBar({ lastUpdated, loading, selectedSheet, onRefresh,
         <div ref={dropRef} className="relative">
           <button
             onClick={() => setDropdownOpen(o => !o)}
+            data-testid="profile-menu"
             className="flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-lg border transition-colors cursor-pointer"
             style={{
               background: dropdownOpen ? 'var(--cn-bg-hover)' : 'var(--cn-bg-input)',
@@ -249,6 +254,21 @@ export default function TopBar({ lastUpdated, loading, selectedSheet, onRefresh,
                   >
                     <ShieldCheck className="w-4 h-4 shrink-0" style={{ color: 'var(--cn-accent)' }} />
                     <span>Admin Portal</span>
+                  </button>
+                )}
+
+                {/* Help — one item; its page has the Apply and Queries sub tabs */}
+                {helpMenu && (
+                  <button
+                    role="menuitem"
+                    onClick={() => { setDropdownOpen(false); if (!helpMenu.children.some(isLeafActive)) onNavigate(helpMenu.children[0]); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg transition-colors cursor-pointer text-left"
+                    style={{ color: 'var(--cn-text-primary)', background: selectedSheet === '18' ? 'var(--cn-bg-hover)' : '' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--cn-bg-hover)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = selectedSheet === '18' ? 'var(--cn-bg-hover)' : '')}
+                  >
+                    <CircleHelp className="w-4 h-4 shrink-0" style={{ color: 'var(--cn-accent)' }} />
+                    <span>Help</span>
                   </button>
                 )}
 
