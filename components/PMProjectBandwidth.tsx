@@ -7,6 +7,7 @@ import { SheetData } from '@/lib/dataStore';
 import { MultiSelect } from './FilteredDataTable';
 import { currentRosterNames } from '@/lib/roster';
 import RowActions from './RowActions';
+import BulkDeleteBar, { SelectBox, useRowSelection } from './BulkDelete';
 import { parseHHMM, formatHHMM, hhmmToDecimalHours, DURATION_MINUTE_OPTIONS, formatHoursClock } from './SpecificCharts';
 import { memberPhoto, memberColor } from '@/lib/memberColors';
 import ClampedText from './ClampedText';
@@ -978,12 +979,16 @@ export function PmProjectEditPopup({ row, headers, optionSourceData, onCellChang
 // header (project, status, PM, assigned, department/year/month), then the
 // project's fields grouped into divided sections of four, then the long-text
 // fields stacked full width.
-type ViewField = { key: string; label: string; node: React.ReactNode };
+export type ViewField = { key: string; label: string; node: React.ReactNode };
 
-function PmRowViewModal({ title, statusNode, pm, assignedNode, meta, sections, long, onClose }: {
+// Also the popup of a task row in Tasks Assigned (components/TaskDetailsModal.tsx): pmLabel and untitled
+// change the wording, the layout is the same.
+export function PmRowViewModal({ title, statusNode, pm, pmLabel = 'Managed by', untitled = 'Untitled project', assignedNode, meta, sections, long, onClose }: {
   title: string;
   statusNode: React.ReactNode;
   pm: string;
+  pmLabel?: string;
+  untitled?: string;
   assignedNode: React.ReactNode;
   meta: ViewField[];
   sections: ViewField[][];
@@ -1014,7 +1019,7 @@ function PmRowViewModal({ title, statusNode, pm, assignedNode, meta, sections, l
           {/* Header */}
           <div className="flex items-start justify-between gap-4">
             <h2 className="text-2xl sm:text-3xl font-bold leading-tight break-words min-w-0" style={{ color: 'var(--cn-text-primary)' }}>
-              {title || 'Untitled project'}
+              {title || untitled}
             </h2>
             <div className="flex items-center gap-3 shrink-0">
               {statusNode}
@@ -1038,7 +1043,7 @@ function PmRowViewModal({ title, statusNode, pm, assignedNode, meta, sections, l
                     // eslint-disable-next-line @next/next/no-img-element
                     ? <img src={photo} alt={pm} className="w-8 h-8 rounded-full object-cover shrink-0" />
                     : <span className="w-8 h-8 rounded-full inline-flex items-center justify-center text-white text-sm font-bold shrink-0" style={{ background: memberColor(pm) }}>{pm.trim().charAt(0).toUpperCase()}</span>}
-                  <span>Managed by <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{pm}</span></span>
+                  <span>{pmLabel} <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{pm}</span></span>
                 </div>
               )}
               {pm && assignedNode && <span className="hidden sm:block self-stretch w-px" style={{ background: 'var(--cn-border)' }} />}
@@ -1125,6 +1130,8 @@ interface Props {
   /** In edit mode every row gets a Duplicate icon and / or a Delete icon, for whichever handler is given */
   onDuplicateRow?: (row: SheetData) => Promise<void>;
   onDeleteRow?: (row: SheetData) => Promise<void>;
+  /** Delete several projects at once: tick boxes and Delete selected, while editing */
+  onDeleteRows?: (rows: SheetData[]) => Promise<void>;
   /** Edit one project at a time in a popup (like My Projects) without locking the table to Full — for admins on Current / Previous Months */
   popupEdit?: boolean;
   // True for "Previous Months" — every sheet column (including the
@@ -1383,7 +1390,7 @@ export async function downloadProjectsPdf({ rows, headers, include, eyebrow, fil
   await downloadDetailsPdf(projects, fileName, summary, eyebrow);
 }
 
-export default function PMProjectBandwidth({ data, headers, canEdit = false, popupEdit = false, onDuplicateRow, onDeleteRow, onCellChange, allData, defaultToCurrentMonth = true, hideYearMonthFilter = false, lockShowDataFull = false, showAllColumns = false, allowReportDownload = false, reportName = 'Report', hidePmFilter = false, hidePmSummary = false, allPmNames = [] }: Props) {
+export default function PMProjectBandwidth({ data, headers, canEdit = false, popupEdit = false, onDuplicateRow, onDeleteRow, onDeleteRows, onCellChange, allData, defaultToCurrentMonth = true, hideYearMonthFilter = false, lockShowDataFull = false, showAllColumns = false, allowReportDownload = false, reportName = 'Report', hidePmFilter = false, hidePmSummary = false, allPmNames = [] }: Props) {
   const optionSourceData = allData ?? data;
   // Cells only become editable after clicking "Edit", same pattern as Tasks Assigned
   const [editMode, setEditMode] = useState(false);
@@ -1752,6 +1759,15 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, pop
   const currentPage = Math.min(page, totalPages);
   const pageData = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
+  // Several projects at once: tick boxes while editing. Only ticked rows the filters still show count.
+  const bulk = popupEditing && !!onDeleteRows;
+  const { selected, toggle, setMany, clear: clearSelection } = useRowSelection();
+  const rowId = (r: SheetData) => String(r['__id'] ?? r['__row'] ?? '');
+  const selectedRows = useMemo(() => (bulk ? sorted.filter(r => selected.has(rowId(r))) : []), [bulk, sorted, selected]);
+  const pageIds = pageData.map(rowId);
+  const pageAllTicked = pageIds.length > 0 && pageIds.every(id => selected.has(id));
+  const pageSomeTicked = pageIds.some(id => selected.has(id));
+
   const handleSort = (col: string) => {
     if (sortCol === col) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
     else { setSortCol(col); setSortDir('desc'); }
@@ -2058,7 +2074,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, pop
           />
           {canEdit && (
           <button
-            onClick={() => setEditMode(m => !m)}
+            onClick={() => { setEditMode(m => !m); clearSelection(); }}
             title={editMode ? 'Stop editing' : 'Edit'}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg cursor-pointer transition-all text-xs font-semibold"
             style={editMode
@@ -2090,10 +2106,24 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, pop
         </div>
       </div>
 
+      {bulk && (
+        <BulkDeleteBar
+          count={selectedRows.length} total={sorted.length} noun="project"
+          onSelectAll={() => setMany(sorted.map(rowId), true)}
+          onClear={clearSelection}
+          onDelete={async () => { await onDeleteRows!(selectedRows); clearSelection(); }}
+        />
+      )}
+
       <div style={{ borderColor: 'var(--cn-border)' }} className="overflow-x-auto rounded-md border">
         <table className="w-full text-xs text-left">
           <thead>
             <tr style={{ background: 'var(--cn-bg-input)', borderColor: 'var(--cn-border)' }} className="border-b">
+              {bulk && (
+                <th className="px-2 py-2 w-10">
+                  <SelectBox label="Select all projects on this page" checked={pageAllTicked} indeterminate={pageSomeTicked} onChange={on => setMany(pageIds, on)} />
+                </th>
+              )}
               {(popupEditing || viewEnabled) && <th className={`px-2 py-2 ${popupEditing && onDuplicateRow && onDeleteRow ? 'w-28' : popupEditing && (onDuplicateRow || onDeleteRow) ? 'w-20' : 'w-10'}`} aria-label="Row actions" />}
               <th style={{ color: 'var(--cn-text-muted)' }} className="px-4 py-2 font-semibold uppercase tracking-wide text-[10px] w-12">#</th>
               {showPmCol && (
@@ -2126,7 +2156,7 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, pop
           <tbody>
             {pageData.length === 0 ? (
               <tr>
-                <td colSpan={visibleHeaders.length + (showPmCol ? 2 : 1) + (showPendingCol ? 1 : 0) + ((popupEditing || viewEnabled) ? 1 : 0)} style={{ color: 'var(--cn-text-muted)' }} className="text-center py-12">
+                <td colSpan={visibleHeaders.length + (showPmCol ? 2 : 1) + (showPendingCol ? 1 : 0) + ((popupEditing || viewEnabled) ? 1 : 0) + (bulk ? 1 : 0)} style={{ color: 'var(--cn-text-muted)' }} className="text-center py-12">
                   No records found
                 </td>
               </tr>
@@ -2138,6 +2168,14 @@ export default function PMProjectBandwidth({ data, headers, canEdit = false, pop
                   className={`border-b transition-colors hover:bg-[var(--cn-bg-hover)] ${(popupEditing || viewEnabled) ? 'cursor-pointer' : ''}`}
                   onClick={popupEditing ? () => setPopupRow(row) : viewEnabled ? () => setViewRow(row) : undefined}
                 >
+                  {bulk && (
+                    <td className="px-2 py-2" onClick={e => e.stopPropagation()}>
+                      <SelectBox
+                        label={`Select ${(projectCol ? String(row[projectCol] ?? '').trim() : '') || 'this project'}`}
+                        checked={selected.has(rowId(row))} onChange={() => toggle(rowId(row))}
+                      />
+                    </td>
+                  )}
                   {popupEditing && (
                     <td className="px-2 py-2">
                       <div className="flex items-center gap-1.5">

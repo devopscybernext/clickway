@@ -588,6 +588,35 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     await fetchAll();
     setEntryRefreshKey(k => k + 1);
   };
+  // Delete several rows at once. They are grouped by the tab they live in (normally all one), one request
+  // each; the page reloads once at the end.
+  const deleteRows = async (rows: SheetData[], sheetOf: (row: SheetData) => { id: string; tab: string }) => {
+    const groups = new Map<string, { id: string; tab: string; rows: number[] }>();
+    for (const row of rows) {
+      const { id, tab } = sheetOf(row);
+      const g = groups.get(`${id}|${tab}`) ?? { id, tab, rows: [] };
+      g.rows.push(Number(row['__row']));
+      groups.set(`${id}|${tab}`, g);
+    }
+    let deleted = 0;
+    try {
+      for (const g of groups.values()) {
+        const res = await fetch('/api/rows', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'delete', spreadsheetId: g.id, sheetName: g.tab, rows: g.rows }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json.success) throw new Error(json.error || 'Could not delete the rows');
+        deleted += Number(json.deleted ?? 0);
+      }
+    } catch (e) {
+      if (deleted > 0) { await fetchAll(); setEntryRefreshKey(k => k + 1); }
+      throw new Error(`${e instanceof Error ? e.message : 'Could not delete the rows'}${deleted > 0 ? ` (${deleted} were already deleted)` : ''}`);
+    }
+    await fetchAll();
+    setEntryRefreshKey(k => k + 1);
+  };
   const taskRowSheet = (row: SheetData) => tasksAssignedTeam === 'marketing'
     ? { id: MARKETING_TEAM_SHEET_ID, tab: String(row['__sheet'] ?? TAB_MARKETING_TASKS) }
     : { id: SHEET_IDS['1'], tab: String(row['__sheet'] ?? TAB_BANDWIDTH) };
@@ -1027,6 +1056,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 canManageRows={isAdmin || isPmTier || isTeamAdmin}
                 onDuplicateRow={row => changeRow('duplicate', taskRowSheet(row).id, taskRowSheet(row).tab, row)}
                 onDeleteRow={row => changeRow('delete', taskRowSheet(row).id, taskRowSheet(row).tab, row)}
+                onDeleteRows={rows => deleteRows(rows, taskRowSheet)}
+                detailsPopup
               />
             )}
           </section>
@@ -1235,6 +1266,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     ? row => changeRow('duplicate', pmRowSheet(row).id, pmRowSheet(row).tab, row) : undefined}
                   onDeleteRow={canDeletePmProjects(user.role) && (effectivePmBandwidthSubTab === 'current' || effectivePmBandwidthSubTab === 'archive' || effectivePmBandwidthSubTab === 'mine')
                     ? row => changeRow('delete', pmRowSheet(row).id, pmRowSheet(row).tab, row) : undefined}
+                  onDeleteRows={canDeletePmProjects(user.role) && (effectivePmBandwidthSubTab === 'current' || effectivePmBandwidthSubTab === 'archive' || effectivePmBandwidthSubTab === 'mine')
+                    ? rows => deleteRows(rows, pmRowSheet) : undefined}
                   onCellChange={effectivePmBandwidthSubTab === 'mine' || canEditPmTab ? handlePmBandwidthChange : undefined}
                   allData={pmBandwidthData}
                   allPmNames={pmUsers.map(u => u.displayName).filter(Boolean)}

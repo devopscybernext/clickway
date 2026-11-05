@@ -342,6 +342,21 @@ const HANDED_OFF_STATUSES = ['submitted to client', 'submitted to pm', 'submitte
 // Everyone on a daily 7h day (Web and SMM) — i.e. everyone except the monthly-retainer PPC / SEO names
 const usesLoggedTimeRule = (name: string) => !MONTHLY_BLOCK_MARKETING_NAMES.has(name.trim().toLowerCase());
 const webTaskLoad = (estHours: number, loggedHours: number) => Math.max(estHours, loggedHours);
+// PPC and SEO (monthly retainer): a task takes its estimate minus the hours already spent on it (Total Hours),
+// never below zero. Est. 20:00 with 06:00 in Total Hours is 14:00 still to do.
+const monthlyTaskLoad = (estHours: number, totalHours: number) => Math.max(0, estHours - totalHours);
+// The order a person's tasks are listed in Tasks Overview, by Task Daily Bucket; anything else (e.g. No Action Taken) comes last
+const BUCKET_SORT_ORDER = ['today', 'everyday', 'to be expected', 'tomorrow', 'day after tomorrow', 'submitted'];
+const bucketRank = (raw: string) => {
+  const l = raw.trim().toLowerCase()
+    .replace(/^(tommorow|tommorrow|tomorow)$/, 'tomorrow')
+    .replace(/^day after (tommorow|tommorrow)$/, 'day after tomorrow');
+  const i = BUCKET_SORT_ORDER.indexOf(l);
+  return i === -1 ? BUCKET_SORT_ORDER.length : i;
+};
+// The column holding the time already spent on a task: "Total Hours" (Marketing) / "Total Time" (Web)
+const findTotalHoursCol = (headers: string[]) =>
+  headers.find(h => h.toLowerCase().includes('total hours') || (h.toLowerCase().includes('total time') && !h.toLowerCase().includes('est')));
 
 // The band (label) is only used internally for the bar's colour; the screens show
 // the percentage — assigned hours / capacity (7h a day, or 125h a month for the
@@ -386,6 +401,8 @@ interface ResourceRow {
   todayHours: number;
   /** hours the workload bar / bandwidth use: Time Estimation - Time Logged On AC for Web, else todayHours */
   todayLoadHours: number;
+  /** how many tasks make up todayLoadHours (the pill on the card says "N Tasks · HH:MMh") */
+  todayLoadTasks: number;
   todayTasks: number;
   pendingTasks: { task: string; project: string; status: string; pmStatus: string; timeEst: string; taskUrl: string; bucketSet: string; bucket: string; timeLogged: string; totalHoursVal: string; actionTakenToday: string; performanceSignal: string; blocker: string; nextSteps: string; deadline: string; _raw: SheetData }[];
 }
@@ -517,7 +534,7 @@ function ResourceStatusSelect({ value, raw, colName, onStatusChange, options = S
 
 const BUCKET_OPTIONS_RO = ['Today', 'Tomorrow', 'Day After Tomorrow', 'Everyday', 'No Action Taken', 'Submitted', 'To Be Expected'];
 const BUCKET_COLORS_RO: Record<string, string> = {
-  today: '#16a34a', tomorrow: '#3b82f6', 'day after tomorrow': '#f59e0b',
+  today: '#16a34a', everyday: '#16a34a', tomorrow: '#3b82f6', 'day after tomorrow': '#f59e0b',
 };
 
 function ResourceBucketSelect({ value, raw, colName, onStatusChange }: {
@@ -920,12 +937,12 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
 
         {/* Stat pills */}
         <div className="hidden sm:flex items-center gap-3 shrink-0">
-          {row.todayTasks > 0 && (
+          {row.todayLoadTasks > 0 && (
             <div className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shrink-0"
               style={{ background: '#f59e0b22', color: '#f59e0b' }}
-              title="Today + Everyday Tasks & Hours">
+              title="Today + Everyday tasks that are not closed, each counted as the larger of its estimate and the time logged on it. The same hours as the bar and the bandwidth in Tasks Assigned.">
               <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              {row.todayTasks} Tasks · {formatHoursClock(row.todayHours)}h
+              {row.todayLoadTasks} Tasks · {formatHoursClock(row.todayLoadHours)}h
             </div>
           )}
           <div className="flex items-center gap-1.5 text-xs" title="In Progress">
@@ -1131,7 +1148,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                 };
                 const pmC = pmColor[t.pmStatus.toLowerCase()] ?? '#6b7280';
                 const bucketColors: Record<string, string> = {
-                  today: '#16a34a', tomorrow: '#3b82f6', 'day after tomorrow': '#f59e0b',
+                  today: '#16a34a', everyday: '#16a34a', tomorrow: '#3b82f6', 'day after tomorrow': '#f59e0b',
                 };
                 const normBucket = (s: string) => {
                   const l = s.trim().toLowerCase();
@@ -1487,7 +1504,7 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
     return l;
   };
   const bucketColors: Record<string, string> = {
-    today: '#16a34a', tomorrow: '#3b82f6', 'day after tomorrow': '#f59e0b',
+    today: '#16a34a', everyday: '#16a34a', tomorrow: '#3b82f6', 'day after tomorrow': '#f59e0b',
   };
 
   if (flatTasks.length === 0) {
@@ -1832,11 +1849,15 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
     // Sum hours + count for today + everyday tasks only, excluding closed/n/a
     const todayFiltered = myTasks.filter(r => { const b = getBucket(r); return (b === 'today' || b === 'everyday') && !NON_PENDING.includes(getStatus(r)); });
     const todayHours = todayFiltered.reduce((sum, r) => sum + parseHours(getTimeEst(r)), 0);
+    // The same load as Tasks Assigned's bandwidth: every Today / Everyday task that is not closed (submitted ones
+    // included), each as the larger of its estimate and the time logged on it. PPC / SEO keep the plain estimates.
+    const loadTasks = usesLoggedTimeRule(name)
+      ? myTasks.filter(r => { const b = getBucket(r); return (b === 'today' || b === 'everyday') && !['task closed', 'n/a', ''].includes(getStatus(r)); })
+      : todayFiltered;
     const todayLoadHours = usesLoggedTimeRule(name)
-      ? myTasks
-          .filter(r => { const b = getBucket(r); return (b === 'today' || b === 'everyday') && !['task closed', 'n/a', ''].includes(getStatus(r)); })
-          .reduce((sum, r) => sum + webTaskLoad(parseHours(getTimeEst(r)), parseHours(getTimeLogged(r))), 0)
-      : todayHours;
+      ? loadTasks.reduce((sum, r) => sum + webTaskLoad(parseHours(getTimeEst(r)), parseHours(getTimeLogged(r))), 0)
+      : todayFiltered.reduce((sum, r) => sum + monthlyTaskLoad(parseHours(getTimeEst(r)), parseHours(getTotalHoursVal(r))), 0);
+    const todayLoadTasks = loadTasks.length;
     const todayTasks = todayFiltered.length;
 
     const inProgressTask = myTasks.find(r => getStatus(r) === 'in progress');
@@ -1855,13 +1876,15 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
         actionTakenToday: getActionTaken(r), performanceSignal: getPerformanceSignal(r),
         blocker: getBlocker(r), nextSteps: getNextSteps(r), deadline: getDeadline(r),
         _raw: r,
-      }));
+      }))
+      // by Task Daily Bucket (a stable sort: tasks in the same bucket keep their order)
+      .sort((a, b) => bucketRank(a.bucket) - bucketRank(b.bucket));
     // Each card lists the first 20; a task someone just clicked a notification for is always included
     const top = pendingTasks.slice(0, 20);
     const focused = focusTaskId ? pendingTasks.slice(20).filter(t => String(t._raw['__id'] ?? '') === focusTaskId) : [];
     pendingTasks = [...top, ...focused];
 
-    return { name, department, activeProject, activeTasks, onHoldTasks, pendingPM, toBeStarted, testingTasks, totalHours, todayHours, todayLoadHours, todayTasks, pendingTasks };
+    return { name, department, activeProject, activeTasks, onHoldTasks, pendingPM, toBeStarted, testingTasks, totalHours, todayHours, todayLoadHours, todayLoadTasks, todayTasks, pendingTasks };
   }).filter(r => r.totalHours > 0 || r.activeTasks + r.onHoldTasks + r.pendingPM + r.toBeStarted + r.testingTasks > 0
       || r.pendingTasks.some(t => isOwnTask(t._raw) || (!!focusTaskId && String(t._raw['__id'] ?? '') === focusTaskId)))
     .sort((a, b) => (b.activeTasks + b.onHoldTasks) - (a.activeTasks + a.onHoldTasks));
@@ -1920,19 +1943,21 @@ export function ResourceOverview({ data, headers, availData = [], availHeaders =
         const activeProject = myTasks.find(t => t.status.toLowerCase() === 'in progress')?.project || row.activeProject;
         const todayFiltered = myTasks.filter(r => { const b = r.bucket.toLowerCase(); return (b === 'today' || b === 'everyday') && !NON_PENDING.includes(r.status.trim().toLowerCase()); });
         const todayHours = todayFiltered.reduce((sum, r) => sum + parseHours(r.timeEst), 0);
+        const loadTasks = usesLoggedTimeRule(row.name)
+          ? myTasks.filter(r => { const b = r.bucket.toLowerCase(); return (b === 'today' || b === 'everyday') && !['task closed', 'n/a', ''].includes(r.status.trim().toLowerCase()); })
+          : todayFiltered;
         const todayLoadHours = usesLoggedTimeRule(row.name)
-          ? myTasks
-              .filter(r => { const b = r.bucket.toLowerCase(); return (b === 'today' || b === 'everyday') && !['task closed', 'n/a', ''].includes(r.status.trim().toLowerCase()); })
-              .reduce((sum, r) => sum + webTaskLoad(parseHours(r.timeEst), parseHours(r.timeLogged)), 0)
-          : todayHours;
+          ? loadTasks.reduce((sum, r) => sum + webTaskLoad(parseHours(r.timeEst), parseHours(r.timeLogged)), 0)
+          : todayFiltered.reduce((sum, r) => sum + monthlyTaskLoad(parseHours(r.timeEst), parseHours(r.totalHoursVal)), 0);
+        const todayLoadTasks = loadTasks.length;
         const todayTasks = todayFiltered.length;
-        return { ...row, pendingTasks: myTasks, activeTasks, onHoldTasks, pendingPM, toBeStarted, activeProject, todayHours, todayLoadHours, todayTasks };
+        return { ...row, pendingTasks: myTasks, activeTasks, onHoldTasks, pendingPM, toBeStarted, activeProject, todayHours, todayLoadHours, todayLoadTasks, todayTasks };
       }).filter(row => row.pendingTasks.length > 0)
     : rows;
 
   // Task Daily Bucket / PM Status dropdown options. Buckets come from the data
   // (shown in the usual order, then anything unexpected); PM Status is the fixed list.
-  const BUCKET_ORDER = ['today', 'everyday', 'tomorrow', 'day after tomorrow', 'no action taken', 'submitted', 'to be expected'];
+  const BUCKET_ORDER = [...BUCKET_SORT_ORDER, 'no action taken'];
   const titleCase = (v: string) => v.replace(/\b\w/g, c => c.toUpperCase());
   const bucketOptions = [...new Set(rows.flatMap(r => r.pendingTasks.map(t => t.bucket.toLowerCase())).filter(Boolean))]
     .sort((a, b) => {
@@ -2463,7 +2488,7 @@ function PmTasksTable({ data, personName, projectCol, taskCol, taskUrlCol, timeE
     return l;
   };
   const bucketColors: Record<string, string> = {
-    today: '#16a34a', tomorrow: '#3b82f6', 'day after tomorrow': '#f59e0b',
+    today: '#16a34a', everyday: '#16a34a', tomorrow: '#3b82f6', 'day after tomorrow': '#f59e0b',
   };
   const pmColor: Record<string,string> = {
     'approved': '#16a34a', 'submitted to client': '#6d28d9',
@@ -2959,7 +2984,9 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
     // e.g. a Today task and nothing for Tomorrow would show "0 Tasks" on the
     // Tomorrow tab while the badge still read "Partially Occupied" from
     // stale Today hours.
-    const displayHours = tabTasks.reduce((s, r) => s + getTime(r), 0);
+    const displayHours = isMonthlyBlock
+      ? tabTasks.reduce((s, r) => s + monthlyTaskLoad(getTime(r), parseHours(getTotalHoursVal2(r))), 0)
+      : tabTasks.reduce((s, r) => s + getTime(r), 0);
     const loadHours = usesLoggedTimeRule(name) ? tabTasks.reduce((s, r) => s + webTaskLoad(getTime(r), getLogged(r)), 0) : displayHours;
     const tabHours = displayHours;
     const tabCount = tabTasks.length;
@@ -3302,7 +3329,9 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
     // counting toward someone's workload.
     const SUBMITTED_STATUSES = ['submitted to client', 'submitted to pm', 'submitted to akash', 'submitted to web admin', 'submitted to admin'];
     const activeTasks = todayTasks.filter(r => !SUBMITTED_STATUSES.includes(getStatus(r)));
-    const displayHours = activeTasks.reduce((s, r) => s + getTime(r), 0);
+    const displayHours = isMonthlyBlock
+      ? activeTasks.reduce((s, r) => s + monthlyTaskLoad(getTime(r), parseHours(getTotalHours(r))), 0)
+      : activeTasks.reduce((s, r) => s + getTime(r), 0);
     const loadHours = usesLoggedTimeRule(name) ? todayTasks.reduce((s, r) => s + webTaskLoad(getTime(r), getLogged(r)), 0) : displayHours;
 
     let onLeave = false;
@@ -3568,7 +3597,11 @@ export function MyWorkloadSummary({ sheet1Data, sheet1Headers, availData, availH
   });
   const SUBMITTED_STATUSES = ['submitted to client', 'submitted to pm', 'submitted to akash', 'submitted to web admin', 'submitted to admin'];
   const activeTasks = todayTasks.filter(r => !SUBMITTED_STATUSES.includes(getStatus(r).toLowerCase()));
-  const displayHours = activeTasks.reduce((s, r) => s + getTime(r), 0);
+  const totalHoursCol = findTotalHoursCol(sheet1Headers);
+  const getTotalSpent = (r: SheetData) => totalHoursCol ? parseHours(String(r[totalHoursCol] ?? '').trim()) : 0;
+  const displayHours = isMonthlyBlock
+    ? activeTasks.reduce((s, r) => s + monthlyTaskLoad(getTime(r), getTotalSpent(r)), 0)
+    : activeTasks.reduce((s, r) => s + getTime(r), 0);
   const loadHours = usesLoggedTimeRule(personName) ? todayTasks.reduce((s, r) => s + webTaskLoad(getTime(r), getLogged(r)), 0) : displayHours;
 
   let onLeave = false;
@@ -3677,6 +3710,8 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
   const getTime   = (r: SheetData) => timeEstCol ? parseHours(String(r[timeEstCol] ?? '').trim()) : 0;
   const timeLoggedCol = findCol(sheet1Headers, 'time logged');
   const getLogged = (r: SheetData) => timeLoggedCol ? parseHours(String(r[timeLoggedCol] ?? '').trim()) : 0;
+  const totalHoursCol = findTotalHoursCol(sheet1Headers);
+  const getTotalSpent = (r: SheetData) => totalHoursCol ? parseHours(String(r[totalHoursCol] ?? '').trim()) : 0;
   const getStatus = (r: SheetData) => statusCol  ? String(r[statusCol]  ?? '').trim().toLowerCase() : '';
 
   const names = fullRosterFor([...new Set(sheet1Data.map(r => String(r[resourceCol] ?? '').trim()).filter(Boolean))]);
@@ -3688,8 +3723,10 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
     // with the resource; the load (bar and bandwidth) counts every one of them.
     const todayTasksOf = sheet1Data
       .filter(r => String(r[resourceCol] ?? '').trim() === name && ['today', 'everyday'].includes(getBucket(r)) && !SKIP_STATUSES.includes(getStatus(r)));
-    const displayHours = todayTasksOf.filter(r => !HANDED_OFF_STATUSES.includes(getStatus(r))).reduce((s, r) => s + getTime(r), 0);
-    const loadHours = usesLoggedTimeRule(name) ? todayTasksOf.reduce((s, r) => s + webTaskLoad(getTime(r), getLogged(r)), 0) : displayHours;
+    // Web and SMM: see webTaskLoad. PPC and SEO: each task not yet handed on counts its estimate minus its Total Hours.
+    const loadHours = usesLoggedTimeRule(name)
+      ? todayTasksOf.reduce((s, r) => s + webTaskLoad(getTime(r), getLogged(r)), 0)
+      : todayTasksOf.filter(r => !HANDED_OFF_STATUSES.includes(getStatus(r))).reduce((s, r) => s + monthlyTaskLoad(getTime(r), getTotalSpent(r)), 0);
 
     let onLeave = false;
     let leaveDeduction = 0;
@@ -3772,6 +3809,7 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
   const getHours   = (r: SheetData) => timeEstCol  ? parseHours(String(r[timeEstCol] ?? '').trim()) : 0;
   const timeLoggedCol = findCol(sheet1Headers, 'time logged');
   const getLogged  = (r: SheetData) => timeLoggedCol ? parseHours(String(r[timeLoggedCol] ?? '').trim()) : 0;
+  const totalHoursCol = findTotalHoursCol(sheet1Headers);
   const getPerson  = (r: SheetData) => resourceCol ? String(r[resourceCol] ?? '').trim() : '';
 
   // ── Team Current State ──
@@ -3836,7 +3874,7 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
     // Web and SMM: see webTaskLoad (submitted tasks count too); PPC / SEO: the plain estimate of tasks not yet submitted
     const hours = usesLoggedTimeRule(name)
       ? todayOf.reduce((s, r) => s + webTaskLoad(getHours(r), getLogged(r)), 0)
-      : todayOf.filter(r => !HANDED_OFF_STATUSES.includes(getStatus(r))).reduce((s, r) => s + getHours(r), 0);
+      : todayOf.filter(r => !HANDED_OFF_STATUSES.includes(getStatus(r))).reduce((s, r) => s + monthlyTaskLoad(getHours(r), totalHoursCol ? parseHours(String(r[totalHoursCol] ?? '').trim()) : 0), 0);
     let leaveDeduction = 0;
     if (availData && availNameCol && availStatusCol) {
       const av = availData.find(r => String(r[availNameCol] ?? '').trim().toLowerCase() === name.toLowerCase());

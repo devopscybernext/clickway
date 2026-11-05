@@ -200,6 +200,37 @@ export async function deleteRow(sheetId: string, tab: string, row: number, actor
   }
 }
 
+// Removes several rows at once, all in one transaction (either every one goes or none). Each row's
+// content is kept in change_log, as for a single delete. Rows that are already gone are skipped;
+// returns how many were removed.
+export async function deleteRows(sheetId: string, tab: string, rows: number[], actor: string): Promise<number> {
+  const ds = datasetFor(sheetId, tab);
+  if (rows.length === 0) return 0;
+  const conn = await getPool().getConnection();
+  try {
+    await conn.beginTransaction();
+    const [found] = await conn.query<mysql.RowDataPacket[][]>({
+      sql: `SELECT id, ${cols(ds).join(', ')} FROM ${q(ds.table)} WHERE id IN (?) AND sheet_id = ? AND sheet_tab = ? FOR UPDATE`,
+      rowsAsArray: true,
+    }, [rows, sheetId, tab]);
+    if (found.length > 0) {
+      const ids = found.map(r => Number(r[0]));
+      await conn.query(`DELETE FROM ${q(ds.table)} WHERE id IN (?)`, [ids]);
+      await conn.query(
+        'INSERT INTO change_log (changed_by, table_name, row_id, column_name, old_value, new_value) VALUES ?',
+        [found.map(r => [actor, ds.table, Number(r[0]), 'Row deleted', JSON.stringify(Object.fromEntries(ds.headers.map((h, i) => [h, r[i + 1] ?? '']))), null])]
+      );
+    }
+    await conn.commit();
+    return found.length;
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
 // ─── Schema ─────────────────────────────────────────────────────────────────
 // Tables are generated from lib/data/datasets.ts, so the registry is the one
 // place a column is added. Every data column is TEXT holding the cell exactly

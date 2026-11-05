@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySession, COOKIE_NAME } from '@/lib/session';
-import { fetchSheetData, duplicateSheetRow, deleteSheetRow, DataError } from '@/lib/dataStore';
+import { fetchSheetData, duplicateSheetRow, deleteSheetRow, deleteSheetRows, DataError } from '@/lib/dataStore';
 import { findDataset } from '@/lib/data/datasets';
 import { isAdminTierRole, isPmTierRole, canDeletePmProjects, Role } from '@/lib/auth';
 import { formatTimestamp, DateOrder } from '@/lib/forms';
@@ -22,6 +22,7 @@ function mayChangeRows(role: Role, table: string): boolean {
   if (table === 'pm_projects') return isPmTierRole(role);
   return false;
 }
+const MAX_DELETE_ROWS = 500;
 const ORDER: Record<string, DateOrder> = { web_tasks: 'dmy', marketing_tasks: 'mdy', pm_projects: 'mdy' };
 
 export async function POST(req: NextRequest) {
@@ -30,11 +31,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { action, spreadsheetId, sheetName, row } = await req.json().catch(() => ({})) as {
-    action?: string; spreadsheetId?: string; sheetName?: string; row?: number;
+  const { action, spreadsheetId, sheetName, row, rows } = await req.json().catch(() => ({})) as {
+    action?: string; spreadsheetId?: string; sheetName?: string; row?: number; rows?: unknown;
   };
-  if ((action !== 'duplicate' && action !== 'delete') || !spreadsheetId || !sheetName || !row || row < 1) {
+  // delete also takes `rows` (several at once, up to MAX_DELETE_ROWS) instead of one `row`
+  const many = action === 'delete' && Array.isArray(rows)
+    ? [...new Set(rows.map(Number).filter(n => Number.isInteger(n) && n >= 1))]
+    : null;
+  if ((action !== 'duplicate' && action !== 'delete') || !spreadsheetId || !sheetName || (many ? many.length === 0 : (!row || row < 1))) {
     return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
+  }
+  if (many && many.length > MAX_DELETE_ROWS) {
+    return NextResponse.json({ success: false, error: `Delete at most ${MAX_DELETE_ROWS} rows at a time` }, { status: 400 });
   }
   const ds = findDataset(spreadsheetId, sheetName);
   if (!ds || !mayChangeRows(user.role, ds.table) || (ds.table === 'pm_projects' && action === 'delete' && !canDeletePmProjects(user.role))) {
@@ -45,13 +53,19 @@ export async function POST(req: NextRequest) {
     // A PM may only change their own projects
     if (ds.table === 'pm_projects' && !isAdminTierRole(user.role)) {
       const { data } = await fetchSheetData(spreadsheetId, `'${sheetName}'!A1:Z10000`);
-      const target = data.find(r => Number(r.__row) === Number(row));
-      const owner = String(target?.['Email Address'] ?? '').trim().toLowerCase();
-      if (!target || !user.email || owner !== user.email.trim().toLowerCase()) {
-        return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+      for (const id of many ?? [Number(row)]) {
+        const target = data.find(r => Number(r.__row) === id);
+        const owner = String(target?.['Email Address'] ?? '').trim().toLowerCase();
+        if (!target || !user.email || owner !== user.email.trim().toLowerCase()) {
+          return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+        }
       }
     }
 
+    if (many) {
+      const deleted = await deleteSheetRows(spreadsheetId, sheetName, many, user.username);
+      return NextResponse.json({ success: true, deleted });
+    }
     if (action === 'delete') {
       await deleteSheetRow(spreadsheetId, sheetName, Number(row), user.username);
       return NextResponse.json({ success: true });

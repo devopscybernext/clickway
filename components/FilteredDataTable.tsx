@@ -1,12 +1,15 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronDown as ChevDown, ChevronLeft, ChevronRight, Copy, Check, Pencil, Send } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronDown as ChevDown, ChevronLeft, ChevronRight, Copy, Check, Pencil, Send, Eye } from 'lucide-react';
 import { SheetData } from '@/lib/dataStore';
 import { pmRowTint } from '@/lib/pmRowTint';
 import RowActions from './RowActions';
+import BulkDeleteBar, { SelectBox, useRowSelection } from './BulkDelete';
+import TaskDetailsModal from './TaskDetailsModal';
 import { totalTimeRow, totalRowHtml, totalRowText } from '@/lib/copyTotals';
 import { flashRow } from '@/lib/flashRow';
+import { PM_STATUS_COLORS } from '@/lib/pmStatusColors';
 import { STATUS_COLORS, formatHHMM, displayHHMM, toHM, DURATION_HOUR_OPTIONS, DURATION_MINUTE_OPTIONS, hhmmToDecimalHours, addLoggedToTotal } from './SpecificCharts';
 
 const PAGE_SIZE = 30;
@@ -397,15 +400,6 @@ function AssignedPersonSelect({ value, options, row, col, onStatusChange }: Omit
 
 // ─── PM Status Select ─────────────────────────────────────────────────────────
 const PM_STATUS_OPTIONS = ['No Action Taken', 'Changes', 'Approved', 'Submitted To Client', 'TicketClosed'];
-const PM_STATUS_COLORS: Record<string, string> = {
-  'no action taken':     '#6b7280',
-  'n/a':                 '#6b7280',
-  'rework':              '#dc2626',
-  'approved':            '#16a34a',
-  'submitted to client': '#6d28d9',
-  'changes':             '#dc2626',
-  'ticketclosed':        '#7c3aed',
-};
 // Per-status text colors (defaults to white if not listed)
 const PM_STATUS_TEXT_COLORS: Record<string, string> = {};
 
@@ -693,6 +687,10 @@ interface Props {
   canManageRows?: boolean;
   onDuplicateRow?: (row: SheetData) => Promise<void>;
   onDeleteRow?: (row: SheetData) => Promise<void>;
+  // Delete several rows at once (tick boxes + Delete selected, while Edit is on)
+  onDeleteRows?: (rows: SheetData[]) => Promise<void>;
+  // Tasks Assigned: an eye icon (or a click on the row) opens the task's full details in a popup, while not editing
+  detailsPopup?: boolean;
   // A notification was clicked: filter, page and scroll to this row (its __id), and highlight it
   focusRowId?: string | null;
   focusClicks?: number;
@@ -722,7 +720,7 @@ function parseTimestamp(v: string): number {
   return new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s)).getTime();
 }
 
-export default function FilteredDataTable({ data, headers, sheetNum, onStatusChange, readOnlyStatus, readOnlyPmStatus, showCopy, defaultPersonFilter, editPersonBucket, readOnlyBucket, readOnlyAssigned, rowCopy, restrictToBucketEdit, editStatusUpdation, editProjectTask, hiddenCols, onlyColTerms, hiddenFilterTerms, statusOptions, todayBucketSetOptions, assignedPersonOptions, allowPushToAdmin, canManageRows, onDuplicateRow, onDeleteRow, focusRowId, focusClicks = 0 }: Props) {
+export default function FilteredDataTable({ data, headers, sheetNum, onStatusChange, readOnlyStatus, readOnlyPmStatus, showCopy, defaultPersonFilter, editPersonBucket, readOnlyBucket, readOnlyAssigned, rowCopy, restrictToBucketEdit, editStatusUpdation, editProjectTask, hiddenCols, onlyColTerms, hiddenFilterTerms, statusOptions, todayBucketSetOptions, assignedPersonOptions, allowPushToAdmin, canManageRows, onDuplicateRow, onDeleteRow, onDeleteRows, detailsPopup, focusRowId, focusClicks = 0 }: Props) {
   const [copiedRow, setCopiedRow] = useState<string | null>(null);
   const effectiveStatusOptions = statusOptions ?? STATUS_OPTIONS;
   const effectiveStatusOptionsLower = effectiveStatusOptions.map(s => s.toLowerCase());
@@ -972,6 +970,18 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
   const currentPage = Math.min(page, totalPages);
   const pageData = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
+  // Several rows at once: tick boxes while Edit is on. Only ticked rows the filters still show count,
+  // so a row hidden by a filter is never deleted by mistake.
+  const bulk = rowActions && !!onDeleteRows;
+  const [viewRow, setViewRow] = useState<SheetData | null>(null);
+  const canView = !!detailsPopup && !editMode;
+  const { selected, toggle, setMany, clear: clearSelection } = useRowSelection();
+  const rowId = (r: SheetData) => String(r['__id'] ?? r['__row'] ?? '');
+  const selectedRows = useMemo(() => (bulk && editMode ? sorted.filter(r => selected.has(rowId(r))) : []), [bulk, editMode, sorted, selected]);
+  const pageIds = pageData.map(rowId);
+  const pageAllTicked = pageIds.length > 0 && pageIds.every(id => selected.has(id));
+  const pageSomeTicked = pageIds.some(id => selected.has(id));
+
   // A notification was clicked: make sure the task is in the table (clear the filters if they hide it),
   // go to the page it is on, scroll to it and highlight it. The data may still be arriving, so it keeps
   // looking for a few seconds. Reads the latest sorted list through a ref, as the filters change under it.
@@ -1169,7 +1179,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
         <div className="flex items-center gap-2">
           {hasAnyEditPermission && (
             <button
-              onClick={() => setEditMode(m => !m)}
+              onClick={() => { setEditMode(m => !m); clearSelection(); }}
               title={editMode ? 'Stop editing' : 'Edit Task'}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg cursor-pointer transition-all text-xs font-semibold"
               style={editMode
@@ -1241,13 +1251,30 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
         </div>
       )}
 
+      {viewRow && <TaskDetailsModal row={viewRow} headers={headers} onClose={() => setViewRow(null)} />}
+
+      {bulk && editMode && (
+        <BulkDeleteBar
+          count={selectedRows.length} total={sorted.length} noun="task"
+          onSelectAll={() => setMany(sorted.map(rowId), true)}
+          onClear={clearSelection}
+          onDelete={async () => { await onDeleteRows!(selectedRows); clearSelection(); }}
+        />
+      )}
+
       {/* Table */}
       <div style={{ borderColor: 'var(--cn-border)' }} className="overflow-x-auto rounded-md border">
         <table className="w-full text-xs text-left">
           <thead>
             <tr style={{ background: 'var(--cn-bg-input)', borderColor: 'var(--cn-border)' }} className="border-b">
               <th style={{ color: 'var(--cn-text-muted)' }} className="px-4 py-2 font-semibold uppercase tracking-wide text-[10px] w-12">#</th>
+              {canView && <th className="px-2 py-2 w-10" aria-label="View details" />}
               {rowCopy && <th className="px-3 py-2 w-20" />}
+              {bulk && editMode && (
+                <th className="px-3 py-2 w-10">
+                  <SelectBox label="Select all rows on this page" checked={pageAllTicked} indeterminate={pageSomeTicked} onChange={on => setMany(pageIds, on)} />
+                </th>
+              )}
               {rowActions && editMode && <th className="px-3 py-2 w-24" aria-label="Duplicate or delete" />}
               {visibleHeaders.map(h => (
                 <th
@@ -1273,7 +1300,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
           <tbody>
             {pageData.length === 0 ? (
               <tr>
-                <td colSpan={visibleHeaders.length + 2} style={{ color: 'var(--cn-text-muted)' }} className="text-center py-12">
+                <td colSpan={visibleHeaders.length + 3 + (canView ? 1 : 0)} style={{ color: 'var(--cn-text-muted)' }} className="text-center py-12">
                   No records found
                 </td>
               </tr>
@@ -1297,11 +1324,33 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                       : isToday
                       ? { backgroundColor: 'rgba(34,197,94,0.20)', borderColor: 'rgba(34,197,94,0.15)' }
                       : { backgroundColor: i % 2 === 0 ? 'var(--cn-bg-row-even)' : 'var(--cn-bg-row-odd)', borderColor: 'var(--cn-border-light)' }}
-                    className={`border-b transition-colors hover:bg-[var(--cn-bg-hover)]`}
+                    className={`border-b transition-colors hover:bg-[var(--cn-bg-hover)] ${canView ? 'cursor-pointer' : ''}`}
+                    onClick={canView ? e => { if (!(e.target as HTMLElement).closest('a,button,input,select,textarea,label')) setViewRow(row); } : undefined}
                   >
                     <td style={{ color: 'var(--cn-text-faint)' }} className="px-4 py-2 tabular-nums">
                       {(currentPage - 1) * PAGE_SIZE + i + 1}
                     </td>
+                    {canView && (
+                      <td className="px-2 py-2">
+                        <button
+                          onClick={e => { e.stopPropagation(); setViewRow(row); }}
+                          title="View full details"
+                          aria-label={`View details of ${[row[projectNameHeader ?? ''], row[taskNameHeader ?? '']].map(v => String(v ?? '').trim()).filter(Boolean).join(' — ') || 'this task'}`}
+                          className="w-7 h-7 rounded-lg inline-flex items-center justify-center cursor-pointer transition-colors hover:opacity-80"
+                          style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)', border: '1px solid var(--cn-border)' }}
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    )}
+                    {bulk && editMode && (
+                      <td className="px-3 py-2">
+                        <SelectBox
+                          label={`Select ${[row[projectNameHeader ?? ''], row[taskNameHeader ?? '']].map(v => String(v ?? '').trim()).filter(Boolean).join(' — ') || 'this task'}`}
+                          checked={selected.has(rowId(row))} onChange={() => toggle(rowId(row))}
+                        />
+                      </td>
+                    )}
                     {rowActions && editMode && (
                       <td className="px-3 py-2">
                         <RowActions

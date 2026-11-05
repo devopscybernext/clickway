@@ -31,6 +31,10 @@ export function duplicateSheetRow(
 export function deleteSheetRow(sheetId: string, tab: string, row: number, actor: string): Promise<void> {
   return db.deleteRow(sheetId, tab, row, actor);
 }
+// Several rows in one go (one transaction); returns how many were removed
+export function deleteSheetRows(sheetId: string, tab: string, rows: number[], actor: string): Promise<number> {
+  return db.deleteRows(sheetId, tab, rows, actor);
+}
 
 // Writes one cell. row is the __row handle (the row's MySQL id) a
 // fetchSheetData() row carries; colIndex indexes the headers that same call

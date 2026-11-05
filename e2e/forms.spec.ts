@@ -64,7 +64,7 @@ test('Web "Add Task": required questions are enforced, then the task is saved an
   // Listed in Tasks Assigned with the default filters on, ready to be assigned
   await openPage(page, 'Web', 'Tasks Assigned');
   await searchTasks(page, project);
-  await expect(page.getByRole('cell', { name: project })).toBeVisible();
+  await expect(page.getByRole('cell', { name: project, exact: true })).toBeVisible();
 });
 
 test('Marketing "Add Task": the task is saved in the marketing format and listed', async ({ page }) => {
@@ -94,7 +94,7 @@ test('Marketing "Add Task": the task is saved in the marketing format and listed
 
   await openPage(page, 'Marketing', 'Tasks Assigned');
   await searchTasks(page, task);
-  await expect(page.getByRole('cell', { name: task })).toBeVisible();
+  await expect(page.getByRole('cell', { name: task, exact: true })).toBeVisible();
 });
 
 test('PM "Add New Project": the project is saved and appears in My Projects', async ({ page }) => {
