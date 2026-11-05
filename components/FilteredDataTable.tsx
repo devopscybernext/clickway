@@ -710,7 +710,7 @@ const normalizeBucket = (v: string) => {
   const lower = v.trim().toLowerCase();
   return BUCKET_ALIAS_MAP[lower] ?? lower;
 };
-const TODAY_BUCKET_SET_OPTIONS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'URGENT'];
+const TODAY_BUCKET_SET_OPTIONS = ['No Action Taken', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'URGENT'];
 
 // Sheet timestamps are "DD/MM/YYYY[ HH:MM:SS]" — parse to epoch ms, NaN if unparseable
 function parseTimestamp(v: string): number {
