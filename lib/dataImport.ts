@@ -96,6 +96,15 @@ export function storedDate(raw: string, order: 'dmy' | 'mdy'): { value: string; 
   return { value: out(Number(m[3]), mo, d, time(m[4], m[5], m[6])), ok: true };
 }
 
+// The same date as "YYYY-MM-DD" (what a date input takes); '' when it is not a date
+export function isoDate(raw: string, order: 'dmy' | 'mdy'): string {
+  const v = storedDate(raw, order);
+  const m = v.ok ? v.value.match(/^(\d+)\/(\d+)\/(\d{4})/) : null;
+  if (!m) return '';
+  const [d, mo] = order === 'dmy' ? [m[1], m[2]] : [m[2], m[1]];
+  return `${m[3]}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+}
+
 export interface DataImportSummary {
   newRows: number;
   skipped: { row: number; reason: string }[];

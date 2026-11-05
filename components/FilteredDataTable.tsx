@@ -7,6 +7,7 @@ import { pmRowTint } from '@/lib/pmRowTint';
 import RowActions from './RowActions';
 import BulkDeleteBar, { SelectBox, useRowSelection } from './BulkDelete';
 import TaskDetailsModal from './TaskDetailsModal';
+import EveryColumnCell from './EveryColumnCell';
 import { totalTimeRow, totalRowHtml, totalRowText } from '@/lib/copyTotals';
 import { flashRow } from '@/lib/flashRow';
 import { PM_STATUS_COLORS } from '@/lib/pmStatusColors';
@@ -691,6 +692,8 @@ interface Props {
   onDeleteRows?: (rows: SheetData[]) => Promise<void>;
   // The order the Timestamp column is written in: Web 'dmy', Marketing 'mdy' (used by the Month filter and the newest-first sort)
   dateOrder?: 'dmy' | 'mdy';
+  // Super Admin / HM: while editing, every column that has no editor of its own gets one (see EveryColumnCell)
+  editAllColumns?: boolean;
   // Tasks Assigned: an eye icon (or a click on the row) opens the task's full details in a popup, while not editing
   detailsPopup?: boolean;
   // A notification was clicked: filter, page and scroll to this row (its __id), and highlight it
@@ -746,7 +749,7 @@ const monthLabel = (key: string) => {
   return new Date(y, m - 1, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
 };
 
-export default function FilteredDataTable({ data, headers, sheetNum, onStatusChange, readOnlyStatus, readOnlyPmStatus, showCopy, defaultPersonFilter, editPersonBucket, readOnlyBucket, readOnlyAssigned, rowCopy, restrictToBucketEdit, editStatusUpdation, editProjectTask, hiddenCols, onlyColTerms, hiddenFilterTerms, statusOptions, todayBucketSetOptions, assignedPersonOptions, allowPushToAdmin, canManageRows, onDuplicateRow, onDeleteRow, onDeleteRows, detailsPopup, dateOrder = 'dmy', focusRowId, focusClicks = 0 }: Props) {
+export default function FilteredDataTable({ data, headers, sheetNum, onStatusChange, readOnlyStatus, readOnlyPmStatus, showCopy, defaultPersonFilter, editPersonBucket, readOnlyBucket, readOnlyAssigned, rowCopy, restrictToBucketEdit, editStatusUpdation, editProjectTask, hiddenCols, onlyColTerms, hiddenFilterTerms, statusOptions, todayBucketSetOptions, assignedPersonOptions, allowPushToAdmin, canManageRows, onDuplicateRow, onDeleteRow, onDeleteRows, detailsPopup, dateOrder = 'dmy', editAllColumns, focusRowId, focusClicks = 0 }: Props) {
   const [copiedRow, setCopiedRow] = useState<string | null>(null);
   const effectiveStatusOptions = statusOptions ?? STATUS_OPTIONS;
   const effectiveStatusOptionsLower = effectiveStatusOptions.map(s => s.toLowerCase());
@@ -1446,6 +1449,9 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                       const isTodayBucketSet = h.toLowerCase().includes('today bucket') || h.toLowerCase().includes('bucket set');
                       const isProjectName = h.toLowerCase().includes('project name');
                       const isTaskName = h.toLowerCase().includes('task name') || h.toLowerCase().includes('task title');
+                      // columns with an editor of their own below; the rest get EveryColumnCell for the Super Admin / HM
+                      const hasOwnEditor = isAssigned || isBucket || isTodayBucketSet || isProjectName || isTaskName || isPmStatus || isStatusUpdation || isStatus || isTimeEst || isTotalTimeEst;
+                      const everyColumn = !!editAllColumns && editMode && !!onStatusChange && !hasOwnEditor;
                       const statusColor = (isStatus || isStatusUpdation) ? STATUS_COLORS[val.toLowerCase()] : isPmStatus ? PM_STATUS_COLORS[val.toLowerCase()] : undefined;
                       return (
                         <td
@@ -1453,7 +1459,9 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
                           style={!isStatus && !isStatusUpdation ? { color: 'var(--cn-text-secondary)' } : undefined}
                           className="px-4 py-2 break-words min-w-[120px] max-w-xs"
                         >
-                          {isAssigned && canEditPersonBucket && !readOnlyAssigned && !restrictToBucketEdit && onStatusChange ? (
+                          {everyColumn ? (
+                            <EveryColumnCell column={h} value={val} row={row} onSave={onStatusChange!} personOptions={personOptions} dateOrder={dateOrder} />
+                          ) : isAssigned && canEditPersonBucket && !readOnlyAssigned && !restrictToBucketEdit && onStatusChange ? (
                             <AssignedPersonSelect
                               value={val}
                               options={personOptions}

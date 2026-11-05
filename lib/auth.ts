@@ -92,6 +92,11 @@ export function canViewNotificationLog(role: Role): boolean {
 export function canClearNotifications(role: Role): boolean {
   return HELP_ADMIN_ROLES.includes(role);
 }
+// Tasks Assigned (Web and Marketing): while editing, the Super Admin (Admin) and HM can change every column of a task, not only
+// the usual ones (and their legacy aliases). The page passes it to the table as editAllColumns.
+export function canEditEveryColumn(role: Role): boolean {
+  return INHOUSE_FULL_ROLES.includes(role);
+}
 export function isPmTierRole(role: Role): boolean {
   return PM_TIER_ROLES.includes(role);
 }
