@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronDown as ChevDown, ChevronLeft, ChevronRight, Copy, Check, Pencil, Send, Eye } from 'lucide-react';
 import { SheetData } from '@/lib/dataStore';
 import { pmRowTint } from '@/lib/pmRowTint';
@@ -689,6 +689,8 @@ interface Props {
   onDeleteRow?: (row: SheetData) => Promise<void>;
   // Delete several rows at once (tick boxes + Delete selected, while Edit is on)
   onDeleteRows?: (rows: SheetData[]) => Promise<void>;
+  // The order the Timestamp column is written in: Web 'dmy', Marketing 'mdy' (used by the Month filter and the newest-first sort)
+  dateOrder?: 'dmy' | 'mdy';
   // Tasks Assigned: an eye icon (or a click on the row) opens the task's full details in a popup, while not editing
   detailsPopup?: boolean;
   // A notification was clicked: filter, page and scroll to this row (its __id), and highlight it
@@ -713,14 +715,23 @@ const normalizeBucket = (v: string) => {
 const TODAY_BUCKET_SET_OPTIONS = ['No Action Taken', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'URGENT'];
 
 // Sheet timestamps are "DD/MM/YYYY[ HH:MM:SS]" — parse to epoch ms, NaN if unparseable
-function parseTimestamp(v: string): number {
+// (Web writes DD/MM/YYYY, Marketing M/D/YYYY: `order` says which)
+function parseTimestamp(v: string, order: 'dmy' | 'mdy' = 'dmy'): number {
   const m = v.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}):(\d{2}))?$/);
   if (!m) return NaN;
-  const [, d, mo, y, h = '0', mi = '0', s = '0'] = m;
+  const [, a, b, y, h = '0', mi = '0', s = '0'] = m;
+  const [d, mo] = order === 'dmy' ? [a, b] : [b, a];
   return new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s)).getTime();
 }
 
-export default function FilteredDataTable({ data, headers, sheetNum, onStatusChange, readOnlyStatus, readOnlyPmStatus, showCopy, defaultPersonFilter, editPersonBucket, readOnlyBucket, readOnlyAssigned, rowCopy, restrictToBucketEdit, editStatusUpdation, editProjectTask, hiddenCols, onlyColTerms, hiddenFilterTerms, statusOptions, todayBucketSetOptions, assignedPersonOptions, allowPushToAdmin, canManageRows, onDuplicateRow, onDeleteRow, onDeleteRows, detailsPopup, focusRowId, focusClicks = 0 }: Props) {
+// The Month filter keeps its choices among the other filters under this key; a month is "YYYY-MM"
+const MONTH_KEY = '__month';
+const monthLabel = (key: string) => {
+  const [y, m] = key.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+};
+
+export default function FilteredDataTable({ data, headers, sheetNum, onStatusChange, readOnlyStatus, readOnlyPmStatus, showCopy, defaultPersonFilter, editPersonBucket, readOnlyBucket, readOnlyAssigned, rowCopy, restrictToBucketEdit, editStatusUpdation, editProjectTask, hiddenCols, onlyColTerms, hiddenFilterTerms, statusOptions, todayBucketSetOptions, assignedPersonOptions, allowPushToAdmin, canManageRows, onDuplicateRow, onDeleteRow, onDeleteRows, detailsPopup, dateOrder = 'dmy', focusRowId, focusClicks = 0 }: Props) {
   const [copiedRow, setCopiedRow] = useState<string | null>(null);
   const effectiveStatusOptions = statusOptions ?? STATUS_OPTIONS;
   const effectiveStatusOptionsLower = effectiveStatusOptions.map(s => s.toLowerCase());
@@ -791,6 +802,15 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
     () => headers.find(h => h.toLowerCase().includes('timestamp')),
     [headers]
   );
+
+  // The month ("YYYY-MM") a task was added in, from its Timestamp; '' when there is none
+  const monthOf = useCallback((row: SheetData) => {
+    if (!timestampCol) return '';
+    const ms = parseTimestamp(String(row[timestampCol] ?? ''), dateOrder);
+    if (isNaN(ms)) return '';
+    const d = new Date(ms);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }, [timestampCol, dateOrder]);
 
   const [page, setPage] = useState(1);
   const [sortCol, setSortCol] = useState('');
@@ -920,8 +940,10 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
   }, [filterOptions, defaultsApplied, filterCols, sheetNum, defaultPersonFilter]);
 
   // Apply filters
+  const monthOptions = useMemo(() => [...new Set(filteredData.map(monthOf).filter(Boolean))].sort().reverse(), [filteredData, monthOf]);
   const filtered = useMemo(
     () => filteredData.filter(row =>
+      ((filters[MONTH_KEY] ?? []).length === 0 || (filters[MONTH_KEY] ?? []).includes(monthOf(row))) &&
       filterCols.every(({ term, col }) => {
         const selected = filters[col] ?? [];
         if (selected.length === 0) return true;
@@ -937,7 +959,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
         return selected.includes(cellVal);
       })
     ),
-    [data, filters, filterCols]
+    [data, filters, filterCols, monthOf]
   );
 
   // Sort — default (no column picked) shows newest entries first, by actual
@@ -946,8 +968,8 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
     if (!sortCol) {
       return [...filtered].sort((a, b) => {
         if (timestampCol) {
-          const at = parseTimestamp(String(a[timestampCol] ?? ''));
-          const bt = parseTimestamp(String(b[timestampCol] ?? ''));
+          const at = parseTimestamp(String(a[timestampCol] ?? ''), dateOrder);
+          const bt = parseTimestamp(String(b[timestampCol] ?? ''), dateOrder);
           if (!isNaN(at) && !isNaN(bt)) return bt - at;
           if (!isNaN(bt)) return 1;
           if (!isNaN(at)) return -1;
@@ -1143,6 +1165,17 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
             onChange={vals => handleFilter(col, vals)}
           />
         ))}
+
+        {/* Month the task was added in (from its Timestamp) */}
+        {sheetNum === '1' && monthOptions.length > 0 && (
+          <MultiSelect
+            label="Month"
+            options={monthOptions}
+            selected={filters[MONTH_KEY] ?? []}
+            onChange={vals => handleFilter(MONTH_KEY, vals)}
+            renderOption={monthLabel}
+          />
+        )}
 
         {/* Column picker */}
         <MultiSelect

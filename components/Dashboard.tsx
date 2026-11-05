@@ -1058,6 +1058,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 onDeleteRow={row => changeRow('delete', taskRowSheet(row).id, taskRowSheet(row).tab, row)}
                 onDeleteRows={rows => deleteRows(rows, taskRowSheet)}
                 detailsPopup
+                dateOrder={tasksAssignedTeam === 'marketing' ? 'mdy' : 'dmy'}
               />
             )}
           </section>
