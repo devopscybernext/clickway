@@ -3,7 +3,7 @@ import { verifySession, COOKIE_NAME } from '@/lib/session';
 import { insertRow } from '@/lib/data/mysql';
 import { findDataset } from '@/lib/data/datasets';
 import { isAdminTierRole } from '@/lib/auth';
-import { DATA_IMPORT, DataImportSummary, MAX_IMPORT_ROWS, MAX_CELL, normHeader, storedTime } from '@/lib/dataImport';
+import { DATA_IMPORT, DataImportSummary, MAX_IMPORT_ROWS, MAX_CELL, normHeader, storedTime, storedDate } from '@/lib/dataImport';
 import { formatTimestamp, parseDuration } from '@/lib/forms';
 
 export const runtime = 'nodejs';
@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
 
   const skipped: DataImportSummary['skipped'] = [];
   const badTimes: DataImportSummary['badTimes'] = [];
+  const badDates: DataImportSummary['badDates'] = [];
   const toAdd: Record<string, string>[] = [];
   cells.slice(1).forEach((r, i) => {
     const line = i + 2; // the row number in Excel
@@ -49,6 +50,12 @@ export async function POST(req: NextRequest) {
     const values: Record<string, string> = {};
     mapping.forEach((h, ci) => {
       if (!h || !r[ci]) return;
+      if (def.dateColumns.includes(h)) {
+        const d = storedDate(r[ci], def.dateOrder);
+        values[h] = d.value;
+        if (!d.ok) badDates.push({ row: line, column: h, value: d.value });
+        return;
+      }
       values[h] = def.timeColumns.includes(h) ? storedTime(r[ci]) : r[ci];
     });
     if (!def.required.some(h => values[h])) { skipped.push({ row: line, reason: `no ${def.required.join(' or ')}` }); return; }
@@ -61,7 +68,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'No usable rows found in the sheet.', skipped }, { status: 400 });
   }
 
-  const summary: DataImportSummary = { newRows: toAdd.length, skipped, ignoredColumns, badTimes, sampleNew: toAdd.slice(0, 5) };
+  const summary: DataImportSummary = { newRows: toAdd.length, skipped, ignoredColumns, badTimes, badDates, sampleNew: toAdd.slice(0, 5) };
   if (body.mode === 'preview') return NextResponse.json({ success: true, summary });
 
   let added = 0;

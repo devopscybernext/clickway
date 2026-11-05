@@ -151,7 +151,7 @@ function ImportDialog({ team, label, onClose, onImported }: { team: Team; label:
               <p style={muted}>
                 Use an .xlsx file whose first row holds the column names:{' '}
                 <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{def.headers.join(', ')}</span>.
-                A row needs a {def.required.join(' or ')}. Times are written as HH:MM (for example 02:30). Every row is added as a new task, so
+                A row needs a {def.required.join(' or ')}. Times are written as HH:MM (for example 02:30) and dates as 2026-10-01 or in the team&apos;s own format; a Timestamp left empty is filled in with now. Every row is added as a new task, so
                 uploading the same file twice adds everything twice.
               </p>
               <div className="flex flex-wrap items-center gap-2">
@@ -186,6 +186,12 @@ function ImportDialog({ team, label, onClose, onImported }: { team: Team; label:
                 </ul>
               )}
               {summary.ignoredColumns.length > 0 && <p className="text-xs" style={muted}>Ignored columns: {summary.ignoredColumns.join(', ')}</p>}
+              {summary.badDates.length > 0 && (
+                <p className="text-xs" style={{ color: '#d97706' }}>
+                  {summary.badDates.length} date {summary.badDates.length === 1 ? 'cell is' : 'cells are'} not a date and will be added as typed (a Timestamp like that is listed under &quot;No date&quot; in the Month filter):{' '}
+                  {summary.badDates.slice(0, 3).map(b => `row ${b.row} ${b.column} "${b.value}"`).join('; ')}{summary.badDates.length > 3 ? '…' : ''}
+                </p>
+              )}
               {summary.badTimes.length > 0 && (
                 <p className="text-xs" style={{ color: '#d97706' }}>
                   {summary.badTimes.length} time {summary.badTimes.length === 1 ? 'cell is' : 'cells are'} not HH:MM and will be added as typed:{' '}

@@ -66,3 +66,32 @@ test('Marketing: month-first timestamps land in the right month', async ({ page 
     await query('DELETE FROM marketing_tasks WHERE project_name = ?', [project]);
   }
 });
+
+test('entries whose Timestamp is written another way still land in their month (and none are lost)', async ({ page }) => {
+  const project = uniqueMark('Month Odd');
+  const add = (task: string, ts: string) => query(
+    `INSERT INTO web_tasks (sheet_id, sheet_tab, project_name, task_name, task_daily_bucket, task_status_updation, pm_status, timestamp)
+     VALUES (?, ?, ?, ?, 'No Action Taken', 'No Action Taken', 'No Action Taken', ?)`, [SHEET_IDS['1'], TAB_BANDWIDTH, project, task, ts]);
+  await add('odd iso', '2026-10-15 10:00:00');   // a date straight from an Excel import
+  await add('odd isodate', '2026-10-16');         // date only
+  await add('odd mdy', '10/26/2026 08:00:00');   // month first in the day-first Web table (26 cannot be a month)
+  await add('odd text', 'sometime in October');  // not a date at all
+  try {
+    await login(page, USERS.admin);
+    await openPage(page, 'Web', 'Tasks Assigned');
+    await searchTasks(page, project);
+    await expect(page.getByRole('cell', { name: project, exact: true })).toHaveCount(4);
+
+    await pickMonth(page, 'October 2026');
+    await expect(page.getByRole('cell', { name: project, exact: true })).toHaveCount(3);
+    await expect(page.getByRole('cell', { name: 'odd text', exact: true })).toHaveCount(0);
+
+    // the one with no date is under "No date", not lost
+    await page.getByRole('button', { name: /Clear all/ }).click();
+    await pickMonth(page, 'No date');
+    await expect(page.getByRole('cell', { name: project, exact: true })).toHaveCount(1);
+    await expect(page.getByRole('cell', { name: 'odd text', exact: true })).toBeVisible();
+  } finally {
+    await query('DELETE FROM web_tasks WHERE project_name = ?', [project]);
+  }
+});

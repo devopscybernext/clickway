@@ -716,17 +716,32 @@ const TODAY_BUCKET_SET_OPTIONS = ['No Action Taken', 'P1', 'P2', 'P3', 'P4', 'P5
 
 // Sheet timestamps are "DD/MM/YYYY[ HH:MM:SS]" — parse to epoch ms, NaN if unparseable
 // (Web writes DD/MM/YYYY, Marketing M/D/YYYY: `order` says which)
+// Also read: "YYYY-MM-DD[ HH:MM[:SS]]" (a date straight from an Excel import), and a slash date written the
+// other way round than the table's order when it cannot be read the table's way (e.g. 10/26/2026 in the
+// day-first Web table: 26 is not a month). NaN for anything else.
 function parseTimestamp(v: string, order: 'dmy' | 'mdy' = 'dmy'): number {
-  const m = v.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}):(\d{2}))?$/);
+  const s = v.trim();
+  const valid = (mo: number, d: number) => mo >= 1 && mo <= 12 && d >= 1 && d <= 31;
+  const time = (h?: string, mi?: string, sec?: string) => [Number(h ?? 0), Number(mi ?? 0), Number(sec ?? 0)] as const;
+  const iso = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T\s]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (iso) {
+    const mo = Number(iso[2]), d = Number(iso[3]);
+    return valid(mo, d) ? new Date(Number(iso[1]), mo - 1, d, ...time(iso[4], iso[5], iso[6])).getTime() : NaN;
+  }
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
   if (!m) return NaN;
-  const [, a, b, y, h = '0', mi = '0', s = '0'] = m;
-  const [d, mo] = order === 'dmy' ? [a, b] : [b, a];
-  return new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s)).getTime();
+  let [d, mo] = order === 'dmy' ? [Number(m[1]), Number(m[2])] : [Number(m[2]), Number(m[1])];
+  if (!valid(mo, d)) [d, mo] = [mo, d];
+  if (!valid(mo, d)) return NaN;
+  return new Date(Number(m[3]), mo - 1, d, ...time(m[4], m[5], m[6])).getTime();
 }
 
 // The Month filter keeps its choices among the other filters under this key; a month is "YYYY-MM"
 const MONTH_KEY = '__month';
+// a Timestamp that cannot be read as a date is listed under this choice instead of being left out
+const NO_DATE = 'none';
 const monthLabel = (key: string) => {
+  if (key === NO_DATE) return 'No date';
   const [y, m] = key.split('-').map(Number);
   return new Date(y, m - 1, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
 };
@@ -807,7 +822,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
   const monthOf = useCallback((row: SheetData) => {
     if (!timestampCol) return '';
     const ms = parseTimestamp(String(row[timestampCol] ?? ''), dateOrder);
-    if (isNaN(ms)) return '';
+    if (isNaN(ms)) return NO_DATE;
     const d = new Date(ms);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   }, [timestampCol, dateOrder]);
@@ -940,7 +955,11 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
   }, [filterOptions, defaultsApplied, filterCols, sheetNum, defaultPersonFilter]);
 
   // Apply filters
-  const monthOptions = useMemo(() => [...new Set(filteredData.map(monthOf).filter(Boolean))].sort().reverse(), [filteredData, monthOf]);
+  const monthOptions = useMemo(() => {
+    const keys = [...new Set(filteredData.map(monthOf).filter(Boolean))];
+    // newest month first, then "No date" if some row has none
+    return [...keys.filter(k => k !== NO_DATE).sort().reverse(), ...(keys.includes(NO_DATE) ? [NO_DATE] : [])];
+  }, [filteredData, monthOf]);
   const filtered = useMemo(
     () => filteredData.filter(row =>
       ((filters[MONTH_KEY] ?? []).length === 0 || (filters[MONTH_KEY] ?? []).includes(monthOf(row))) &&

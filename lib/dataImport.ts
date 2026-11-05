@@ -14,6 +14,7 @@ export interface DataImportDef {
   example: string[];  // the template's sample row
   required: string[]; // a row needs at least one of these filled in
   timeColumns: string[]; // read as hours:minutes and stored like every other time cell
+  dateColumns: string[]; // read as dates and stored in the team's own date format
 }
 
 export const DATA_IMPORT: Record<Team, DataImportDef> = {
@@ -32,6 +33,7 @@ export const DATA_IMPORT: Record<Team, DataImportDef> = {
     ],
     required: ['Project Name', 'Task Name'],
     timeColumns: ['Time Estimation', 'Total Time Est', 'Time Logged On Ac', 'Total Time'],
+    dateColumns: ['Timestamp', 'Deadline'],
   },
   marketing: {
     label: 'Marketing Tasks', sheetId: MARKETING_TEAM_SHEET_ID, tab: TAB_MARKETING_TASKS, dateOrder: 'mdy',
@@ -49,6 +51,7 @@ export const DATA_IMPORT: Record<Team, DataImportDef> = {
     ],
     required: ['Project Name', 'Task Name'],
     timeColumns: ['Task Estimation', 'Time Logged On Ac', 'Total Hours'],
+    dateColumns: ['Timestamp', 'Deadline'],
   },
 };
 
@@ -66,10 +69,38 @@ export function storedTime(v: string): string {
   return h > 500 ? v : formatDuration(h, Number(m[2]));
 }
 
+// A date from the sheet -> the way that team writes dates: Web "DD/MM/YYYY[ HH:MM:SS]", Marketing "M/D/YYYY[ H:MM:SS]".
+// An Excel date arrives as "2026-10-01"; "10/26/2026" in the day-first Web table is turned round (26 is not a
+// month). Anything that is not a date is kept as typed, with ok false.
+export function storedDate(raw: string, order: 'dmy' | 'mdy'): { value: string; ok: boolean } {
+  const s = raw.trim();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const valid = (mo: number, d: number) => mo >= 1 && mo <= 12 && d >= 1 && d <= 31;
+  const out = (y: number, mo: number, d: number, t?: [number, number, number]) => {
+    const date = order === 'dmy' ? `${pad(d)}/${pad(mo)}/${y}` : `${mo}/${d}/${y}`;
+    if (!t) return date;
+    return `${date} ${order === 'dmy' ? pad(t[0]) : t[0]}:${pad(t[1])}:${pad(t[2])}`;
+  };
+  const time = (h?: string, mi?: string, sec?: string): [number, number, number] | undefined =>
+    h === undefined ? undefined : [Number(h), Number(mi ?? 0), Number(sec ?? 0)];
+  const iso = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T\s]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (iso) {
+    const mo = Number(iso[2]), d = Number(iso[3]);
+    return valid(mo, d) ? { value: out(Number(iso[1]), mo, d, time(iso[4], iso[5], iso[6])), ok: true } : { value: s, ok: false };
+  }
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (!m) return { value: s, ok: false };
+  let [d, mo] = order === 'dmy' ? [Number(m[1]), Number(m[2])] : [Number(m[2]), Number(m[1])];
+  if (!valid(mo, d)) [d, mo] = [mo, d];
+  if (!valid(mo, d)) return { value: s, ok: false };
+  return { value: out(Number(m[3]), mo, d, time(m[4], m[5], m[6])), ok: true };
+}
+
 export interface DataImportSummary {
   newRows: number;
   skipped: { row: number; reason: string }[];
   ignoredColumns: string[];
   badTimes: { row: number; column: string; value: string }[];
+  badDates: { row: number; column: string; value: string }[]; // not dates: added as typed
   sampleNew: Record<string, string>[];
 }
