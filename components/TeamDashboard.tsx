@@ -1,9 +1,10 @@
 'use client';
 
 import { useMemo } from 'react';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell, Legend } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell, Legend } from 'recharts';
 import { SheetData } from '@/lib/dataStore';
-import { parseTimestamp, startOfDay, startOfMonth, startOfWeek, DAY_MS } from '@/lib/dates';
+import { ENTRY_FORMS } from '@/lib/forms';
+import { parseTimestamp, startOfMonth, startOfWeek, DAY_MS } from '@/lib/dates';
 import { taskInPeriodAt, type PeriodInfo } from '@/lib/period';
 import { PM_STATUS_COLORS } from '@/lib/pmStatusColors';
 import { parseHours, formatHoursClock } from './SpecificCharts';
@@ -75,20 +76,35 @@ function HoursBars({ rows }: { rows: { name: string; est: number; spent: number 
   );
 }
 
-function Donut({ rows }: { rows: { name: string; value: number; color: string }[] }) {
-  const shown = rows.filter(r => r.value > 0);
-  if (shown.length === 0) return <Empty />;
+// A ranked list: the biggest first, each with its count, its share of the whole and a bar to compare them by eye
+function RankedBars({ rows, unit = 'tasks', keepZero = false }: { rows: { name: string; value: number; color: string }[]; unit?: string; keepZero?: boolean }) {
+  const shown = rows.filter(r => keepZero || r.value > 0).sort((x, y) => y.value - x.value);
+  if (shown.length === 0 || shown.every(r => r.value === 0)) return <Empty />;
+  const total = shown.reduce((s, r) => s + r.value, 0);
+  const top = shown[0].value;
   return (
-    <div style={{ height: 240 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie isAnimationActive={false} data={shown} dataKey="value" nameKey="name" innerRadius={50} outerRadius={85} paddingAngle={2} stroke="none">
-            {shown.map(r => <Cell key={r.name} fill={r.color} />)}
-          </Pie>
-          <Tooltip contentStyle={tooltipStyle} />
-          <Legend wrapperStyle={{ fontSize: 11 }} />
-        </PieChart>
-      </ResponsiveContainer>
+    <div className="space-y-3 py-1">
+      <div className="flex h-2.5 rounded-full overflow-hidden" style={{ background: 'var(--cn-bg-input)' }} aria-hidden>
+        {shown.map(r => <div key={r.name} style={{ width: `${(r.value / total) * 100}%`, background: r.color }} />)}
+      </div>
+      <ul className="space-y-2.5">
+        {shown.map(r => (
+          <li key={r.name}>
+            <div className="flex items-baseline justify-between gap-3 text-xs">
+              <span className="flex items-center gap-2 min-w-0">
+                <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: r.color }} />
+                <span data-testid="rank-label" className="truncate font-medium" style={{ color: 'var(--cn-text-primary)' }}>{r.name}</span>
+              </span>
+              <span className="shrink-0 tabular-nums" style={{ color: 'var(--cn-text-muted)' }}>
+                <b style={{ color: 'var(--cn-text-primary)' }}>{r.value}</b> {r.value === 1 ? unit.replace(/s$/, '') : unit} ·{Math.round((r.value / total) * 100)}%
+              </span>
+            </div>
+            <div className="mt-1 h-1.5 rounded-full" style={{ background: 'var(--cn-bg-input)' }}>
+              <div className="h-full rounded-full" style={{ width: `${(r.value / top) * 100}%`, background: r.color }} />
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -128,11 +144,11 @@ export default function TeamDashboard({ team, data, headers, scope, viewerName, 
 
     // tasks added over time, split by whether they are closed now: by day (Today), by week (Weekly), by month (Monthly)
     const starts: number[] = period.kind === 'today'
-      ? Array.from({ length: 7 }, (_, i) => startOfDay(period.from) - (6 - i) * DAY_MS)
+      ? (() => { const d = new Date(period.from); const n = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(); return Array.from({ length: n }, (_, i) => new Date(d.getFullYear(), d.getMonth(), i + 1).getTime()); })()
       : period.kind === 'weekly'
         ? Array.from({ length: 8 }, (_, i) => startOfWeek(now) - (7 - i) * 7 * DAY_MS)
         : Array.from({ length: 6 }, (_, i) => startOfMonth(now, 5 - i));
-    const label = (ms: number) => (period.kind === 'monthly' ? monthShort(ms) : day(ms));
+    const label = (ms: number) => (period.kind === 'monthly' ? monthShort(ms) : period.kind === 'today' ? String(new Date(ms).getDate()) : day(ms));
     const trend = starts.map(s => ({ start: s, label: label(s), open: 0, closed: 0 }));
     for (const t of tasks) {
       if (isNaN(t.added) || t.added < starts[0]) continue;
@@ -156,7 +172,8 @@ export default function TeamDashboard({ team, data, headers, scope, viewerName, 
       return [...m.values()].sort((a, b2) => b2.est + b2.spent - (a.est + a.spent)).slice(0, limit).map(e => ({ ...e, est: +e.est.toFixed(2), spent: +e.spent.toFixed(2) }));
     };
     const palette = ['#3b82f6', '#f59e0b', '#16a34a', '#8b5cf6', '#ec4899', '#06b6d4', '#9ca3af'];
-    const groupCount = new Map<string, number>();
+    // Web: every Team Required option is listed, even before anyone has a task in it
+    const groupCount = new Map<string, number>(team === 'web' ? (ENTRY_FORMS['web-task'].fields.find(f => f.header === 'Team Required')?.options ?? []).map(o => [o, 0] as [string, number]) : []);
     for (const t of inRange) groupCount.set(t.group || 'Not set', (groupCount.get(t.group || 'Not set') ?? 0) + 1);
     const groupRows = [...groupCount.entries()].sort((a, b2) => b2[1] - a[1]).map(([name, value], i) => ({ name, value, color: palette[i % palette.length] }));
 
@@ -167,7 +184,7 @@ export default function TeamDashboard({ team, data, headers, scope, viewerName, 
   const who = scope === 'mine' ? 'My work' : person ?? `${teamName} team`;
   const what = period.kind === 'today' ? "today's tasks (Today and Everyday)"
     : period.kind === 'weekly' ? 'tasks added this week, and the Everyday ones' : 'tasks added this month, and the Everyday ones';
-  const trendTitle = period.kind === 'today' ? 'Tasks added per day (last 7 days)'
+  const trendTitle = period.kind === 'today' ? 'Tasks added per day (current month)'
     : period.kind === 'weekly' ? 'Tasks added per week (last 8 weeks)' : 'Tasks added per month (last 6 months)';
   const topThree = leaderboard.filter(p => p.totalPoints !== 0).slice(0, 3);
 
@@ -195,7 +212,7 @@ export default function TeamDashboard({ team, data, headers, scope, viewerName, 
         </Card>
 
         <Card title="Status of the tasks">
-          <Donut rows={view.statusRows} />
+          <RankedBars rows={view.statusRows} />
         </Card>
 
         <Card title="PM review outcome"
@@ -221,7 +238,7 @@ export default function TeamDashboard({ team, data, headers, scope, viewerName, 
         </Card>
 
         <Card title={team === 'web' ? 'By team required' : 'By department'}>
-          <Donut rows={view.groupRows} />
+          <RankedBars rows={view.groupRows} keepZero />
         </Card>
 
         {scope === 'team' && (

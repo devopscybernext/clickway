@@ -15,7 +15,7 @@ const add = (project: string, task: string, who: string, ts: string, bucket: str
    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'FrontEnd')`,
   [SHEET_IDS['1'], TAB_BANDWIDTH, project, task, who, ts, bucket, status, pm, est]);
 
-const legend = (page: Page, text: string) => page.locator('.recharts-legend-item-text', { hasText: new RegExp(`^${text}$`) });
+const legend = (page: Page, text: string) => page.getByTestId('rank-label').filter({ hasText: new RegExp(`^${text}$`) });
 const period = (page: Page, name: 'Today' | 'Weekly' | 'Monthly') => page.getByRole('tablist', { name: 'Period' }).getByRole('tab', { name }).click();
 
 // A: today, In Progress. B: everyday, Submitted To PM (approved). C: closed. D: tomorrow bucket, On Hold.
@@ -138,4 +138,10 @@ test('Marketing: Project State Bandwidth follows the sub-department tabs', async
   await page.getByRole('button', { name: 'SMM', exact: true }).click();
   await expect.poll(mins).toBeLessThan(all);
   expect(await mins()).toBeLessThan(60 * 7 * 30);   // a handful of 7-hour days, not the 125 h retainers of SEO / PPC
+});
+
+test('Video Editing is a Team Required option: in the chart even with no tasks, and in the editor', async ({ page }) => {
+  await login(page, USERS.admin);
+  await openPage(page, 'Web', 'Dashboard');
+  await expect(page.getByTestId('rank-label').filter({ hasText: /^Video Editing$/ })).toBeVisible();
 });

@@ -109,7 +109,7 @@ export const ENTRY_FORMS: Record<FormKey, EntryFormDef> = {
         'Section Dynamic', 'Blog Post'] },
       { header: 'Task URL', type: 'paragraph', required: true },
       { header: 'Task Priority', type: 'dropdown', required: true, options: ['Urgent', 'High', 'Medium', 'Low'] },
-      { header: 'Team Required', type: 'dropdown', required: true, options: ['UIUX', 'FrontEnd', 'BackEnd', 'QA'] },
+      { header: 'Team Required', type: 'dropdown', required: true, options: ['UIUX', 'FrontEnd', 'BackEnd', 'QA', 'Video Editing'] },
       { header: 'Task Information', type: 'dropdown', options: ['New', 'Running', 'To be expected'] },
       { header: 'Preferred Resource', type: 'dropdown', roster: 'web', options: ['Lovepreet', 'Shubham', 'Dhruv', 'Pawan', 'Robin', 'Akash'] },
       { header: 'Time Estimation', type: 'duration' },
