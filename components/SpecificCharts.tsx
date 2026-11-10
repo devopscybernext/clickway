@@ -3865,7 +3865,7 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
   // this isn't already scoped to one person (personFilter), since expanding
   // a single-person roster would wrongly pull in the whole team.
   const rawRosterNames = resourceCol ? [...new Set(scopedData.map(r => String(r[resourceCol] ?? '').trim()).filter(Boolean))] : [];
-  const rosterNames = personFilter ? rawRosterNames : fullRosterFor(rawRosterNames);
+  const rosterNames = personFilter ? rawRosterNames : fullRosterFor(rawRosterNames).filter(n => !subDept || matchesSubDept(n, subDept));
   const onLeaveCount = (availData && availNameCol && availStatusCol)
     ? rosterNames.filter(name => {
         const av = availData.find(r => String(r[availNameCol] ?? '').trim().toLowerCase() === name.toLowerCase());

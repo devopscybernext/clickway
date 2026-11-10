@@ -124,3 +124,18 @@ test('Marketing Dashboard: no period switch, and picking a person narrows the ch
     await query('DELETE FROM marketing_tasks WHERE project_name = ?', [project]);
   }
 });
+
+// The Project State Bandwidth is the sum of the Team Workload cards shown: choosing SMM / SEO / PPC narrows it
+test('Marketing: Project State Bandwidth follows the sub-department tabs', async ({ page }) => {
+  await login(page, USERS.admin);
+  await openPage(page, 'Marketing', 'Dashboard');
+  const mins = async () => page.evaluate(() => {
+    const m = /BANDWIDTH\s*(\d+):(\d{2})h/i.exec(document.body.innerText.split('TEAM WORKLOAD')[0].replace(/\n+/g, ' ').replace(/\s+/g, ' ').replace(/BANDWIDTH (\d)/i, 'BANDWIDTH $1'));
+    return m ? +m[1] * 60 + +m[2] : -1;
+  });
+  await expect.poll(mins).toBeGreaterThan(0);
+  const all = await mins();
+  await page.getByRole('button', { name: 'SMM', exact: true }).click();
+  await expect.poll(mins).toBeLessThan(all);
+  expect(await mins()).toBeLessThan(60 * 7 * 30);   // a handful of 7-hour days, not the 125 h retainers of SEO / PPC
+});
