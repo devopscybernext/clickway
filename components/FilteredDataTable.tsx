@@ -10,6 +10,7 @@ import TaskDetailsModal from './TaskDetailsModal';
 import EveryColumnCell from './EveryColumnCell';
 import { totalTimeRow, totalRowHtml, totalRowText } from '@/lib/copyTotals';
 import { flashRow } from '@/lib/flashRow';
+import { parseTimestamp } from '@/lib/dates';
 import { PM_STATUS_COLORS } from '@/lib/pmStatusColors';
 import { STATUS_COLORS, formatHHMM, displayHHMM, toHM, DURATION_HOUR_OPTIONS, DURATION_MINUTE_OPTIONS, hhmmToDecimalHours, addLoggedToTotal } from './SpecificCharts';
 
@@ -716,28 +717,6 @@ const normalizeBucket = (v: string) => {
   return BUCKET_ALIAS_MAP[lower] ?? lower;
 };
 const TODAY_BUCKET_SET_OPTIONS = ['No Action Taken', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'URGENT'];
-
-// Sheet timestamps are "DD/MM/YYYY[ HH:MM:SS]" — parse to epoch ms, NaN if unparseable
-// (Web writes DD/MM/YYYY, Marketing M/D/YYYY: `order` says which)
-// Also read: "YYYY-MM-DD[ HH:MM[:SS]]" (a date straight from an Excel import), and a slash date written the
-// other way round than the table's order when it cannot be read the table's way (e.g. 10/26/2026 in the
-// day-first Web table: 26 is not a month). NaN for anything else.
-function parseTimestamp(v: string, order: 'dmy' | 'mdy' = 'dmy'): number {
-  const s = v.trim();
-  const valid = (mo: number, d: number) => mo >= 1 && mo <= 12 && d >= 1 && d <= 31;
-  const time = (h?: string, mi?: string, sec?: string) => [Number(h ?? 0), Number(mi ?? 0), Number(sec ?? 0)] as const;
-  const iso = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T\s]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
-  if (iso) {
-    const mo = Number(iso[2]), d = Number(iso[3]);
-    return valid(mo, d) ? new Date(Number(iso[1]), mo - 1, d, ...time(iso[4], iso[5], iso[6])).getTime() : NaN;
-  }
-  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
-  if (!m) return NaN;
-  let [d, mo] = order === 'dmy' ? [Number(m[1]), Number(m[2])] : [Number(m[2]), Number(m[1])];
-  if (!valid(mo, d)) [d, mo] = [mo, d];
-  if (!valid(mo, d)) return NaN;
-  return new Date(Number(m[3]), mo - 1, d, ...time(m[4], m[5], m[6])).getTime();
-}
 
 // The Month filter keeps its choices among the other filters under this key; a month is "YYYY-MM"
 const MONTH_KEY = '__month';

@@ -1,4 +1,4 @@
-export type SheetId = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | '11' | '12' | '14' | '15' | '16' | '17' | '18' | '19';
+export type SheetId = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | '11' | '12' | '14' | '15' | '16' | '17' | '18' | '19' | '20';
 
 // New role taxonomy (2026 rollout) — kept alongside legacy role slugs so
 // accounts that haven't been migrated in the UserDetails sheet keep working
@@ -137,7 +137,7 @@ export function getLockedTeam(role: Role): Team | undefined {
 //
 // ─── Grouped, collapsible sidebar nav ───────────────────────────────────────
 // The sidebar is sorted by department, each rendered as a collapsible
-// dropdown: Web (Team Bandwidth/Tasks Assigned/Tasks Overview/Leaderboard/
+// dropdown: Web (Dashboard/Tasks Assigned/Tasks Overview/Leaderboard/
 // Add Task), Marketing (same minus Leaderboard — no Marketing scoring system
 // yet), PM Projects (Current Month/Previous Months/My Projects), then
 // standalone Leave Status, then Cybernext InHouse (with Clock Room/Holiday Calendar/AI
@@ -166,38 +166,41 @@ export function isNavParent(item: NavItem): item is NavParent {
 // Sheet '3' used to be the single shared "Dashboard" page with an in-page
 // Web/Marketing toggle; it's now reached only via a team-scoped "Team
 // Bandwidth" leaf per department.
+// Dashboard (id 20) is the first page of each team's menu: a summary of how the team's work is going
+const WEB_DASHBOARD: NavLeaf = { id: '20', team: 'web', label: 'Dashboard' };
 const WEB_FULL: NavLeaf[] = [
-  { id: '3', team: 'web', label: 'Team Bandwidth' },
+  WEB_DASHBOARD,
   { id: '1', team: 'web', label: 'Tasks Assigned' },
   { id: '9', team: 'web', label: 'Tasks Overview' },
   { id: '7', label: 'Leaderboard' },
   { id: '6', team: 'web', label: 'Add Task' },
 ];
 const WEB_NO_TASKS_ASSIGNED: NavLeaf[] = [
-  { id: '3', team: 'web', label: 'Team Bandwidth' },
+  WEB_DASHBOARD,
   { id: '9', team: 'web', label: 'Tasks Overview' },
   { id: '7', label: 'Leaderboard' },
   { id: '6', team: 'web', label: 'Add Task' },
 ];
 const WEB_INDIVIDUAL: NavLeaf[] = [
-  { id: '3', team: 'web', label: 'Team Bandwidth' },
+  WEB_DASHBOARD,
   { id: '9', team: 'web', label: 'Tasks Overview' },
   { id: '7', label: 'Leaderboard' },
 ];
 const WEB_TASKS_OVERVIEW_ONLY: NavLeaf[] = [{ id: '9', team: 'web', label: 'Tasks Overview' }];
+const MARKETING_DASHBOARD: NavLeaf = { id: '20', team: 'marketing', label: 'Dashboard' };
 const MARKETING_FULL: NavLeaf[] = [
-  { id: '3', team: 'marketing', label: 'Team Bandwidth' },
+  MARKETING_DASHBOARD,
   { id: '1', team: 'marketing', label: 'Tasks Assigned' },
   { id: '9', team: 'marketing', label: 'Tasks Overview' },
   { id: '6', team: 'marketing', label: 'Add Task' },
 ];
 const MARKETING_NO_TASKS_ASSIGNED: NavLeaf[] = [
-  { id: '3', team: 'marketing', label: 'Team Bandwidth' },
+  MARKETING_DASHBOARD,
   { id: '9', team: 'marketing', label: 'Tasks Overview' },
   { id: '6', team: 'marketing', label: 'Add Task' },
 ];
 const MARKETING_INDIVIDUAL: NavLeaf[] = [
-  { id: '3', team: 'marketing', label: 'Team Bandwidth' },
+  MARKETING_DASHBOARD,
   { id: '9', team: 'marketing', label: 'Tasks Overview' },
 ];
 const MARKETING_TASKS_OVERVIEW_ONLY: NavLeaf[] = [{ id: '9', team: 'marketing', label: 'Tasks Overview' }];
@@ -361,6 +364,7 @@ export const SHEET_LABELS: Record<SheetId, string> = {
   '17': 'Cybernext InHouse',
   '18': 'Help',
   '19': 'Import Data',
+  '20': 'Dashboard',
 };
 
 export function getSheetLabel(id: SheetId, role: Role): string {

@@ -4,9 +4,9 @@ import { USERS, login, openPage } from './helpers';
 // Every page an admin can reach must load with no failed data request and
 // no script error.
 const ADMIN_PAGES: [string, string?][] = [
-  ['Web', 'Team Bandwidth'], ['Web', 'Tasks Assigned'], ['Web', 'Tasks Overview'], ['Web', 'Leaderboard'],
+  ['Web', 'Dashboard'], ['Web', 'Tasks Assigned'], ['Web', 'Tasks Overview'], ['Web', 'Leaderboard'],
   ['Web', 'Add Task'], ['Web', 'Report'], ['Web', 'Import Data'],
-  ['Marketing', 'Team Bandwidth'], ['Marketing', 'Tasks Assigned'], ['Marketing', 'Tasks Overview'], ['Marketing', 'Add Task'], ['Marketing', 'Report'], ['Marketing', 'Import Data'],
+  ['Marketing', 'Dashboard'], ['Marketing', 'Tasks Assigned'], ['Marketing', 'Tasks Overview'], ['Marketing', 'Add Task'], ['Marketing', 'Report'], ['Marketing', 'Import Data'],
   ['PM Projects', 'Current Month'], ['PM Projects', 'Previous Months'], ['PM Projects', 'Closed Project'],
   ['Leave Status'],
   ['Cybernext InHouse', 'Websites'], ['Cybernext InHouse', 'Case Studies'], ['Cybernext InHouse', 'Brand Kit'],

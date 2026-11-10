@@ -23,6 +23,8 @@ import ClosedProjects from './ClosedProjects';
 import ProjectReport from './ProjectReport';
 import Reports from './Reports';
 import ImportData from './ImportData';
+import TeamDashboard from './TeamDashboard';
+import { periodInfo, PERIOD_LABELS, type Period, type PeriodInfo } from '@/lib/period';
 import type { NotificationItem } from '@/lib/notifications';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import LeaveStatus from './LeaveStatus';
@@ -242,6 +244,7 @@ function TodaysFocusBanner({ data, headers, onNavigate, personFilter, emailFilte
       </div>
     );
   }
+
 
   return (
     <div
@@ -669,6 +672,10 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   // A notification was clicked: open that team's Tasks Overview and jump to the task. The data may be
   // a few minutes old (a task added a moment ago), so it is refreshed first; the page waits for the
   // task to arrive and gives up after a few seconds.
+  // The Today / Weekly / Monthly switch at the top of a team's Dashboard (lib/period.ts)
+  const [dashPeriod, setDashPeriod] = useState<Period>('today');
+  const [dashNow, setDashNow] = useState(() => Date.now());
+  const dashPeriodInfo = periodInfo(navTeam === 'marketing' ? 'today' : dashPeriod, dashNow, navTeam === 'marketing' ? 'mdy' : 'dmy');
   const [focusTask, setFocusTask] = useState<string | null>(null);
   const [focusField, setFocusField] = useState<NotificationItem['type'] | undefined>(undefined);
   // changes on every click, so clicking the same notification again shows its task again
@@ -716,6 +723,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const isInHouse           = selectedSheet === '17';
   const isHelp              = selectedSheet === '18';
   const isImportData        = selectedSheet === '19';
+  const isWebDashboard      = selectedSheet === '20';
 
   // "Add New Project" form — PM-tier users and the admin tier
   // Admin / HM / Mod can add and edit projects too (PMs do on My Projects and can add)
@@ -836,6 +844,131 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     document.documentElement.setAttribute('data-theme', `admin-${base}`);
   }, []);
 
+  // The Team Bandwidth page: greeting, Project State cards, Team Workload cards. Also the top of the Web Dashboard.
+  const renderTeamBandwidth = (period?: PeriodInfo) => (
+      <div className="space-y-4">
+        {/* ── Greeting — full width ── */}
+        <div
+          className="cn-card rounded-lg px-6 py-3 border flex items-center justify-between gap-4"
+          style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
+        >
+          <div>
+            <h2 className="text-xl sm:text-2xl font-bold" style={{ color: 'var(--cn-text-primary)' }}>
+              {(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; })()}, {user.displayName}!
+            </h2>
+            <p className="text-sm mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>
+              {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              {' · '}{isIndividual ? "Here's your personal task overview for today." : "Here's your team overview for today."}
+            </p>
+          </div>
+        </div>
+
+        {/* ── Project State cards — admin + PM + Team Admin ── */}
+        {(isAdmin || isPmTier || isTeamAdmin) && (
+          <InsightCards mode="project-cards"
+                  period={period}
+            sheet1Data={analyticsData}
+            sheet1Headers={analyticsHeaders}
+            availData={analyticsAvailData}
+            availHeaders={analyticsAvailHeaders}
+            subDept={analyticsSubDept}
+            personFilter={selectedMember ?? undefined}
+          />
+        )}
+
+        {/* ── Project State cards — individual contributor (own data only) ── */}
+        {isIndividual && (
+          <InsightCards mode="project-cards"
+                  period={period}
+            sheet1Data={analyticsData}
+            sheet1Headers={analyticsHeaders}
+            personFilter={user.displayName}
+          />
+        )}
+
+        {/* ── My Workload — individual contributor's own badge/gauge/leave
+             flag + today's task list (Web & MarketingTeam only) ── */}
+        {isIndividual && (
+          <MyWorkloadSummary
+            key={`my-workload-${analyticsTeam}`}
+            sheet1Data={analyticsData}
+            sheet1Headers={analyticsHeaders}
+            availData={analyticsAvailData}
+            availHeaders={analyticsAvailHeaders}
+            personName={user.displayName}
+          />
+        )}
+
+        {/* ── Today's Team Workload cards — admin + PM + Team Admin ── */}
+        {(isAdmin || isPmTier || isTeamAdmin) && (
+          <div className="cn-card rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+            <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--cn-border)', background: 'var(--cn-bg-input)' }}>
+              <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>Team Workload</p>
+            </div>
+            <div className="p-4">
+              <TeamWorkloadCards
+                      period={period}
+                key={`team-workload-${analyticsTeam}`}
+                sheet1Data={analyticsData}
+                sheet1Headers={analyticsHeaders}
+                availData={analyticsAvailData}
+                availHeaders={analyticsAvailHeaders}
+                subDept={analyticsSubDept}
+                onSubDeptChange={setAnalyticsSubDept}
+                selectedName={selectedMember}
+                onSelectName={setSelectedMember}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ── Charts ── */}
+        <div className="flex flex-col gap-4">
+            {loading && analyticsTeam === 'web' && !analyticsData.length ? (
+              <div className="animate-pulse space-y-3">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="h-64 rounded-lg" style={{ background: 'var(--cn-bg-input)' }} />
+                ))}
+              </div>
+            ) : !analyticsData.length ? (
+              <div
+                className="cn-card border rounded-lg flex flex-col items-center justify-center gap-3 py-20"
+                style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
+              >
+                <svg className="w-10 h-10 opacity-30" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+                </svg>
+                <p className="text-sm font-medium" style={{ color: 'var(--cn-text-muted)' }}>No chart data available</p>
+                <p className="text-xs" style={{ color: 'var(--cn-text-faint)' }}>Data may still be loading — it refreshes every 5 minutes</p>
+                <button onClick={fetchAll} className="mt-1 px-4 py-1.5 rounded-full text-xs font-semibold transition-all"
+                  style={{ background: 'var(--cn-accent)', color: '#fff', border: 'none', cursor: 'pointer' }}>
+                  Refresh Now
+                </button>
+              </div>
+            ) : (
+              <SpecificCharts
+                key={analyticsTeam}
+                sheet1Data={analyticsData}
+                sheet1Headers={analyticsHeaders}
+                pmView={isPmTier}
+                resourceView={isIndividual}
+                resourceName={user.displayName}
+                isAdmin={isAdmin || isTeamAdmin}
+                availData={analyticsAvailData}
+                availHeaders={analyticsAvailHeaders}
+                onStatusChange={analyticsOnStatusChange}
+                pmStatusColName={analyticsHeaders.find(h => h.toLowerCase().includes('pm status'))}
+                currentUserName={user.displayName}
+                currentUserEmail={user.email}
+                showFilter={isPmTier || isAdmin || isTeamAdmin}
+                hideKpi
+                hideBreakdownCharts
+              />
+            )}
+        </div>
+      </div>
+  );
+
   return (
     <div className="flex min-h-screen" style={{ color: 'var(--cn-text-primary)' }}>
       {/* Fixed gradient backdrop */}
@@ -881,128 +1014,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           )}
 
           {/* Analytics */}
-          {isAnalytics && (() => {
-            return (
-            <div className="space-y-4">
-              {/* ── Greeting — full width ── */}
-              <div
-                className="cn-card rounded-lg px-6 py-3 border flex items-center justify-between gap-4"
-                style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
-              >
-                <div>
-                  <h2 className="text-xl sm:text-2xl font-bold" style={{ color: 'var(--cn-text-primary)' }}>
-                    {(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; })()}, {user.displayName}!
-                  </h2>
-                  <p className="text-sm mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>
-                    {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                    {' · '}{isIndividual ? "Here's your personal task overview for today." : "Here's your team overview for today."}
-                  </p>
-                </div>
-              </div>
-
-              {/* ── Project State cards — admin + PM + Team Admin ── */}
-              {(isAdmin || isPmTier || isTeamAdmin) && (
-                <InsightCards mode="project-cards"
-                  sheet1Data={analyticsData}
-                  sheet1Headers={analyticsHeaders}
-                  availData={analyticsAvailData}
-                  availHeaders={analyticsAvailHeaders}
-                  subDept={analyticsSubDept}
-                  personFilter={selectedMember ?? undefined}
-                />
-              )}
-
-              {/* ── Project State cards — individual contributor (own data only) ── */}
-              {isIndividual && (
-                <InsightCards mode="project-cards"
-                  sheet1Data={analyticsData}
-                  sheet1Headers={analyticsHeaders}
-                  personFilter={user.displayName}
-                />
-              )}
-
-              {/* ── My Workload — individual contributor's own badge/gauge/leave
-                   flag + today's task list (Web & MarketingTeam only) ── */}
-              {isIndividual && (
-                <MyWorkloadSummary
-                  key={`my-workload-${analyticsTeam}`}
-                  sheet1Data={analyticsData}
-                  sheet1Headers={analyticsHeaders}
-                  availData={analyticsAvailData}
-                  availHeaders={analyticsAvailHeaders}
-                  personName={user.displayName}
-                />
-              )}
-
-              {/* ── Today's Team Workload cards — admin + PM + Team Admin ── */}
-              {(isAdmin || isPmTier || isTeamAdmin) && (
-                <div className="cn-card rounded-xl border overflow-hidden" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
-                  <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--cn-border)', background: 'var(--cn-bg-input)' }}>
-                    <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--cn-text-muted)' }}>Team Workload</p>
-                  </div>
-                  <div className="p-4">
-                    <TeamWorkloadCards
-                      key={`team-workload-${analyticsTeam}`}
-                      sheet1Data={analyticsData}
-                      sheet1Headers={analyticsHeaders}
-                      availData={analyticsAvailData}
-                      availHeaders={analyticsAvailHeaders}
-                      subDept={analyticsSubDept}
-                      onSubDeptChange={setAnalyticsSubDept}
-                      selectedName={selectedMember}
-                      onSelectName={setSelectedMember}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* ── Charts ── */}
-              <div className="flex flex-col gap-4">
-                  {loading && analyticsTeam === 'web' && !analyticsData.length ? (
-                    <div className="animate-pulse space-y-3">
-                      {Array.from({ length: 4 }).map((_, i) => (
-                        <div key={i} className="h-64 rounded-lg" style={{ background: 'var(--cn-bg-input)' }} />
-                      ))}
-                    </div>
-                  ) : !analyticsData.length ? (
-                    <div
-                      className="cn-card border rounded-lg flex flex-col items-center justify-center gap-3 py-20"
-                      style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
-                    >
-                      <svg className="w-10 h-10 opacity-30" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-                      </svg>
-                      <p className="text-sm font-medium" style={{ color: 'var(--cn-text-muted)' }}>No chart data available</p>
-                      <p className="text-xs" style={{ color: 'var(--cn-text-faint)' }}>Data may still be loading — it refreshes every 5 minutes</p>
-                      <button onClick={fetchAll} className="mt-1 px-4 py-1.5 rounded-full text-xs font-semibold transition-all"
-                        style={{ background: 'var(--cn-accent)', color: '#fff', border: 'none', cursor: 'pointer' }}>
-                        Refresh Now
-                      </button>
-                    </div>
-                  ) : (
-                    <SpecificCharts
-                      key={analyticsTeam}
-                      sheet1Data={analyticsData}
-                      sheet1Headers={analyticsHeaders}
-                      pmView={isPmTier}
-                      resourceView={isIndividual}
-                      resourceName={user.displayName}
-                      isAdmin={isAdmin || isTeamAdmin}
-                      availData={analyticsAvailData}
-                      availHeaders={analyticsAvailHeaders}
-                      onStatusChange={analyticsOnStatusChange}
-                      pmStatusColName={analyticsHeaders.find(h => h.toLowerCase().includes('pm status'))}
-                      currentUserName={user.displayName}
-                      currentUserEmail={user.email}
-                      showFilter={isPmTier || isAdmin || isTeamAdmin}
-                      hideKpi
-                      hideBreakdownCharts
-                    />
-                  )}
-              </div>
-            </div>
-            );
-          })()}
+          {isAnalytics && renderTeamBandwidth()}
 
           {/* ── Bandwidth Allocation — always mounted to preserve filter state ── */}
           <section
@@ -1179,6 +1191,43 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 />
               )}
             </section>
+          )}
+
+          {/* ── Dashboard (Web): how the team's work is going; a team member sees their own tasks only ── */}
+          {isWebDashboard && (
+            <div className="space-y-4">
+              {/* the period switch drives everything below it */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="font-semibold text-base" style={{ color: 'var(--cn-text-primary)' }}>{navTeam === 'marketing' ? 'Marketing' : 'Web'} Dashboard</h2>
+                {navTeam === 'web' && <div role="tablist" aria-label="Period" className="flex gap-1.5">
+                  {(Object.keys(PERIOD_LABELS) as Period[]).map(k => (
+                    <button key={k} role="tab" aria-selected={dashPeriod === k} onClick={() => { setDashPeriod(k); setDashNow(Date.now()); }}
+                      className="px-4 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all"
+                      style={dashPeriod === k
+                        ? { background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }
+                        : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>
+                      {PERIOD_LABELS[k]}
+                    </button>
+                  ))}
+                </div>}
+              </div>
+              {/* the Team Bandwidth page (greeting, project state, team workload) */}
+              {renderTeamBandwidth(dashPeriodInfo)}
+              {(navTeam === 'marketing' ? marketingTeamData.length === 0 : loading && !bandwidthData.length) ? (
+                <div className="animate-pulse space-y-3">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-24 rounded-lg" style={{ background: 'var(--cn-bg-input)' }} />)}</div>
+              ) : (
+                <TeamDashboard
+                  team={navTeam}
+                  data={navTeam === 'marketing' ? marketingTeamData : [...webBandwidthData, ...webUnassignedData]}
+                  headers={navTeam === 'marketing' ? marketingTeamHeaders : bandwidthHeaders}
+                  scope={isIndividual ? 'mine' : 'team'}
+                  viewerName={user.displayName}
+                  person={selectedMember}
+                  leaderboard={isIndividual ? [] : calcLeaderboard(analyticsData, analyticsHeaders, lbData, 'monthly')}
+                  period={dashPeriodInfo}
+                />
+              )}
+            </div>
           )}
 
           {/* ── Import Data (Web / Marketing; Super Admin, HM, Mod): Excel upload of tasks ── */}

@@ -11,7 +11,8 @@ test('a team member sees only their own pages, and is refused elsewhere', async 
   for (const hidden of ['Marketing', 'PM Projects', 'Leave Status']) {
     await expect(nav.getByRole('button', { name: hidden, exact: true })).toHaveCount(0);
   }
-  if (!(await nav.getByRole('button', { name: 'Team Bandwidth', exact: true }).isVisible())) {
+  // Web's first page is its Dashboard (Team Bandwidth now sits at the top of it)
+  if (!(await nav.getByRole('button', { name: 'Dashboard', exact: true }).isVisible())) {
     await nav.getByRole('button', { name: 'Web', exact: true }).click();
   }
   await expect(nav.getByRole('button', { name: 'Leaderboard', exact: true })).toBeVisible();

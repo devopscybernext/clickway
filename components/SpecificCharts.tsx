@@ -10,6 +10,7 @@ import { SheetData } from '@/lib/dataStore';
 import { pmRowTint } from '@/lib/pmRowTint';
 import { totalTimeRow, totalRowHtml, totalRowText } from '@/lib/copyTotals';
 import { memberColor, MONTHLY_BLOCK_MARKETING_NAMES } from '@/lib/memberColors';
+import { periodCapacity, dailyEquivalent, taskInPeriod, type PeriodInfo } from '@/lib/period';
 import { MARKETING_STATUS_OPTIONS } from '@/lib/config';
 import { inSubDepartment, teamOf, webTeam, marketingTeam, type SubDeptKey } from '@/lib/roster';
 
@@ -3272,9 +3273,11 @@ export function ResourceStatusGrid({ sheet1Data, sheet1Headers, availData, avail
 // card style: avatar/name/status header, then Total + Bandwidth as a
 // two-column stat grid. No click-to-expand, no editing — that's what the
 // standalone Team Bandwidth tab was for, and it's been retired.
-export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availHeaders, subDept: subDeptProp, onSubDeptChange, selectedName: selectedProp, onSelectName }: {
+export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availHeaders, subDept: subDeptProp, onSubDeptChange, selectedName: selectedProp, onSelectName, period }: {
   sheet1Data: SheetData[]; sheet1Headers: string[];
   availData?: SheetData[]; availHeaders?: string[];
+  /** Weekly / Monthly (see lib/period.ts): the tasks of that period against a capacity that grows with it. Left out: today. */
+  period?: PeriodInfo;
   subDept?: SubDept; onSubDeptChange?: (d: SubDept) => void;
   /** One selected person at a time — the rest of the page filters to them. */
   selectedName?: string | null; onSelectName?: (name: string | null) => void;
@@ -3286,6 +3289,7 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
   const openName = selectedProp !== undefined ? selectedProp : localSelected;
   const setOpenName = onSelectName ?? setLocalSelected;
   const resourceCol = findCol(sheet1Headers, 'assigned person', 'assigned to', 'resource');
+  const periodTsCol = findCol(sheet1Headers, 'timestamp');
   const statusCol   = findCol(sheet1Headers, 'task status', 'status');
   const bucketCol   = findCol(sheet1Headers, 'task daily bucket', 'bucket');
   const timeEstCol  = findCol(sheet1Headers, 'time estimation', 'time estimate', 'estimation');
@@ -3317,11 +3321,13 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
   const cards = names.map(name => {
     const myTasks = sheet1Data.filter(r => String(r[resourceCol] ?? '').trim() === name);
     const isMonthlyBlock = MONTHLY_BLOCK_MARKETING_NAMES.has(name.trim().toLowerCase());
-    // Strictly Today/Everyday bucketed tasks, excluding closed/n-a.
+    // Strictly Today/Everyday bucketed tasks, excluding closed/n-a. For a Weekly / Monthly period: the tasks added in it
+    // plus the Everyday ones (same exclusions).
     const todayTasks = myTasks.filter(r => {
       const st = getStatus(r);
       if (SKIP_STATUSES.includes(st)) return false;
       const b = getBucket(r);
+      if (period && period.kind !== 'today') return taskInPeriod(period, b, periodTsCol ? String(r[periodTsCol] ?? '') : '');
       return b === 'today' || b === 'everyday';
     });
     // Tasks/Hours/Status reflect only what's still actively pending — a task
@@ -3347,14 +3353,14 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
 
     const status = onLeave
       ? { label: 'On Leave', bg: '#8b5cf6' }
-      : workloadStatus(loadHours, isMonthlyBlock);
+      : workloadStatus(period ? dailyEquivalent(period, isMonthlyBlock, loadHours) : loadHours, isMonthlyBlock);
 
     // Bandwidth — same "headroom left before Overload"
     // formula as PM Projects, just against this person's own daily (7h)
     // or monthly-retainer (125h) ceiling instead of the PM 450h one. A
     // leave entry knocks its hours off too, so someone on Full Day Leave
     // (or worse) shows 0 instead of their full untouched cap.
-    const cap = isMonthlyBlock ? 125 : 7;
+    const cap = period ? periodCapacity(period, isMonthlyBlock) : (isMonthlyBlock ? 125 : 7);
     const availableHours = Math.max(0, cap - loadHours - leaveDeduction);
 
     // All of this person's tasks for the month, flat — not grouped by
@@ -3778,9 +3784,11 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
 }
 
 // ─── Insight Cards (Resource Health / Project Health / Trends) ────────────────
-export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeaders, mode, personFilter, subDept }: {
+export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeaders, mode, personFilter, subDept, period }: {
   sheet1Data: SheetData[]; sheet1Headers: string[];
   availData?: SheetData[]; availHeaders?: string[];
+  /** Project State cards for a Weekly / Monthly period (see lib/period.ts). Left out: today. */
+  period?: PeriodInfo;
   mode?: 'all' | 'team' | 'project' | 'project-cards';
   personFilter?: string;
   subDept?: SubDept;
@@ -3796,7 +3804,11 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
     if (subDept && subDept !== 'all' && resourceCol && !matchesSubDept(String(r[resourceCol] ?? '').trim(), subDept)) return false;
     return true;
   });
-  const data = filterByDate(scopedData, sheet1Headers, filter);
+  const periodTsCol = findCol(sheet1Headers, 'timestamp');
+  const longPeriod = !!period && period.kind !== 'today';
+  const data = longPeriod
+    ? scopedData.filter(r => taskInPeriod(period!, bucketCol ? String(r[bucketCol] ?? '').trim().toLowerCase() : '', periodTsCol ? String(r[periodTsCol] ?? '') : ''))
+    : filterByDate(scopedData, sheet1Headers, filter);
   if (!sheet1Data.length) return null;
   const timeEstCol  = findCol(sheet1Headers, 'time estimation', 'time estimate', 'estimation');
   const projectCol  = findCol(sheet1Headers, 'project name', 'project');
@@ -3869,6 +3881,7 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
       .filter(r => {
         if (SKIP_STATUSES.includes(getStatus(r))) return false;
         const b = getBucket(r);
+        if (longPeriod) return taskInPeriod(period!, b, periodTsCol ? String(r[periodTsCol] ?? '') : '');
         return b === 'today' || b === 'everyday';
       });
     // Web and SMM: see webTaskLoad (submitted tasks count too); PPC / SEO: the plain estimate of tasks not yet submitted
@@ -3880,7 +3893,7 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
       const av = availData.find(r => String(r[availNameCol] ?? '').trim().toLowerCase() === name.toLowerCase());
       if (av) leaveDeduction = leaveHoursDeduction(String(av[availStatusCol] ?? '').trim());
     }
-    const cap = isMonthlyBlock ? 125 : 7;
+    const cap = period ? periodCapacity(period, isMonthlyBlock) : (isMonthlyBlock ? 125 : 7);
     return sum + Math.max(0, cap - hours - leaveDeduction);
   }, 0);
 
@@ -3922,7 +3935,8 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
   // ── Project Cards (horizontal KPI style) ────────────────────────────────────
   if (mode === 'project-cards') {
     const cards = [
-      { label: 'Today/Everyday Tasks', value: todayCount + everydayCount,       color: '#FE4A23', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
+      { label: longPeriod ? (period!.kind === 'weekly' ? 'Tasks this week' : 'Tasks this month') : 'Today/Everyday Tasks',
+        value: longPeriod ? data.filter(r => !SKIP_STATUSES.includes(getStatus(r))).length : todayCount + everydayCount,       color: '#FE4A23', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
       { label: 'In Progress',          value: inProgressCount,                  color: '#16a34a', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> },
       { label: 'On Hold',              value: onHoldCount,                      color: '#7c3aed', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/></svg> },
       { label: 'Submitted To Admin',   value: submittedAkashCount,              color: '#d97706', icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.84 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.77 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8 8.09a16 16 0 0 0 6 6l1.06-1.06a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg> },
