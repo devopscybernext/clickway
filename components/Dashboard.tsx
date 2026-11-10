@@ -19,6 +19,7 @@ import HolidayCalendar from './HolidayCalendar';
 import AITools from './AITools';
 import Leaderboard, { calcLeaderboard, PersonStats } from './Leaderboard';
 import PMProjectBandwidth from './PMProjectBandwidth';
+import PMDashboard from './PMDashboard';
 import ClosedProjects from './ClosedProjects';
 import ProjectReport from './ProjectReport';
 import Reports from './Reports';
@@ -333,8 +334,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [toolsSubTab, setToolsSubTab] = useState<'clock' | 'holiday' | 'ai'>('clock');
   const [inHouseSubTab, setInHouseSubTab] = useState<InHouseSubTab | 'nextbot'>('websites');
   const [helpSubTab, setHelpSubTab] = useState<HelpSubTab>('apply');
-  const [pmBandwidthSubTab, setPmBandwidthSubTab] = useState<'current' | 'archive' | 'mine' | 'closed'>(
-    firstLeaf.id === '11' && firstLeaf.subTab ? firstLeaf.subTab as 'current' | 'archive' | 'mine' | 'closed' : 'current');
+  const [pmBandwidthSubTab, setPmBandwidthSubTab] = useState<'current' | 'archive' | 'mine' | 'closed' | 'dashboard'>(
+    firstLeaf.id === '11' && firstLeaf.subTab ? firstLeaf.subTab as 'current' | 'archive' | 'mine' | 'closed' | 'dashboard' : 'current');
   const [showAddProjectForm, setShowAddProjectForm] = useState(false);
   // Freeze the page behind the Add New Project popup.
   useBodyScrollLock(showAddProjectForm);
@@ -695,7 +696,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     setFocusTask(null); setFocusField(undefined); // leaving the page ends any "show this task" (openNotification sets it again after)
     setSelectedSheet(leaf.id);
     if (leaf.team) { setNavTeam(leaf.team); setAnalyticsSubDept('all'); }
-    if (leaf.id === '11' && leaf.subTab) setPmBandwidthSubTab(leaf.subTab as 'current' | 'archive' | 'mine' | 'closed');
+    if (leaf.id === '11' && leaf.subTab) setPmBandwidthSubTab(leaf.subTab as 'current' | 'archive' | 'mine' | 'closed' | 'dashboard');
     if (leaf.id === '14' && leaf.subTab) setToolsSubTab(leaf.subTab as 'clock' | 'holiday' | 'ai');
     if (leaf.id === '17' && leaf.subTab) setInHouseSubTab(leaf.subTab as InHouseSubTab | 'nextbot');
     if (leaf.id === '18' && leaf.subTab) setHelpSubTab(leaf.subTab as HelpSubTab);
@@ -1257,7 +1258,17 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           )}
 
           {/* ── PM Project Bandwidth: Current Month / Previous Months / My Projects ── */}
-          {isPmBandwidth && (
+          {isPmBandwidth && effectivePmBandwidthSubTab === 'dashboard' && (
+            <PMDashboard
+              data={pmBandwidthData.filter(r => r['__period'] === 'current')}
+              headers={pmBandwidthHeaders}
+              viewerName={user.displayName}
+              isAdmin={isAdmin}
+              allPmNames={pmUsers.map(u => u.displayName).filter(Boolean)}
+            />
+          )}
+
+          {isPmBandwidth && effectivePmBandwidthSubTab !== 'dashboard' && (
             <section
               className="cn-card rounded-lg border transition-colors"
               style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell, Legend } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
 import { SheetData } from '@/lib/dataStore';
 import { ENTRY_FORMS } from '@/lib/forms';
 import { parseTimestamp, startOfMonth, startOfWeek, DAY_MS } from '@/lib/dates';
@@ -37,7 +37,7 @@ const day = (ms: number) => new Date(ms).toLocaleDateString('en-GB', { day: 'num
 const monthShort = (ms: number) => new Date(ms).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
 const hoursLabel = (h: number) => `${formatHoursClock(h)}h`;
 
-function Card({ title, children, right, className = '' }: { title: string; children: React.ReactNode; right?: React.ReactNode; className?: string }) {
+export function Card({ title, children, right, className = '' }: { title: string; children: React.ReactNode; right?: React.ReactNode; className?: string }) {
   return (
     <section className={`cn-card rounded-lg border p-4 ${className}`} style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
       <div className="flex items-center justify-between gap-3 mb-3">
@@ -49,7 +49,7 @@ function Card({ title, children, right, className = '' }: { title: string; child
   );
 }
 
-const Empty = ({ text = 'Nothing in this period.' }: { text?: string }) => (
+export const Empty = ({ text = 'Nothing in this period.' }: { text?: string }) => (
   <p className="text-sm py-10 text-center" style={{ color: 'var(--cn-text-muted)' }}>{text}</p>
 );
 
@@ -57,7 +57,65 @@ const axisProps = { tick: { fill: 'var(--cn-text-muted)', fontSize: 11 }, stroke
 const tooltipStyle = { background: 'var(--cn-bg-card)', border: '1px solid var(--cn-border)', borderRadius: 8, fontSize: 12, color: 'var(--cn-text-primary)' };
 
 // Estimated against spent hours, horizontal bars (by person, by project)
-function HoursBars({ rows }: { rows: { name: string; est: number; spent: number }[] }) {
+// Big counts as coloured tiles
+export function CountTiles({ rows, cols = 2 }: { rows: { name: string; value: number; color: string }[]; cols?: 2 | 3 }) {
+  const shown = rows.filter(r => r.value > 0);
+  if (shown.length === 0) return <Empty />;
+  return (
+    <div className={`grid ${cols === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-3`}>
+      {shown.map(r => (
+        <div key={r.name} className="rounded-lg border px-3 py-2.5" style={{ background: 'var(--cn-bg-input)', borderColor: 'var(--cn-border)', borderLeft: `4px solid ${r.color}` }}>
+          <p className="text-2xl font-bold tabular-nums leading-none" style={{ color: 'var(--cn-text-primary)' }}>{r.value}</p>
+          <p data-testid="rank-label" className="text-xs font-medium mt-1.5" style={{ color: 'var(--cn-text-muted)' }}>{r.name}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// One column per group, the tallest is the biggest
+export function CountColumns({ rows }: { rows: { name: string; value: number; color: string }[] }) {
+  if (rows.length === 0) return <Empty />;
+  const top = Math.max(1, ...rows.map(r => r.value));
+  return (
+    <div className="flex items-end gap-3 overflow-x-auto pb-1" style={{ minHeight: 230 }}>
+      {rows.map(r => (
+        <div key={r.name} className="flex-1 min-w-[40px] max-w-[130px] flex flex-col items-center justify-end gap-1.5" style={{ height: 230 }}>
+          <span className="text-lg font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{r.value}</span>
+          <div className="w-full rounded-t-md" style={{ height: `${r.value === 0 ? 3 : Math.max(8, (r.value / top) * 160)}px`, background: r.value === 0 ? 'var(--cn-border)' : r.color }} />
+          <span data-testid="rank-label" className="text-[11px] font-medium text-center leading-tight" style={{ color: 'var(--cn-text-muted)' }}>{r.name}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Hours spent against hours estimated, one row each, the share used as a coloured bar (red once over the estimate)
+export function HoursList({ rows }: { rows: { name: string; est: number; spent: number }[] }) {
+  if (rows.length === 0) return <Empty />;
+  return (
+    <ul className="space-y-3.5">
+      {rows.map(r => {
+        const pct = r.est > 0 ? Math.round((r.spent / r.est) * 100) : null;
+        const color = pct === null ? '#6b7280' : pct > 100 ? '#dc2626' : pct >= 75 ? '#f59e0b' : '#16a34a';
+        return (
+          <li key={r.name}>
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-sm font-medium min-w-0" style={{ color: 'var(--cn-text-primary)' }}>{r.name}</span>
+              <span className="text-xs font-bold tabular-nums shrink-0" style={{ color }}>{pct === null ? '' : `${pct}%`}</span>
+            </div>
+            <div className="mt-1 h-2 rounded-full" style={{ background: 'var(--cn-bg-input)' }}>
+              <div className="h-full rounded-full" style={{ width: `${Math.min(100, pct ?? 0)}%`, background: color }} />
+            </div>
+            <p className="mt-0.5 text-[11px] tabular-nums" style={{ color: 'var(--cn-text-muted)' }}>{hoursLabel(r.spent)} spent of {hoursLabel(r.est)} estimated</p>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+export function HoursBars({ rows }: { rows: { name: string; est: number; spent: number }[] }) {
   if (rows.length === 0) return <Empty />;
   return (
     <div style={{ height: Math.max(180, rows.length * 38 + 40) }}>
@@ -77,7 +135,7 @@ function HoursBars({ rows }: { rows: { name: string; est: number; spent: number 
 }
 
 // A ranked list: the biggest first, each with its count, its share of the whole and a bar to compare them by eye
-function RankedBars({ rows, unit = 'tasks', keepZero = false }: { rows: { name: string; value: number; color: string }[]; unit?: string; keepZero?: boolean }) {
+export function RankedBars({ rows, unit = 'tasks', keepZero = false }: { rows: { name: string; value: number; color: string }[]; unit?: string; keepZero?: boolean }) {
   const shown = rows.filter(r => keepZero || r.value > 0).sort((x, y) => y.value - x.value);
   if (shown.length === 0 || shown.every(r => r.value === 0)) return <Empty />;
   const total = shown.reduce((s, r) => s + r.value, 0);
@@ -178,7 +236,7 @@ export default function TeamDashboard({ team, data, headers, scope, viewerName, 
     const groupRows = [...groupCount.entries()].sort((a, b2) => b2[1] - a[1]).map(([name, value], i) => ({ name, value, color: palette[i % palette.length] }));
 
     return { trend, statusRows, pmRows, hasPm: pmRows[0].value + pmRows[1].value > 0, byPerson: sumBy(t => t.person, 8), byProject: sumBy(t => t.project, 8), groupRows };
-  }, [tasks, period]);
+  }, [tasks, period, team]);
 
   const teamName = team === 'web' ? 'Web' : 'Marketing';
   const who = scope === 'mine' ? 'My work' : person ?? `${teamName} team`;
@@ -194,60 +252,49 @@ export default function TeamDashboard({ team, data, headers, scope, viewerName, 
         {who} — {what}
       </h2>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card title={trendTitle}>
-          <div style={{ height: 240 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={view.trend} margin={{ left: -10, right: 8 }}>
-                <CartesianGrid vertical={false} stroke="var(--cn-border)" strokeDasharray="3 3" />
-                <XAxis dataKey="label" {...axisProps} />
-                <YAxis allowDecimals={false} {...axisProps} />
-                <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'rgba(128,128,128,0.08)' }} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar isAnimationActive={false} dataKey="closed" name="Closed now" stackId="w" fill="#6b7280" />
-                <Bar isAnimationActive={false} dataKey="open" name="Still open" stackId="w" fill="#FE4A23" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        <Card title="Status of the tasks">
-          <RankedBars rows={view.statusRows} />
-        </Card>
+      {/* the shape of the work, in one row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+        <Card title="Status of the tasks"><CountTiles rows={view.statusRows} /></Card>
 
         <Card title="PM review outcome"
           right={view.hasPm ? <span className="text-xs font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{view.pmRows[0].value} approved · {view.pmRows[1].value} waiting on changes</span> : undefined}>
           {view.pmRows.every(r => r.value === 0) ? <Empty text="No PM reviews on the tasks of this period yet." /> : (
             <>
-              <div style={{ height: 220 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={view.pmRows} margin={{ left: -10, right: 8 }}>
-                    <CartesianGrid vertical={false} stroke="var(--cn-border)" strokeDasharray="3 3" />
-                    <XAxis dataKey="name" {...axisProps} />
-                    <YAxis allowDecimals={false} {...axisProps} />
-                    <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'rgba(128,128,128,0.08)' }} />
-                    <Bar isAnimationActive={false} dataKey="value" name="Tasks" radius={[3, 3, 0, 0]}>
-                      {view.pmRows.map(r => <Cell key={r.name} fill={r.color} />)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              <p className="text-[11px]" style={{ color: 'var(--cn-text-muted)' }}>The latest PM Status of each task in the period.</p>
+              <CountTiles rows={view.pmRows} />
+              <p className="text-[11px] mt-3" style={{ color: 'var(--cn-text-muted)' }}>The latest PM Status of each task in the period.</p>
             </>
           )}
         </Card>
 
         <Card title={team === 'web' ? 'By team required' : 'By department'}>
-          <RankedBars rows={view.groupRows} keepZero />
+          <CountColumns rows={view.groupRows} />
         </Card>
+      </div>
 
+      {team === 'web' && (
+      <Card title={trendTitle}>
+        <div style={{ height: 240 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={view.trend} margin={{ left: -10, right: 8 }}>
+              <CartesianGrid vertical={false} stroke="var(--cn-border)" strokeDasharray="3 3" />
+              <XAxis dataKey="label" {...axisProps} />
+              <YAxis allowDecimals={false} {...axisProps} />
+              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'rgba(128,128,128,0.08)' }} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Bar isAnimationActive={false} dataKey="closed" name="Closed now" stackId="w" fill="#6b7280" />
+              <Bar isAnimationActive={false} dataKey="open" name="Still open" stackId="w" fill="#FE4A23" radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {scope === 'team' && (
-          <Card title="Hours by person — estimated and spent">
-            <HoursBars rows={view.byPerson} />
-          </Card>
+          <Card title="Hours by person — spent of estimated"><HoursList rows={view.byPerson} /></Card>
         )}
-        <Card title="Top projects — estimated and spent hours" className={scope === 'team' ? '' : 'lg:col-span-2'}>
-          <HoursBars rows={view.byProject} />
+        <Card title="Top projects — spent of estimated" className={scope === 'team' ? '' : 'lg:col-span-2'}>
+          <HoursList rows={view.byProject} />
         </Card>
       </div>
 

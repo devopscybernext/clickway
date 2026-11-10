@@ -207,6 +207,7 @@ const MARKETING_TASKS_OVERVIEW_ONLY: NavLeaf[] = [{ id: '9', team: 'marketing', 
 
 // Admin/HM/Mod don't have their own projects — no "My Projects" view for them.
 const PM_PROJECTS_ADMIN: NavLeaf[] = [
+  { id: '11', subTab: 'dashboard', label: 'Dashboard' },
   { id: '11', subTab: 'current', label: 'Current Month' },
   { id: '11', subTab: 'archive', label: 'Previous Months' },
   { id: '11', subTab: 'closed', label: 'Closed Project' },

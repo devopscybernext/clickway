@@ -77,7 +77,7 @@ test('picking a person in Team Workload narrows the charts to them', async ({ pa
     await login(page, USERS.admin);
     await openPage(page, 'Web', 'Dashboard');
     await period(page, 'Monthly');
-    const axis = () => page.locator('.recharts-wrapper svg text').allTextContents();
+    const axis = () => page.locator('section').filter({ has: page.getByRole('heading', { name: /^Hours by person/ }) }).locator('li > div > span:first-child').allTextContents();
     await expect.poll(async () => { const a = await axis(); return a.includes('Pawan') && a.includes('Dhruv'); }).toBe(true);
     await expect(page.getByRole('heading', { name: /^Web team — .*this month/ })).toBeVisible();
 
@@ -116,7 +116,7 @@ test('Marketing Dashboard: no period switch, and picking a person narrows the ch
     await expect(page.getByRole('heading', { name: 'Marketing Dashboard' })).toBeVisible();
     await expect(page.getByRole('heading', { name: /^Marketing team — today/ })).toBeVisible();
     await expect(page.getByRole('tablist', { name: 'Period' })).toHaveCount(0);
-    const axis = () => page.locator('.recharts-wrapper svg text').allTextContents();
+    const axis = () => page.locator('section').filter({ has: page.getByRole('heading', { name: /^Hours by person/ }) }).locator('li > div > span:first-child').allTextContents();
     await page.getByText('Bhavya', { exact: true }).locator('visible=true').first().click();
     await expect(page.getByRole('heading', { name: /^Bhavya — today/ })).toBeVisible();
     await expect.poll(async () => (await axis()).filter(t => t === 'Bhavya' || t === 'Payal')).toEqual(['Bhavya']);
@@ -144,4 +144,13 @@ test('Video Editing is a Team Required option: in the chart even with no tasks, 
   await login(page, USERS.admin);
   await openPage(page, 'Web', 'Dashboard');
   await expect(page.getByTestId('rank-label').filter({ hasText: /^Video Editing$/ })).toBeVisible();
+});
+
+test('Marketing has no "Tasks added per" chart; Web keeps its own', async ({ page }) => {
+  await login(page, USERS.admin);
+  await openPage(page, 'Marketing', 'Dashboard');
+  await expect(page.getByText('Hours by person')).toBeVisible();
+  await expect(page.getByText(/^Tasks added per/i)).toHaveCount(0);
+  await openPage(page, 'Web', 'Dashboard');
+  await expect(page.getByText(/^Tasks added per/i)).toBeVisible();
 });

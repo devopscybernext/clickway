@@ -47,6 +47,7 @@ test('a PM can add projects and has My Projects', async ({ page }) => {
   const nav = page.getByRole('navigation');
   // PM Projects is where a PM lands, so its pages are already showing (clicking the heading would close it)
   await expect(nav.getByRole('button', { name: 'My Projects', exact: true })).toBeVisible();
+  await nav.getByRole('button', { name: 'Current Month', exact: true }).click();
   await expect(page.getByRole('button', { name: '+ Add New Project' })).toBeVisible();
 
   await nav.getByRole('button', { name: 'Web', exact: true }).click();
@@ -60,6 +61,7 @@ test('an admin has no My Projects, but can add projects', async ({ page }) => {
   // PM Projects is where an admin lands, so its pages are already showing
   await expect(nav.getByRole('button', { name: 'Current Month', exact: true })).toBeVisible();
   await expect(nav.getByRole('button', { name: 'My Projects', exact: true })).toHaveCount(0);
+  await nav.getByRole('button', { name: 'Current Month', exact: true }).click();
   await expect(page.getByRole('button', { name: '+ Add New Project' })).toBeVisible();
   // Allowed, so an empty submission fails validation (422) rather than access (403).
   const form = await page.request.post('/api/forms', { data: { form: 'pm-project', submissionId: randomUUID(), answers: {} } });
