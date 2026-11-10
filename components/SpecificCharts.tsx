@@ -3445,19 +3445,13 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
                     style={{ background: `linear-gradient(135deg, ${bg}cc, ${bg}66)` }}>{initials}</div>
                 )}
                 <p className="text-sm font-semibold truncate min-w-0 flex-1" style={{ color: 'var(--cn-text-primary)' }}>{c.name}</p>
-                <span
-                  className="shrink-0 w-6 h-6 rounded-lg inline-flex items-center justify-center"
-                  style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}
-                >
-                  {openName === c.name ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                </span>
+                <WorkloadBar status={c.status} width={56} />
               </div>
-              <div className="px-3.5 pb-3"><WorkloadBar status={c.status} fill /></div>
               <div className="grid grid-cols-2 gap-px" style={{ background: 'var(--cn-border)', borderTop: '1px solid var(--cn-border)' }}>
                 <div className="flex flex-col gap-1 px-3.5 py-2.5" style={{ background: 'var(--cn-bg-card)' }}>
                   <div className="flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#2563eb' }} />
-                    <span className="text-[9px] font-semibold uppercase tracking-wide leading-tight" style={{ color: 'var(--cn-text-muted)' }}>Assigned</span>
+                    <span className="text-[9px] font-semibold uppercase tracking-wide leading-tight" style={{ color: 'var(--cn-text-muted)' }}>Occupied</span>
                   </div>
                   <span className="text-sm font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{formatHoursClock(c.displayHours)}h</span>
                 </div>

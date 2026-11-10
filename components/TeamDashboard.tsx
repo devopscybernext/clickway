@@ -57,35 +57,31 @@ const axisProps = { tick: { fill: 'var(--cn-text-muted)', fontSize: 11 }, stroke
 const tooltipStyle = { background: 'var(--cn-bg-card)', border: '1px solid var(--cn-border)', borderRadius: 8, fontSize: 12, color: 'var(--cn-text-primary)' };
 
 // Estimated against spent hours, horizontal bars (by person, by project)
-// Big counts as coloured tiles
-export function CountTiles({ rows, cols = 2 }: { rows: { name: string; value: number; color: string }[]; cols?: 2 | 3 }) {
-  const shown = rows.filter(r => r.value > 0);
-  if (shown.length === 0) return <Empty />;
+// Compact cards, all the same height: the name and its count, and a bar for its share of the whole. Only the items
+// that have something in them are shown.
+export function CountCards({ rows: all, emptyText }: { rows: { name: string; value: number; color: string }[]; emptyText?: string }) {
+  const rows = all.filter(r => r.value > 0);
+  const total = rows.reduce((n, r) => n + r.value, 0);
+  if (rows.length === 0) return <Empty text={emptyText} />;
   return (
-    <div className={`grid ${cols === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-3`}>
-      {shown.map(r => (
-        <div key={r.name} className="rounded-lg border px-3 py-2.5" style={{ background: 'var(--cn-bg-input)', borderColor: 'var(--cn-border)', borderLeft: `4px solid ${r.color}` }}>
-          <p className="text-2xl font-bold tabular-nums leading-none" style={{ color: 'var(--cn-text-primary)' }}>{r.value}</p>
-          <p data-testid="rank-label" className="text-xs font-medium mt-1.5" style={{ color: 'var(--cn-text-muted)' }}>{r.name}</p>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// One column per group, the tallest is the biggest
-export function CountColumns({ rows }: { rows: { name: string; value: number; color: string }[] }) {
-  if (rows.length === 0) return <Empty />;
-  const top = Math.max(1, ...rows.map(r => r.value));
-  return (
-    <div className="flex items-end gap-3 overflow-x-auto pb-1" style={{ minHeight: 230 }}>
-      {rows.map(r => (
-        <div key={r.name} className="flex-1 min-w-[40px] max-w-[130px] flex flex-col items-center justify-end gap-1.5" style={{ height: 230 }}>
-          <span className="text-lg font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{r.value}</span>
-          <div className="w-full rounded-t-md" style={{ height: `${r.value === 0 ? 3 : Math.max(8, (r.value / top) * 160)}px`, background: r.value === 0 ? 'var(--cn-border)' : r.color }} />
-          <span data-testid="rank-label" className="text-[11px] font-medium text-center leading-tight" style={{ color: 'var(--cn-text-muted)' }}>{r.name}</span>
-        </div>
-      ))}
+    <div className="grid grid-cols-2 auto-rows-fr gap-2.5">
+      {rows.map(r => {
+        const pct = total > 0 ? (r.value / total) * 100 : 0;
+        return (
+          <div key={r.name} data-testid="rank-card" className="rounded-xl border px-3 py-2.5 flex flex-col justify-between gap-2" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+            <div className="flex items-start justify-between gap-2">
+              <span className="flex items-center gap-2 min-w-0">
+                <span className="w-2 h-2 rounded-full shrink-0 mt-1" style={{ background: r.color }} />
+                <span data-testid="rank-label" className="text-xs font-semibold leading-tight break-words" style={{ color: 'var(--cn-text-primary)' }}>{r.name}</span>
+              </span>
+              <span data-testid="rank-count" className="text-base font-bold tabular-nums leading-none" style={{ color: 'var(--cn-text-primary)' }}>{r.value}</span>
+            </div>
+            <div className="h-1.5 rounded-full" style={{ background: 'var(--cn-bg-input)' }} title={`${Math.round(pct)}% of the total`}>
+              <div className="h-full rounded-full" style={{ width: `${r.value > 0 ? Math.max(4, pct) : 0}%`, background: r.color }} />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -198,7 +194,8 @@ export default function TeamDashboard({ team, data, headers, scope, viewerName, 
 
   const view = useMemo(() => {
     const now = period.from;     // inside the period: the window start is enough to anchor the trend
-    const inRange = tasks.filter(t => taskInPeriodAt(period, t.bucket, t.added));
+    // Marketing has no period switch: its charts show every task that is not closed. Web follows the period.
+    const inRange = team === 'marketing' ? tasks.filter(t => t.status !== 'task closed' && t.status !== 'closed') : tasks.filter(t => taskInPeriodAt(period, t.bucket, t.added));
 
     // tasks added over time, split by whether they are closed now: by day (Today), by week (Weekly), by month (Monthly)
     const starts: number[] = period.kind === 'today'
@@ -240,7 +237,7 @@ export default function TeamDashboard({ team, data, headers, scope, viewerName, 
 
   const teamName = team === 'web' ? 'Web' : 'Marketing';
   const who = scope === 'mine' ? 'My work' : person ?? `${teamName} team`;
-  const what = period.kind === 'today' ? "today's tasks (Today and Everyday)"
+  const what = team === 'marketing' ? 'all tasks that are not closed' : period.kind === 'today' ? "today's tasks (Today and Everyday)"
     : period.kind === 'weekly' ? 'tasks added this week, and the Everyday ones' : 'tasks added this month, and the Everyday ones';
   const trendTitle = period.kind === 'today' ? 'Tasks added per day (current month)'
     : period.kind === 'weekly' ? 'Tasks added per week (last 8 weeks)' : 'Tasks added per month (last 6 months)';
@@ -252,22 +249,18 @@ export default function TeamDashboard({ team, data, headers, scope, viewerName, 
         {who} — {what}
       </h2>
 
-      {/* the shape of the work, in one row */}
+      {/* the shape of the work, in one row, as the same cards the PM Summary uses */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
-        <Card title="Status of the tasks"><CountTiles rows={view.statusRows} /></Card>
+        <Card title="Status of the tasks"><CountCards rows={view.statusRows} /></Card>
 
         <Card title="PM review outcome"
           right={view.hasPm ? <span className="text-xs font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{view.pmRows[0].value} approved · {view.pmRows[1].value} waiting on changes</span> : undefined}>
-          {view.pmRows.every(r => r.value === 0) ? <Empty text="No PM reviews on the tasks of this period yet." /> : (
-            <>
-              <CountTiles rows={view.pmRows} />
-              <p className="text-[11px] mt-3" style={{ color: 'var(--cn-text-muted)' }}>The latest PM Status of each task in the period.</p>
-            </>
-          )}
+          <CountCards rows={view.pmRows} emptyText="No PM reviews on the tasks of this period yet." />
+          <p className="text-[11px] mt-3" style={{ color: 'var(--cn-text-muted)' }}>The latest PM Status of each task in the period.</p>
         </Card>
 
         <Card title={team === 'web' ? 'By team required' : 'By department'}>
-          <CountColumns rows={view.groupRows} />
+          <CountCards rows={view.groupRows} />
         </Card>
       </div>
 

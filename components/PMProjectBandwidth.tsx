@@ -417,14 +417,14 @@ const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'Ju
 // for values outside the current list (older entries, list not updated yet, etc.)
 const DEPARTMENT_OPTIONS = ['Web', 'Marketing'];
 const YEAR_OPTIONS = ['2027', '2026', '2025'];
-const STATUS_OPTIONS = [
+export const STATUS_OPTIONS = [
   'No Action Taken', 'Yet to Start', 'In Progress', 'Initial setup', 'On Going', 'Paused by client',
   'Paused by Cybernext', 'Escalated', 'Completed', 'Submitted - waiting for feedback',
   'Closed: Without feedback', 'Closed: Good Feedback', 'Closed: Bad Feedback', 'Move to Next Month', 'On Hold',
 ];
-const PHASE_OPTIONS = ['No Action Taken', 'Requirement Gathering', 'Design', 'Development', 'QA', 'Deployed', 'Marketing', 'Maintenance', 'Retainer', 'On Hold', 'Completed', 'Design + Dev'];
+export const PHASE_OPTIONS = ['No Action Taken', 'Requirement Gathering', 'Design', 'Development', 'QA', 'Deployed', 'Marketing', 'Maintenance', 'Retainer', 'On Hold', 'Completed', 'Design + Dev'];
 const UPSELL_OPTIONS = ['No Action Taken', 'Upsell', 'Cross-Sell'];
-const PAYMENT_STATUS_OPTIONS = ['No Action Taken', 'Pending', 'Done', 'On Hold', 'QA_Done', 'Not Started Yet', 'In Progress', 'Ongoing', 'Automated Payment', 'Direct Billing'];
+export const PAYMENT_STATUS_OPTIONS = ['No Action Taken', 'Pending', 'Done', 'On Hold', 'QA_Done', 'Not Started Yet', 'In Progress', 'Ongoing', 'Automated Payment', 'Direct Billing'];
 // Everyone who can be assigned to a project: the Web and Marketing teams from the Admin Portal
 const assignedOptions = (): string[] => ['No Action Taken', ...currentRosterNames().all];
 

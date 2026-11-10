@@ -27,8 +27,13 @@ test('a PM sees their own projects charted, and the admin can pick that PM', asy
     await openPage(pm, 'PM Projects', 'Dashboard');
     await expect(pm.getByRole('heading', { name: 'PM Dashboard' })).toBeVisible();
     await expect(pm.getByText('My projects — this month')).toBeVisible();
+    // the greeting bar on top, and only the statuses, phases and payments that have projects
+    await expect(pm.getByRole('heading', { name: /^Good (morning|afternoon|evening), / })).toBeVisible();
+    await expect(pm.getByTestId('rank-label').filter({ hasText: /^Closed: Bad Feedback$/ })).toHaveCount(0);
+    await expect(pm.getByTestId('rank-label').filter({ hasText: /^Escalated$/ })).toHaveCount(0);
+    await expect(pm.getByTestId('rank-count').filter({ hasText: /^0$/ })).toHaveCount(0);
     await expect(pm.getByText('PM Summary', { exact: true })).toHaveCount(0);
-    await expect(pm.getByTestId('rank-label').filter({ hasText: /^In Progress$/ })).toBeVisible();
+    await expect(pm.getByTestId('rank-label').filter({ hasText: /^In Progress$/ }).first()).toBeVisible();
     await expect(pm.getByTestId('rank-label').filter({ hasText: /^Development$/ })).toBeVisible();
     // the stale one is in the follow-up list, the fresh one is not
     await expect(pm.getByTestId('follow-up-row').filter({ hasText: `${mark} stale` })).toContainText('never followed up');

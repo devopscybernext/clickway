@@ -15,7 +15,8 @@ const add = (project: string, task: string, who: string, ts: string, bucket: str
    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'FrontEnd')`,
   [SHEET_IDS['1'], TAB_BANDWIDTH, project, task, who, ts, bucket, status, pm, est]);
 
-const legend = (page: Page, text: string) => page.getByTestId('rank-label').filter({ hasText: new RegExp(`^${text}$`) });
+// a status / PM status / team card: only those with tasks are shown, so its count is there or it is not
+const legend = (page: Page, text: string) => page.getByTestId('rank-card').filter({ has: page.getByTestId('rank-label').filter({ hasText: new RegExp(`^${text}$`) }) }).getByTestId('rank-count');
 const period = (page: Page, name: 'Today' | 'Weekly' | 'Monthly') => page.getByRole('tablist', { name: 'Period' }).getByRole('tab', { name }).click();
 
 // A: today, In Progress. B: everyday, Submitted To PM (approved). C: closed. D: tomorrow bucket, On Hold.
@@ -114,11 +115,11 @@ test('Marketing Dashboard: no period switch, and picking a person narrows the ch
     await login(page, USERS.admin);
     await openPage(page, 'Marketing', 'Dashboard');
     await expect(page.getByRole('heading', { name: 'Marketing Dashboard' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: /^Marketing team — today/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^Marketing team — all tasks that are not closed/ })).toBeVisible();
     await expect(page.getByRole('tablist', { name: 'Period' })).toHaveCount(0);
     const axis = () => page.locator('section').filter({ has: page.getByRole('heading', { name: /^Hours by person/ }) }).locator('li > div > span:first-child').allTextContents();
     await page.getByText('Bhavya', { exact: true }).locator('visible=true').first().click();
-    await expect(page.getByRole('heading', { name: /^Bhavya — today/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^Bhavya — all tasks that are not closed/ })).toBeVisible();
     await expect.poll(async () => (await axis()).filter(t => t === 'Bhavya' || t === 'Payal')).toEqual(['Bhavya']);
   } finally {
     await query('DELETE FROM marketing_tasks WHERE project_name = ?', [project]);
@@ -140,10 +141,24 @@ test('Marketing: Project State Bandwidth follows the sub-department tabs', async
   expect(await mins()).toBeLessThan(60 * 7 * 30);   // a handful of 7-hour days, not the 125 h retainers of SEO / PPC
 });
 
-test('Video Editing is a Team Required option: in the chart even with no tasks, and in the editor', async ({ page }) => {
-  await login(page, USERS.admin);
-  await openPage(page, 'Web', 'Dashboard');
-  await expect(page.getByTestId('rank-label').filter({ hasText: /^Video Editing$/ })).toBeVisible();
+test('Video Editing is a Team Required option: in the editor, and on the chart once a task is in it', async ({ page }) => {
+  const project = uniqueMark('Dash Video');
+  try {
+    await login(page, USERS.admin);
+    await openPage(page, 'Web', 'Dashboard');
+    await period(page, 'Monthly');
+    await expect(legend(page, 'Video Editing')).toHaveCount(0);   // nothing in it yet, so it is not listed
+    await query(
+      `INSERT INTO web_tasks (sheet_id, sheet_tab, project_name, task_name, assigned_person, timestamp, task_daily_bucket, task_status_updation, pm_status, time_estimation, team_required)
+       VALUES (?, ?, ?, 'cut a reel', 'Pawan', ?, 'No Action Taken', 'In Progress', 'No Action Taken', '01.00 Hours', 'Video Editing')`,
+      [SHEET_IDS['1'], TAB_BANDWIDTH, project, stamp(new Date())]);
+    await page.reload();
+    await openPage(page, 'Web', 'Dashboard');
+    await period(page, 'Monthly');
+    await expect(legend(page, 'Video Editing')).toBeVisible();
+  } finally {
+    await query('DELETE FROM web_tasks WHERE project_name = ?', [project]);
+  }
 });
 
 test('Marketing has no "Tasks added per" chart; Web keeps its own', async ({ page }) => {
@@ -153,4 +168,27 @@ test('Marketing has no "Tasks added per" chart; Web keeps its own', async ({ pag
   await expect(page.getByText(/^Tasks added per/i)).toHaveCount(0);
   await openPage(page, 'Web', 'Dashboard');
   await expect(page.getByText(/^Tasks added per/i)).toBeVisible();
+});
+
+test('Marketing charts count every task that is not closed, whatever its bucket or date', async ({ page }) => {
+  const project = uniqueMark('Dash Open');
+  const add = (task: string, status: string) => query(
+    `INSERT INTO marketing_tasks (sheet_id, sheet_tab, project_name, task_name, assigned_person, task_daily_bucket, task_status_updation, pm_status, task_estimation, department, timestamp)
+     VALUES (?, ?, ?, ?, 'Payal', 'No Action Taken', ?, 'No Action Taken', '450.00 Hours', 'SMM', '1/1/2024 10:00:00')`,
+    [MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, project, task, status]);
+  try {
+    await add('open old', 'In Progress');
+    await add('closed old', 'Task Closed');
+    await login(page, USERS.admin);
+    await openPage(page, 'Marketing', 'Dashboard');
+    // the page speaks of every open task, and the Closed tile is not there
+    await expect(page.getByRole('heading', { name: /^Marketing team — all tasks that are not closed/ })).toBeVisible();
+    await expect(legend(page, 'Closed')).toHaveCount(0);
+    // an old, not-today task is counted (the project shows its 450h), the closed one is not (it would be 900h)
+    const top = page.locator('section').filter({ has: page.getByRole('heading', { name: /^Top projects/ }) });
+    await expect(top.getByText(project)).toBeVisible();
+    await expect(top.locator('li', { hasText: project }).getByText(/of 450:00h estimated/)).toBeVisible();
+  } finally {
+    await query('DELETE FROM marketing_tasks WHERE project_name = ?', [project]);
+  }
 });

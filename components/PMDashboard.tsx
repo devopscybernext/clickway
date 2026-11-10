@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import { SheetData } from '@/lib/dataStore';
-import { Card, Empty } from './TeamDashboard';
-import { computeStatsFor, statusColor } from './PMProjectBandwidth';
+import { Card, Empty, CountCards } from './TeamDashboard';
+import { computeStatsFor, statusColor, STATUS_OPTIONS, PHASE_OPTIONS, PAYMENT_STATUS_OPTIONS } from './PMProjectBandwidth';
 import WorkloadBar, { workloadColor } from './WorkloadBar';
 import { memberPhoto, memberColor } from '@/lib/memberColors';
 import { hhmmToDecimalHours, formatHoursClock } from './SpecificCharts';
@@ -27,11 +27,8 @@ function hoursOf(v: unknown): number {
 }
 const clock = (h: number) => `${formatHoursClock(h)}h`;
 
-// The phases in the order a project moves through them; any other phase goes at the end
-const PHASE_ORDER = ['no action taken', 'initial setup', 'requirement gathering', 'design', 'design + dev', 'development', 'qa', 'deployed', 'ongoing optimization', 'marketing', 'maintenance', 'retainer', 'on hold', 'completed'];
 // how long a project has waited for its follow-up: red once it is a month or never, orange from two weeks, amber after that
 const ageColor = (days: number | null) => (days === null || days >= 30 ? '#dc2626' : days >= 14 ? '#f97316' : '#f59e0b');
-const PAID = ['done', 'automated payment', 'direct billing'];
 
 interface Project { name: string; client: string; pm: string; status: string; phase: string; payment: string; total: number; ac: number; followUp: number | null; row: SheetData }
 
@@ -77,10 +74,12 @@ export default function PMDashboard({ data, headers, viewerName, isAdmin, allPmN
     const rowsOf = projects.map(p => p.row);
     const statCols = { totalHoursCol: c.total, currentMonthHoursCol: c.current, riskMonthHoursCol: c.risk, paymentStatusCol: c.payment, followupDateCol: c.follow, statusCol: c.status };
     const stats = computeStatsFor(rowsOf, statCols);
-    const count = (key: (p: Project) => string, colorOf: (name: string, i: number) => string) => {
-      const m = new Map<string, number>();
-      for (const p of projects) m.set(key(p), (m.get(key(p)) ?? 0) + 1);
-      return [...m.entries()].sort((a, b) => b[1] - a[1]).map(([name, value], i) => ({ name, value, color: colorOf(name, i) }));
+    // the options of the dropdown that have projects (in the dropdown's order), then anything else found in the data
+    const count = (key: (p: Project) => string, options: string[], colorOf: (name: string, i: number) => string) => {
+      const m = new Map<string, number>(options.map(o => [o, 0] as [string, number]));
+      const byLower = new Map(options.map(o => [lc(o), o]));
+      for (const p of projects) { const k = byLower.get(lc(key(p))) ?? key(p); m.set(k, (m.get(k) ?? 0) + 1); }
+      return [...m.entries()].map(([name, value], i) => ({ name, value, color: colorOf(name, i) })).filter(r => r.value > 0);
     };
     // PM Summary: each PM's own figures, from their projects (not narrowed by the PM pick); a PM with none still has a card
     const scopedAll = all.filter(p => !(!isAdmin && scope === 'mine') || lc(p.pm) === lc(viewerName));
@@ -107,12 +106,10 @@ export default function PMDashboard({ data, headers, viewerName, isAdmin, allPmN
     })();
     return {
       stats,
-      status: count(p => p.status, name => statusColor(name)),
-      payment: count(p => p.payment, name => statusColor(name)),
+      status: count(p => p.status, STATUS_OPTIONS, name => statusColor(name)),
+      payment: count(p => p.payment, PAYMENT_STATUS_OPTIONS, name => statusColor(name)),
       pms,
-      pipeline: count(p => p.phase, (_n, i) => palette[i % palette.length])
-        .sort((a, b) => { const x = PHASE_ORDER.indexOf(lc(a.name)), y = PHASE_ORDER.indexOf(lc(b.name)); return (x < 0 ? 99 : x) - (y < 0 ? 99 : y); }),
-      paid: projects.filter(p => PAID.includes(lc(p.payment))).length,
+      phases: count(p => p.phase, PHASE_OPTIONS, (_n, i) => palette[i % palette.length]),
       burn: [...projects].filter(p => p.total > 0).sort((a, b) => b.total - a.total).slice(0, 8)
         .map(p => ({ name: p.name, client: p.client, pm: p.pm, total: p.total, ac: p.ac, pct: Math.round((p.ac / p.total) * 100) })),
       due,
@@ -141,6 +138,17 @@ export default function PMDashboard({ data, headers, viewerName, isAdmin, allPmN
             ))}
           </div>
         )}
+      </div>
+
+      {/* the same greeting bar as the Web and Marketing dashboards */}
+      <div className="cn-card rounded-lg px-6 py-3 border" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+        <h2 className="text-xl sm:text-2xl font-bold" style={{ color: 'var(--cn-text-primary)' }}>
+          {(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; })()}, {viewerName}!
+        </h2>
+        <p className="text-sm mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>
+          {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          {' · '}{isAdmin || scope === 'all' ? "Here's your team overview for today." : "Here's your personal project overview for today."}
+        </p>
       </div>
 
       {/* Overview and PM Summary: the same look and formulas as the Current Month page */}
@@ -215,51 +223,11 @@ export default function PMDashboard({ data, headers, viewerName, isAdmin, allPmN
         <Card title="Projects"><Empty text="No projects this month." /></Card>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* where the projects are in their life: columns in the order a project moves through the phases */}
+          {/* the shape of the projects, in one row: the same compact cards as the Web and Marketing dashboards */}
           <div className="lg:col-span-2 grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
-          <Card title="Project pipeline — by phase">
-            <div className="flex items-end gap-3 overflow-x-auto pb-1" style={{ minHeight: 170 }}>
-              {view.pipeline.map(r => {
-                const top = Math.max(...view.pipeline.map(x => x.value));
-                return (
-                  <div key={r.name} className="flex-1 min-w-[84px] max-w-[150px] flex flex-col items-center justify-end gap-1.5" style={{ height: 170 }}>
-                    <span className="text-lg font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{r.value}</span>
-                    <div className="w-full rounded-t-md" style={{ height: `${Math.max(6, (r.value / top) * 90)}px`, background: r.color }} />
-                    <span data-testid="rank-label" className="text-[11px] font-medium text-center leading-tight" style={{ color: 'var(--cn-text-muted)' }}>{r.name}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-
-          <Card title="Project status">
-            <div className="grid grid-cols-2 gap-3">
-              {view.status.map(r => (
-                <div key={r.name} className="rounded-lg border px-3 py-2.5" style={{ background: 'var(--cn-bg-input)', borderColor: 'var(--cn-border)', borderLeft: `4px solid ${r.color}` }}>
-                  <p className="text-2xl font-bold tabular-nums leading-none" style={{ color: 'var(--cn-text-primary)' }}>{r.value}</p>
-                  <p data-testid="rank-label" className="text-xs font-medium mt-1.5" style={{ color: 'var(--cn-text-muted)' }}>{r.name}</p>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          <Card title="Payments">
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold tabular-nums" style={{ color: 'var(--cn-text-primary)' }}>{projects.length ? Math.round((view.paid / projects.length) * 100) : 0}%</span>
-              <span className="text-sm" style={{ color: 'var(--cn-text-muted)' }}>of projects paid ({view.paid} of {projects.length})</span>
-            </div>
-            <div className="flex h-3 rounded-full overflow-hidden mt-3" style={{ background: 'var(--cn-bg-input)' }} aria-hidden>
-              {view.payment.map(r => <div key={r.name} style={{ width: `${(r.value / projects.length) * 100}%`, background: r.color }} />)}
-            </div>
-            <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3">
-              {view.payment.map(r => (
-                <span key={r.name} className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--cn-text-muted)' }}>
-                  <span className="w-2.5 h-2.5 rounded-sm" style={{ background: r.color }} />{r.name} <b style={{ color: 'var(--cn-text-primary)' }}>{r.value}</b>
-                </span>
-              ))}
-            </div>
-          </Card>
-
+            <Card title="Project status"><CountCards rows={view.status} /></Card>
+            <Card title="Phase"><CountCards rows={view.phases} /></Card>
+            <Card title="Payments"><CountCards rows={view.payment} /></Card>
           </div>
 
           <Card title="Hours used — the biggest projects" className="lg:col-span-2">
