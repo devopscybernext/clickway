@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { RefreshCw, Calendar, ChevronDown, LogOut, ShieldCheck, KeyRound, Building2, CircleHelp } from 'lucide-react';
+import { RefreshCw, Calendar, ChevronDown, LogOut, ShieldCheck, KeyRound, CircleHelp } from 'lucide-react';
 import { SheetId, AuthUser, NavLeaf, NavParent, getSheetLabel, getNavItems, isNavParent, TOP_BAR_MENUS } from '@/lib/auth';
 import { memberPhoto } from '@/lib/memberColors';
 import ThemeToggle from './ThemeToggle';
@@ -54,64 +54,9 @@ interface TopBarProps {
   onOpenNotification: (n: NotificationItem) => void;
 }
 
-const MENU_ICONS: Record<string, React.ReactNode> = {
-  'Cybernext InHouse': <Building2 className="w-4 h-4 shrink-0" />,
-  Help: <CircleHelp className="w-4 h-4 shrink-0" />,
-};
-
-// A top-bar button that opens a dropdown of one menu's pages (Cybernext InHouse, Help)
-function TopMenu({ menu, isLeafActive, onNavigate }: { menu: NavParent; isLeafActive: (leaf: NavLeaf) => boolean; onNavigate: (leaf: NavLeaf) => void }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const close = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, []);
-  const active = menu.children.some(isLeafActive);
-  return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen(o => !o)}
-        aria-haspopup="menu" aria-expanded={open} title={menu.label}
-        className="flex items-center gap-1.5 text-sm font-medium px-2.5 py-1.5 rounded-lg border transition-colors cursor-pointer"
-        style={{ background: open || active ? 'var(--cn-bg-hover)' : 'var(--cn-bg-input)', borderColor: 'var(--cn-border)', color: active ? 'var(--cn-accent)' : 'var(--cn-text-primary)' }}
-      >
-        {MENU_ICONS[menu.label]}
-        <span className="hidden md:inline">{menu.label}</span>
-        <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} style={{ color: 'var(--cn-text-muted)' }} />
-      </button>
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 top-full mt-2 w-52 border rounded-xl overflow-hidden z-50 p-1.5"
-          style={{ background: 'var(--cn-bg-dropdown)', borderColor: 'var(--cn-border)', boxShadow: '0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.10)' }}
-        >
-          {menu.children.map(leaf => {
-            const on = isLeafActive(leaf);
-            return (
-              <button
-                key={`${leaf.id}-${leaf.subTab ?? ''}`} role="menuitem"
-                onClick={() => { setOpen(false); onNavigate(leaf); }}
-                className="w-full px-3 py-2 text-sm rounded-lg transition-colors cursor-pointer text-left"
-                style={{ color: on ? 'var(--cn-accent)' : 'var(--cn-text-primary)', background: on ? 'var(--cn-bg-hover)' : '', fontWeight: on ? 600 : 400 }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'var(--cn-bg-hover)')}
-                onMouseLeave={e => (e.currentTarget.style.background = on ? 'var(--cn-bg-hover)' : '')}
-              >
-                {leaf.label}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function TopBar({ lastUpdated, loading, selectedSheet, onRefresh, user, onLogout, isAdmin, canOpenAdminPortal, onOpenAdminPortal, isLeafActive, onNavigate, onOpenNotification }: TopBarProps) {
   const menus = getNavItems(user).filter((item): item is NavParent => isNavParent(item) && TOP_BAR_MENUS.includes(item.label));
-  // Cybernext InHouse is a button next to Refresh; Help is a section of the profile dropdown
-  const inHouseMenu = menus.find(m => m.label === 'Cybernext InHouse');
+  // Help is a section of the profile dropdown
   const helpMenu = menus.find(m => m.label === 'Help');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
@@ -161,7 +106,6 @@ export default function TopBar({ lastUpdated, loading, selectedSheet, onRefresh,
           </div>
         )}
 
-        {inHouseMenu && <TopMenu menu={inHouseMenu} isLeafActive={isLeafActive} onNavigate={onNavigate} />}
 
         <button
           onClick={onRefresh}

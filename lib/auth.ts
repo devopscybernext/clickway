@@ -152,6 +152,7 @@ export interface NavLeaf {
   id: SheetId;
   team?: Team;
   subTab?: string;
+  tabs?: NavLeaf[]; // Cybernext InHouse: the sub pages of this page, shown as tabs on it
   label?: string; // overrides SHEET_LABELS — needed once one sheet id backs several leaves (PM Projects, Tools)
 }
 export interface NavParent {
@@ -237,7 +238,27 @@ const INHOUSE_FULL_CHILDREN: NavLeaf[] = [
   ...TOOLS_CHILDREN,
   INHOUSE_NEXTBOT,
 ];
-const INHOUSE_LIMITED: NavItem = { label: 'Cybernext InHouse', children: [INHOUSE_BRAND_KIT, ...TOOLS_CHILDREN] };
+const INHOUSE_LIMITED_CHILDREN: NavLeaf[] = [INHOUSE_BRAND_KIT, ...TOOLS_CHILDREN];
+
+// Cybernext InHouse: a sidebar section with two pages. Each page shows its sub pages as tabs:
+//   Internal           Websites, Case Studies, Brand Kit, Documentations, Holiday Calendar
+//   Tools              Clock Room, AI Tools, NextBot
+// A role gets only the tabs it may open (full InHouse, or the limited set); a page with none is left out.
+export const BUSINESS_DEV = 'Cybernext InHouse';
+const BD_PAGES: { label: string; tabs: [SheetId, string][] }[] = [
+  { label: 'Internal', tabs: [['17', 'websites'], ['17', 'case-studies'], ['17', 'brand-kit'], ['17', 'documentations'], ['14', 'holiday']] },
+  { label: 'Tools', tabs: [['14', 'clock'], ['14', 'ai'], ['17', 'nextbot']] },
+];
+function businessDevFrom(children: NavLeaf[]): NavParent {
+  const pages: NavLeaf[] = [];
+  for (const p of BD_PAGES) {
+    const tabs = p.tabs.map(([id, sub]) => children.find(c => c.id === id && c.subTab === sub)).filter((c): c is NavLeaf => !!c);
+    if (tabs.length > 0) pages.push({ id: tabs[0].id, subTab: tabs[0].subTab, label: p.label, tabs });
+  }
+  return { label: BUSINESS_DEV, children: pages };
+}
+const BD_FULL: NavItem = businessDevFrom(INHOUSE_FULL_CHILDREN);
+const BD_LIMITED: NavItem = businessDevFrom(INHOUSE_LIMITED_CHILDREN);
 const LEAVE_STATUS: NavLeaf = { id: '2' };
 // User Details (Username/Role/Display Name/Email) editor — HM/Admin/Mod
 // (and their legacy aliases) only, never PM-tier/team-admin/individual
@@ -255,10 +276,10 @@ const ADMIN_NAV: NavItem[] = [
   { label: 'Marketing', children: MARKETING_ADMIN_FULL },
   { label: 'PM Projects', children: PM_PROJECTS_ADMIN },
   LEAVE_STATUS,
-  { label: 'Cybernext InHouse', children: INHOUSE_FULL_CHILDREN },
+  BD_FULL,
 ];
 // Mod — everything HM / Admin have, except InHouse is just Brand Kit
-const MOD_NAV: NavItem[] = ADMIN_NAV.map(item => (isNavParent(item) && item.label === 'Cybernext InHouse' ? INHOUSE_LIMITED : item));
+const MOD_NAV: NavItem[] = ADMIN_NAV.map(item => (isNavParent(item) && item.label === BUSINESS_DEV ? BD_LIMITED : item));
 // PMWebAdmin / PMMarketingAdmin — full access everywhere except Tasks
 // Assigned, which stays pinned to their own team (see old
 // TASKS_ASSIGNED_TEAM_LOCK behavior this replaces).
@@ -267,14 +288,14 @@ const PM_WEB_ADMIN_NAV: NavItem[] = [
   { label: 'Marketing', children: MARKETING_NO_TASKS_ASSIGNED },
   { label: 'PM Projects', children: PM_PROJECTS_FULL },
   LEAVE_STATUS,
-  INHOUSE_LIMITED,
+  BD_LIMITED,
 ];
 const PM_MARKETING_ADMIN_NAV: NavItem[] = [
   { label: 'Web', children: WEB_NO_TASKS_ASSIGNED },
   { label: 'Marketing', children: MARKETING_FULL },
   { label: 'PM Projects', children: PM_PROJECTS_FULL },
   LEAVE_STATUS,
-  INHOUSE_LIMITED,
+  BD_LIMITED,
 ];
 // legacy "pm" — like ADMIN_NAV but no Tasks Assigned at all, plus "My Projects"
 const PM_LEGACY_NAV: NavItem[] = [
@@ -282,7 +303,7 @@ const PM_LEGACY_NAV: NavItem[] = [
   { label: 'Marketing', children: MARKETING_NO_TASKS_ASSIGNED },
   { label: 'PM Projects', children: PM_PROJECTS_FULL },
   LEAVE_STATUS,
-  INHOUSE_LIMITED,
+  BD_LIMITED,
 ];
 // WebAdmin — no Leave Status, no PM Projects; otherwise Web-only, except
 // Tasks Overview also carries a lone cross-team peek at Marketing's (a
@@ -290,12 +311,12 @@ const PM_LEGACY_NAV: NavItem[] = [
 const WEB_ADMIN_NAV: NavItem[] = [
   { label: 'Web', children: WEB_FULL },
   { label: 'Marketing', children: MARKETING_TASKS_OVERVIEW_ONLY },
-  INHOUSE_LIMITED,
+  BD_LIMITED,
 ];
 // WebTeam / legacy "resource" — individual contributor, own team
 const WEB_TEAM_NAV: NavItem[] = [
   { label: 'Web', children: WEB_INDIVIDUAL },
-  INHOUSE_LIMITED,
+  BD_LIMITED,
 ];
 // MarketingAdmin — no Leave Status, no PM Projects; otherwise
 // Marketing-only, except Tasks Overview also peeks at Web's (mirrors the
@@ -303,12 +324,12 @@ const WEB_TEAM_NAV: NavItem[] = [
 const MARKETING_ADMIN_NAV: NavItem[] = [
   { label: 'Marketing', children: MARKETING_FULL },
   { label: 'Web', children: WEB_TASKS_OVERVIEW_ONLY },
-  INHOUSE_LIMITED,
+  BD_LIMITED,
 ];
 // MarketingTeam — individual contributor, own team
 const MARKETING_TEAM_NAV: NavItem[] = [
   { label: 'Marketing', children: MARKETING_INDIVIDUAL },
-  INHOUSE_LIMITED,
+  BD_LIMITED,
 ];
 
 // Help is in everyone's menu, last: Apply (the form) and the table of queries —
@@ -385,7 +406,7 @@ const menuRank = (item: NavItem): number => {
 };
 // Menus shown as dropdowns in the top bar instead of the sidebar. They stay part of ROLE_NAV (so
 // access checks and the page a role may open are unchanged); the sidebar just leaves them out.
-export const TOP_BAR_MENUS = ['Cybernext InHouse', 'Help'];
+export const TOP_BAR_MENUS = ['Help'];
 export function getNavItems(user: AuthUser): NavItem[] {
   return [...ROLE_NAV[user.role]].sort((a, b) => menuRank(a) - menuRank(b));
 }

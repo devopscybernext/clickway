@@ -4,10 +4,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { SheetData } from '@/lib/dataStore';
 import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, TAB_BANDWIDTH, LEAVE_SHEET_ID, TAB_LEAVE, RANGE_LEAVE, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
 
-import { AuthUser, SheetId, Team, NavLeaf, getFirstNavLeaf, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, canSeeInHouseFull, canManageUsers, canManageInHouseData, canDeletePmProjects, canAddLeaderboardFeedback, opensTasksAssignedForNewTask, canManageHelp, canEditEveryColumn } from '@/lib/auth';
+import { AuthUser, SheetId, Team, NavLeaf, getNavItems, isNavParent, BUSINESS_DEV, getFirstNavLeaf, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, canSeeInHouseFull, canManageUsers, canManageInHouseData, canDeletePmProjects, canAddLeaderboardFeedback, opensTasksAssignedForNewTask, canManageHelp, canEditEveryColumn } from '@/lib/auth';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import InHouse, { type InHouseSubTab } from './InHouse';
+import BusinessDevTabs from './BusinessDevTabs';
 import Help, { type HelpSubTab } from './Help';
 import NextBot from './NextBot';
 import SpecificCharts, { ResourceOverview, PmStatusOverview, KpiCards, ResourceStatusGrid, TeamWorkloadCards, MyWorkloadSummary, InsightCards, PmStatusChart, ResourceBandwidthChips, SubDept } from './SpecificCharts';
@@ -1151,6 +1152,15 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 )}
               </div>
             </section>
+          )}
+
+          {/* ── Cybernext InHouse (Internal / Tools): the sub pages of the open page, as tabs ── */}
+          {(isTools || isInHouse) && (
+            <BusinessDevTabs
+              pages={(getNavItems(user).find(i => isNavParent(i) && i.label === BUSINESS_DEV) as { children: NavLeaf[] } | undefined)?.children ?? []}
+              isTabActive={leaf => selectedSheet === leaf.id && leaf.subTab === (leaf.id === '14' ? toolsSubTab : inHouseSubTab)}
+              onNavigate={handleSheetChange}
+            />
           )}
 
           {/* ── Tools: Clock Room / Holiday Calendar / AI Tools ── */}

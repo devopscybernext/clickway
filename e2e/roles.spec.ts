@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { randomUUID } from 'crypto';
-import { USERS, login, openTopMenu } from './helpers';
+import { USERS, login, openPage } from './helpers';
 
 // Each role sees only its own pages, and the server refuses the rest even
 // when asked directly.
@@ -26,11 +26,16 @@ test('a team member sees only their own pages, and is refused elsewhere', async 
 
   const api = page.request;
   const json = { 'sec-fetch-mode': 'cors', 'sec-fetch-dest': 'empty' };
-  // Cybernext InHouse is open to everyone, but a team member only gets Brand Kit
-  await openTopMenu(page, 'Cybernext InHouse');
-  await expect(page.getByRole('menuitem', { name: 'Brand Kit', exact: true })).toBeVisible();
+  // Cybernext InHouse is open to everyone, but a team member only gets Brand Kit and Holiday Calendar on
+  // Internal, and Clock Room and AI Tools on Tools (no Websites, Case Studies, Documentations, NextBot)
+  await openPage(page, 'Cybernext InHouse', 'Internal');
+  await expect(page.getByRole('tab', { name: 'Brand Kit', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Holiday Calendar', exact: true })).toBeVisible();
+  await openPage(page, 'Cybernext InHouse', 'Tools');
+  await expect(page.getByRole('tab', { name: 'Clock Room', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'AI Tools', exact: true })).toBeVisible();
   for (const hidden of ['Websites', 'Case Studies', 'Documentations', 'NextBot']) {
-    await expect(page.getByRole('menuitem', { name: hidden, exact: true })).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: hidden, exact: true })).toHaveCount(0);
   }
   const inhouse = await api.get('/api/inhouse', { headers: json });
   expect(inhouse.status()).toBe(200);

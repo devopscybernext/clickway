@@ -9,10 +9,13 @@ const ADMIN_PAGES: [string, string?][] = [
   ['Marketing', 'Dashboard'], ['Marketing', 'Tasks Assigned'], ['Marketing', 'Tasks Overview'], ['Marketing', 'Add Task'], ['Marketing', 'Report'], ['Marketing', 'Import Data'],
   ['PM Projects', 'Current Month'], ['PM Projects', 'Previous Months'], ['PM Projects', 'Closed Project'],
   ['Leave Status'],
-  ['Cybernext InHouse', 'Websites'], ['Cybernext InHouse', 'Case Studies'], ['Cybernext InHouse', 'Brand Kit'],
-  ['Cybernext InHouse', 'Documentations'],
-  ['Cybernext InHouse', 'Clock Room'], ['Cybernext InHouse', 'Holiday Calendar'], ['Cybernext InHouse', 'AI Tools'],
+  ['Cybernext InHouse', 'Internal'], ['Cybernext InHouse', 'Tools'],
 ];
+// Cybernext InHouse: each page shows its sub pages as tabs
+const BD_TABS: Record<string, string[]> = {
+  'Internal': ['Websites', 'Case Studies', 'Brand Kit', 'Documentations', 'Holiday Calendar'],
+  'Tools': ['Clock Room', 'AI Tools', 'NextBot'],
+};
 
 test('every admin page loads without errors', async ({ page }) => {
   const failures: string[] = [];
@@ -33,6 +36,15 @@ test('every admin page loads without errors', async ({ page }) => {
       await page.waitForLoadState('networkidle');
       expect(failures, `problems while opening ${section} ${leaf ?? ''}`).toEqual([]);
     });
+    if (section === 'Cybernext InHouse' && leaf) {
+      for (const tab of BD_TABS[leaf]) {
+        await test.step(`${leaf} tab → ${tab}`, async () => {
+          await page.getByRole('tab', { name: tab, exact: true }).click();
+          await page.waitForLoadState('networkidle');
+          expect(failures, `problems while opening the ${tab} tab`).toEqual([]);
+        });
+      }
+    }
   }
 
   await test.step('Admin Portal (profile menu)', async () => {
