@@ -289,7 +289,7 @@ export default function Sidebar({ selectedSheet, selectedTeam, selectedPmSubTab,
       {/* Desktop sidebar */}
       <aside
         data-collapsed={collapsed}
-        className={`hidden lg:flex flex-col shrink-0 sticky top-0 h-screen border-r transition-[width] duration-200 ${collapsed ? 'w-[72px]' : 'w-1/5 min-w-[240px] max-w-[380px]'}`}
+        className={`hidden lg:flex flex-col shrink-0 sticky top-0 h-screen border-r transition-[width] duration-200 ${collapsed ? 'w-[72px]' : 'w-[16%] min-w-[192px] max-w-[304px]'}`}
         style={{ background: 'var(--cn-bg-sidebar)', borderColor: 'var(--cn-border)' }}
       >
         {renderNav(collapsed)}
