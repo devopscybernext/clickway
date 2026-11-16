@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { SheetData } from '@/lib/dataStore';
 import { SHEET_IDS, TOOLS_SHEET_ID, PM_BANDWIDTH_SHEET_ID, MARKETING_TEAM_SHEET_ID, TAB_MARKETING_TASKS, MARKETING_STATUS_OPTIONS, MARKETING_TODAY_BUCKET_SET_OPTIONS, TAB_BANDWIDTH, LEAVE_SHEET_ID, TAB_LEAVE, RANGE_LEAVE, RANGE_LEADERBOARD, RANGE_NEWS, RANGE_HOLIDAY, RANGE_AI_TOOLS, RANGE_QA_TESTING, TAB_QA_TESTING } from '@/lib/config';
 
-import { AuthUser, SheetId, Team, NavLeaf, getNavItems, isNavParent, BUSINESS_DEV, getFirstNavLeaf, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, canSeeInHouseFull, canManageUsers, canManageInHouseData, canDeletePmProjects, canAddLeaderboardFeedback, opensTasksAssignedForNewTask, canManageHelp, canEditEveryColumn } from '@/lib/auth';
+import { AuthUser, SheetId, Team, NavLeaf, getNavItems, isNavParent, BUSINESS_DEV, getFirstNavLeaf, isAdminTierRole, isPmTierRole, isTeamAdminTierRole, isIndividualTierRole, getLockedTeam, canSeeInHouseFull, canManageUsers, canManageInHouseData, canEditInHouseEntries, canDeletePmProjects, canAddLeaderboardFeedback, opensTasksAssignedForNewTask, canManageHelp, canEditEveryColumn } from '@/lib/auth';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import InHouse, { type InHouseSubTab } from './InHouse';
@@ -1172,12 +1172,12 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               <div className="p-3 sm:p-6 space-y-4">
                 <div style={{ display: toolsSubTab === 'clock' ? 'block' : 'none' }}><ClockRoom /></div>
                 {toolsSubTab === 'holiday' && (
-                  <HolidayCalendar data={holidayData} headers={Object.keys(holidayData[0] ?? {})} />
+                  <HolidayCalendar data={holidayData} headers={Object.keys(holidayData[0] ?? {})} canEdit={canEditInHouseEntries(user.role)} onSaved={() => { void fetchHolidays(); }} />
                 )}
                 {toolsSubTab === 'ai' && (
                   <>
                     <NewsTicker data={newsData} />
-                    <AITools data={aiToolsData} headers={Object.keys(aiToolsData[0] ?? {})} />
+                    <AITools data={aiToolsData} headers={Object.keys(aiToolsData[0] ?? {})} canEdit={canEditInHouseEntries(user.role)} onSaved={() => { void fetchAiTools(); }} />
                   </>
                 )}
               </div>
@@ -1252,7 +1252,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
             const subTab = canSeeInHouseFull(user.role) ? inHouseSubTab : 'brand-kit';
             return subTab === 'nextbot'
               ? <section className="cn-card rounded-lg border transition-colors" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}><NextBot /></section>
-              : <InHouse subTab={subTab} refreshKey={lastUpdated} canUpload={canManageInHouseData(user.role)} />;
+              : <InHouse subTab={subTab} refreshKey={lastUpdated} canUpload={canManageInHouseData(user.role)} canEdit={canEditInHouseEntries(user.role)} />;
           })()}
 
           {/* ── Help: the Apply form and the table of queries ── */}

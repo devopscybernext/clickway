@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Search, AlertCircle, X, Upload } from 'lucide-react';
 import { MultiSelect } from './FilteredDataTable';
 import InHouseUpload from './InHouseUpload';
+import EntryEditModal, { EditButton } from './EntryEditModal';
 
 export type InHouseSubTab = 'websites' | 'case-studies' | 'brand-kit' | 'documentations';
 
@@ -174,20 +175,21 @@ function CardTags({ tags }: { tags: string[] }) {
   );
 }
 
-function WebsiteCard({ row, headers }: { row: Row; headers: string[] }) {
+function WebsiteCard({ row, headers, onEdit }: { row: Row; headers: string[]; onEdit?: () => void }) {
   return (
     <article className={cardClass} style={cardStyle}>
       <CardTop name={cell(row, headers, 'website name')} status={cell(row, headers, 'status')} />
       <Blurb>{websiteBlurb(row, headers)}</Blurb>
       <div className="flex flex-wrap gap-2">
         <LinkButton href={safeUrl(cell(row, headers, 'website link'))} label="Visit Website" primary />
+        {onEdit && <span className="ml-auto self-center"><EditButton onClick={onEdit} label={`Edit ${cell(row, headers, 'website name')}`} /></span>}
       </div>
       <CardTags tags={[cell(row, headers, 'platform'), cell(row, headers, 'industry')].filter(meaningful)} />
     </article>
   );
 }
 
-function CaseStudyCard({ row, headers }: { row: Row; headers: string[] }) {
+function CaseStudyCard({ row, headers, onEdit }: { row: Row; headers: string[]; onEdit?: () => void }) {
   return (
     <article className={cardClass} style={cardStyle}>
       <CardTop name={cell(row, headers, 'website name')} status={cell(row, headers, 'status')} />
@@ -195,6 +197,7 @@ function CaseStudyCard({ row, headers }: { row: Row; headers: string[] }) {
       <div className="flex flex-wrap gap-2">
         <LinkButton href={safeUrl(cell(row, headers, 'url'))} label="View Case Study" primary />
         <LinkButton href={safeUrl(cell(row, headers, 'website link'))} label="Visit Website" />
+        {onEdit && <span className="ml-auto self-center"><EditButton onClick={onEdit} label={`Edit ${cell(row, headers, 'website name')}`} /></span>}
       </div>
       <CardTags tags={[cell(row, headers, 'platform'), cell(row, headers, 'category'), cell(row, headers, 'industry')].filter(meaningful)} />
     </article>
@@ -202,13 +205,14 @@ function CaseStudyCard({ row, headers }: { row: Row; headers: string[] }) {
 }
 
 // Brand Kit and Documentations: a name, where the link goes, and one Open button
-function LinkCardItem({ row, headers, what }: { row: Row; headers: string[]; what: string }) {
+function LinkCardItem({ row, headers, what, onEdit }: { row: Row; headers: string[]; what: string; onEdit?: () => void }) {
   return (
     <article className={cardClass} style={cardStyle}>
       <CardTop name={cell(row, headers, 'name')} status={cell(row, headers, 'status')} />
       <Blurb>{linkBlurb(row, headers, what)}</Blurb>
       <div className="flex flex-wrap gap-2">
         <LinkButton href={safeUrl(cell(row, headers, 'url'))} label="Open Link" primary />
+        {onEdit && <span className="ml-auto self-center"><EditButton onClick={onEdit} label={`Edit ${cell(row, headers, 'name')}`} /></span>}
       </div>
       <CardTags tags={[cell(row, headers, 'destination')].filter(meaningful)} />
     </article>
@@ -221,10 +225,12 @@ interface Props {
   refreshKey?: string;
   /** Super Admin: shows "Upload Excel" on every sub-tab */
   canUpload?: boolean;
+  /** Super Admin and HM: an edit button on every entry */
+  canEdit?: boolean;
 }
 
 // Cybernext InHouse: our own websites and case studies as cards, three per row.
-export default function InHouse({ subTab, refreshKey, canUpload = false }: Props) {
+export default function InHouse({ subTab, refreshKey, canUpload = false, canEdit = false }: Props) {
   const [websites, setWebsites] = useState<TabData | null>(null);
   const [caseStudies, setCaseStudies] = useState<TabData | null>(null);
   const [brandKit, setBrandKit] = useState<TabData | null>(null);
@@ -232,6 +238,7 @@ export default function InHouse({ subTab, refreshKey, canUpload = false }: Props
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [editing, setEditing] = useState<Row | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   // chosen values per filter, remembered separately for each sub-tab
   const [chosen, setChosen] = useState<Partial<Record<InHouseSubTab, Record<string, string[]>>>>({});
@@ -325,6 +332,16 @@ export default function InHouse({ subTab, refreshKey, canUpload = false }: Props
         </div>
       </div>
 
+      {editing && tab && (
+        <EntryEditModal
+          kind={subTab}
+          row={Number(editing.__row)}
+          initial={Object.fromEntries(tab.headers.map(h => [h, str(editing[h])]))}
+          onClose={() => setEditing(null)}
+          onSaved={() => setReloadKey(k => k + 1)}
+        />
+      )}
+
       {uploading && <InHouseUpload tab={subTab} onClose={() => setUploading(false)} onImported={() => setReloadKey(k => k + 1)} />}
 
       {tab && filters.length > 0 && (
@@ -368,9 +385,10 @@ export default function InHouse({ subTab, refreshKey, canUpload = false }: Props
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {rows.map((r, i) => {
             const key = `${cell(r, tab.headers, 'website name') || cell(r, tab.headers, 'name')}-${i}`;
-            return subTab === 'websites' ? <WebsiteCard key={key} row={r} headers={tab.headers} />
-              : subTab === 'case-studies' ? <CaseStudyCard key={key} row={r} headers={tab.headers} />
-              : <LinkCardItem key={key} row={r} headers={tab.headers} what={subTab === 'brand-kit' ? 'the Cybernext brand kit' : 'the team documentation'} />;
+            const onEdit = canEdit ? () => setEditing(r) : undefined;
+            return subTab === 'websites' ? <WebsiteCard key={key} row={r} headers={tab.headers} onEdit={onEdit} />
+              : subTab === 'case-studies' ? <CaseStudyCard key={key} row={r} headers={tab.headers} onEdit={onEdit} />
+              : <LinkCardItem key={key} row={r} headers={tab.headers} what={subTab === 'brand-kit' ? 'the Cybernext brand kit' : 'the team documentation'} onEdit={onEdit} />;
           })}
         </div>
       )}

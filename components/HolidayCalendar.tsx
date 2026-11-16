@@ -1,12 +1,16 @@
 'use client';
 
+import { useState } from 'react';
 import {
   PartyPopper, CalendarDays, Sparkles, Flag, Palette, Flame, Moon, TreePine,
   Feather, BookOpen, Sun, Gift, Star, type LucideIcon,
 } from 'lucide-react';
 import { SheetData } from '@/lib/dataStore';
+import EntryEditModal, { EditButton } from './EntryEditModal';
 
 interface Holiday {
+  row: number;                      // the entry's __row handle
+  cells: Record<string, string>;    // its cells by column name, for the edit form
   name: string;
   date: Date;
   day: string;
@@ -54,7 +58,8 @@ function daysAway(date: Date): number {
   return Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-export default function HolidayCalendar({ data, headers }: { data: SheetData[]; headers: string[] }) {
+export default function HolidayCalendar({ data, headers, canEdit = false, onSaved }: { data: SheetData[]; headers: string[]; canEdit?: boolean; onSaved?: () => void }) {
+  const [editing, setEditing] = useState<Holiday | null>(null);
   const nameCol = headers.find(h => h.toLowerCase().includes('name'));
   const dateCol = headers.find(h => h.toLowerCase().includes('date'));
   const dayCol  = headers.find(h => h.toLowerCase().includes('day'));
@@ -72,6 +77,8 @@ export default function HolidayCalendar({ data, headers }: { data: SheetData[]; 
       const raw = String(r[dateCol] ?? '').trim();
       const date = parseDate(raw);
       return date ? {
+        row: Number(r.__row),
+        cells: Object.fromEntries(Object.keys(r).filter(k => k !== '__row').map(k => [k, String(r[k] ?? '').trim()])),
         name: String(r[nameCol] ?? '').trim(),
         date,
         day: dayCol ? String(r[dayCol] ?? '').trim() : date.toLocaleDateString('en-US', { weekday: 'long' }),
@@ -158,6 +165,7 @@ export default function HolidayCalendar({ data, headers }: { data: SheetData[]; 
                 ) : (
                   <span className="text-[11px] shrink-0" style={{ color: 'var(--cn-text-faint)' }}>Past</span>
                 )}
+                {canEdit && <EditButton onClick={() => setEditing(h)} label={`Edit ${h.name}`} />}
               </div>
               <p className="text-sm font-semibold truncate" style={{ color: 'var(--cn-text-primary)' }}>{h.name}</p>
               <p className="text-xs mt-1" style={{ color: 'var(--cn-text-muted)' }}>
@@ -167,6 +175,10 @@ export default function HolidayCalendar({ data, headers }: { data: SheetData[]; 
           );
         })}
       </div>
+
+      {editing && (
+        <EntryEditModal kind="holidays" row={editing.row} initial={editing.cells} onClose={() => setEditing(null)} onSaved={() => onSaved?.()} />
+      )}
     </div>
   );
 }

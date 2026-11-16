@@ -3,11 +3,14 @@
 import { useState } from 'react';
 import { ExternalLink, Sparkles, Briefcase, Hammer, Search, X } from 'lucide-react';
 import { SheetData } from '@/lib/dataStore';
+import EntryEditModal, { EditButton } from './EntryEditModal';
 
 type FocusFilter = 'All' | 'Management' | 'Production';
 type PriceFilter = 'All' | 'Free' | 'Freemium' | 'Premium';
 
 interface Tool {
+  row: number;                      // the entry's __row handle
+  raw: Record<string, string>;      // its cells by column name, for the edit form
   name: string;
   description: string;
   price: string;
@@ -23,7 +26,8 @@ const PRICE_COLORS: Record<string, string> = {
   premium: '#7c3aed',
 };
 
-export default function AITools({ data, headers }: { data: SheetData[]; headers: string[] }) {
+export default function AITools({ data, headers, canEdit = false, onSaved }: { data: SheetData[]; headers: string[]; canEdit?: boolean; onSaved?: () => void }) {
+  const [editing, setEditing] = useState<Tool | null>(null);
   const [category, setCategory] = useState('All');
   const [focus, setFocus] = useState<FocusFilter>('All');
   const [price, setPrice] = useState<PriceFilter>('All');
@@ -47,6 +51,8 @@ export default function AITools({ data, headers }: { data: SheetData[]; headers:
 
   const tools: Tool[] = data
     .map(r => ({
+      row: Number(r.__row),
+      raw: Object.fromEntries(Object.keys(r).filter(k => k !== '__row').map(k => [k, String(r[k] ?? '').trim()])),
       name: String(r[nameCol] ?? '').trim(),
       description: descCol ? String(r[descCol] ?? '').trim() : '',
       price: priceCol ? String(r[priceCol] ?? '').trim() : '',
@@ -187,6 +193,7 @@ export default function AITools({ data, headers }: { data: SheetData[]; headers:
                     </span>
                   )}
                 </div>
+                {canEdit && <EditButton onClick={() => setEditing(tool)} label={`Edit ${tool.name}`} />}
                 <a
                   href={tool.url}
                   target="_blank"
@@ -201,6 +208,10 @@ export default function AITools({ data, headers }: { data: SheetData[]; headers:
           );
         })}
       </div>
+
+      {editing && (
+        <EntryEditModal kind="ai-tools" row={editing.row} initial={editing.raw} onClose={() => setEditing(null)} onSaved={() => onSaved?.()} />
+      )}
     </div>
   );
 }

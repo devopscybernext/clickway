@@ -79,6 +79,11 @@ export function canManageHelp(role: Role): boolean {
 export function canDeletePmProjects(role: Role): boolean {
   return INHOUSE_FULL_ROLES.includes(role);
 }
+// Cybernext InHouse and Tools: Super Admin and HM can edit the entries of AI Tools, Websites, Case Studies, Brand Kit,
+// Documentations and Holiday Calendar (the edit buttons and /api/inhouse/edit use this one check).
+export function canEditInHouseEntries(role: Role): boolean {
+  return INHOUSE_FULL_ROLES.includes(role);
+}
 // Cybernext InHouse: only the Super Admin can upload Excel sheets into Websites, Case Studies,
 // Brand Kit and Documentations (the buttons and /api/inhouse/import use this one check).
 export function canManageInHouseData(role: Role): boolean {
