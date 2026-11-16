@@ -16,7 +16,10 @@ const ins = async (table: string, sheetId: string, tab: string, values: Record<s
 const cell = async (table: string, id: number, col: string) => (await query<Record<string, string>[]>(`SELECT ${col} AS v FROM ${table} WHERE id = ?`, [id]))[0].v;
 
 async function editEntry(page: Page, name: string, changes: Record<string, string>) {
-  await page.getByRole('button', { name: `Edit ${name}`, exact: true }).click();
+  // the pencils appear once the Edit button at the top is on (it stays on while moving between the tabs of a page)
+  const pencil = page.getByRole('button', { name: `Edit ${name}`, exact: true });
+  if ((await pencil.count()) === 0) await page.getByTestId('edit-toggle').click();
+  await pencil.click();
   const dialog = page.getByRole('dialog');
   for (const [label, value] of Object.entries(changes)) {
     const field = dialog.getByLabel(label, { exact: false });
@@ -116,6 +119,7 @@ test('the form refuses bad input, and only Super Admin and HM can edit', async (
     const member = await (await browser.newContext()).newPage();
     await login(member, USERS.team);
     await openPage(member, 'Cybernext InHouse', 'Internal');
+    await expect(member.getByTestId('edit-toggle')).toHaveCount(0);
     await expect(member.getByTestId('edit-entry')).toHaveCount(0);
     expect((await post(member, { Name: 'hacked' })).status()).toBe(403);
     expect(await cell('inhouse_brand_kit', id, 'name')).toBe(mark);
@@ -123,4 +127,86 @@ test('the form refuses bad input, and only Super Admin and HM can edit', async (
   } finally {
     await query('DELETE FROM inhouse_brand_kit WHERE name LIKE ?', [`${mark}%`]);
   }
+});
+
+test('the pencils only show while the Edit button at the top is on', async ({ page }) => {
+  await login(page, USERS.admin);
+  await openPage(page, 'Cybernext InHouse', 'Internal');
+  await expect(page.getByTestId('edit-toggle')).toBeVisible();
+  await expect(page.getByTestId('edit-entry').first()).toHaveCount(0);        // off: no pencils
+  await page.getByTestId('edit-toggle').click();
+  await expect(page.getByTestId('edit-toggle')).toHaveText('Done');
+  await expect(page.getByTestId('edit-entry').first()).toBeVisible();          // on: a pencil on each card
+  await page.getByTestId('edit-toggle').click();
+  await expect(page.getByTestId('edit-entry')).toHaveCount(0);
+});
+
+test('the HM deletes an entry after confirming; a team member cannot', async ({ page, browser }) => {
+  const mark = uniqueMark('InH Del');
+  const b = INHOUSE_IMPORT['brand-kit'];
+  const keep = await ins('inhouse_brand_kit', b.sheetId, b.tab, { name: `${mark} keep`, destination: 'Drive', url: 'https://example.com/keep' });
+  const gone = await ins('inhouse_brand_kit', b.sheetId, b.tab, { name: `${mark} gone`, destination: 'Drive', url: 'https://example.com/gone' });
+  const count = async (id: number) => Number((await query<{ n: number }[]>('SELECT COUNT(*) AS n FROM inhouse_brand_kit WHERE id = ?', [id]))[0].n);
+  try {
+    await login(page, USERS.admin);
+    await openPage(page, 'Cybernext InHouse', 'Internal');
+    await page.getByRole('tab', { name: 'Brand Kit', exact: true }).click();
+    await page.getByRole('textbox', { name: /^Search/ }).fill(mark);
+    await page.getByTestId('edit-toggle').click();
+
+    // asked first: cancelling deletes nothing
+    await page.getByRole('button', { name: `Delete ${mark} gone`, exact: true }).click();
+    const dialog = page.getByRole('alertdialog');
+    await expect(dialog).toContainText(`${mark} gone`);
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(dialog).toHaveCount(0);
+    expect(await count(gone)).toBe(1);
+
+    // confirmed: it goes, the other stays, and what it held is kept in the change log
+    await page.getByRole('button', { name: `Delete ${mark} gone`, exact: true }).click();
+    await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: `${mark} gone` })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: `${mark} keep` })).toBeVisible();
+    expect(await count(gone)).toBe(0);
+    expect(await count(keep)).toBe(1);
+    const log = await query<{ n: number }[]>("SELECT COUNT(*) AS n FROM change_log WHERE table_name = 'inhouse_brand_kit' AND row_id = ? AND column_name = 'Row deleted'", [gone]);
+    expect(Number(log[0].n)).toBe(1);
+
+    // a team member: no buttons, and the API says no
+    const member = await (await browser.newContext()).newPage();
+    await login(member, USERS.team);
+    await openPage(member, 'Cybernext InHouse', 'Internal');
+    await expect(member.getByTestId('delete-entry')).toHaveCount(0);
+    const res = await member.request.post('/api/inhouse/edit', { data: { kind: 'brand-kit', action: 'delete', row: keep }, headers: { 'sec-fetch-mode': 'cors', 'sec-fetch-dest': 'empty' } });
+    expect(res.status()).toBe(403);
+    expect(await count(keep)).toBe(1);
+    await member.context().close();
+  } finally {
+    await query('DELETE FROM inhouse_brand_kit WHERE name LIKE ?', [`${mark}%`]);
+  }
+});
+
+test('Export Excel downloads every entry of each list', async ({ page, browser }) => {
+  await login(page, USERS.admin);
+  const download = async () => {
+    const [file] = await Promise.all([page.waitForEvent('download'), page.getByTestId('export-excel').click()]);
+    return file;
+  };
+  await openPage(page, 'Cybernext InHouse', 'Internal');
+  for (const [tab, name] of [['Websites', 'websites'], ['Case Studies', 'case-studies'], ['Brand Kit', 'brand-kit'], ['Documentations', 'documentations'], ['Holiday Calendar', 'holidays']] as const) {
+    await page.getByRole('tab', { name: tab, exact: true }).click();
+    const file = await download();
+    expect(file.suggestedFilename(), tab).toMatch(new RegExp(String.raw`^cybernext-${name}-\d{4}-\d{2}-\d{2}\.xlsx$`));
+  }
+  await openPage(page, 'Cybernext InHouse', 'Tools');
+  await page.getByRole('tab', { name: 'AI Tools', exact: true }).click();
+  expect((await download()).suggestedFilename()).toMatch(/^cybernext-ai-tools-\d{4}-\d{2}-\d{2}\.xlsx$/);
+
+  // a team member has no export button
+  const member = await (await browser.newContext()).newPage();
+  await login(member, USERS.team);
+  await openPage(member, 'Cybernext InHouse', 'Internal');
+  await expect(member.getByTestId('export-excel')).toHaveCount(0);
+  await member.context().close();
 });

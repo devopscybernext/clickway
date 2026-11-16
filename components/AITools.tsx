@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { ExternalLink, Sparkles, Briefcase, Hammer, Search, X } from 'lucide-react';
 import { SheetData } from '@/lib/dataStore';
-import EntryEditModal, { EditButton } from './EntryEditModal';
+import EntryEditModal, { EntryActions, EditToggle, DeleteConfirm, ExportButton } from './EntryEditModal';
 
 type FocusFilter = 'All' | 'Management' | 'Production';
 type PriceFilter = 'All' | 'Free' | 'Freemium' | 'Premium';
@@ -28,6 +28,8 @@ const PRICE_COLORS: Record<string, string> = {
 
 export default function AITools({ data, headers, canEdit = false, onSaved }: { data: SheetData[]; headers: string[]; canEdit?: boolean; onSaved?: () => void }) {
   const [editing, setEditing] = useState<Tool | null>(null);
+  const [deleting, setDeleting] = useState<Tool | null>(null);
+  const [editMode, setEditMode] = useState(false);   // the Edit button at the top: while on, every tool shows its pencil
   const [category, setCategory] = useState('All');
   const [focus, setFocus] = useState<FocusFilter>('All');
   const [price, setPrice] = useState<PriceFilter>('All');
@@ -128,6 +130,8 @@ export default function AITools({ data, headers, canEdit = false, onSaved }: { d
           ))}
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {canEdit && <ExportButton title="AI Tools" fileName="cybernext-ai-tools" headers={headers} rows={data} />}
+          {canEdit && <EditToggle on={editMode} onChange={setEditMode} />}
           <select
             value={focus}
             onChange={e => setFocus(e.target.value as FocusFilter)}
@@ -193,7 +197,7 @@ export default function AITools({ data, headers, canEdit = false, onSaved }: { d
                     </span>
                   )}
                 </div>
-                {canEdit && <EditButton onClick={() => setEditing(tool)} label={`Edit ${tool.name}`} />}
+                {canEdit && editMode && <EntryActions name={tool.name} onEdit={() => setEditing(tool)} onDelete={() => setDeleting(tool)} />}
                 <a
                   href={tool.url}
                   target="_blank"
@@ -208,6 +212,10 @@ export default function AITools({ data, headers, canEdit = false, onSaved }: { d
           );
         })}
       </div>
+
+      {deleting && (
+        <DeleteConfirm kind="ai-tools" row={deleting.row} name={deleting.name} onClose={() => setDeleting(null)} onDeleted={() => onSaved?.()} />
+      )}
 
       {editing && (
         <EntryEditModal kind="ai-tools" row={editing.row} initial={editing.raw} onClose={() => setEditing(null)} onSaved={() => onSaved?.()} />

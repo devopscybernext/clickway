@@ -6,7 +6,7 @@ import {
   Feather, BookOpen, Sun, Gift, Star, type LucideIcon,
 } from 'lucide-react';
 import { SheetData } from '@/lib/dataStore';
-import EntryEditModal, { EditButton } from './EntryEditModal';
+import EntryEditModal, { EntryActions, EditToggle, DeleteConfirm, ExportButton } from './EntryEditModal';
 
 interface Holiday {
   row: number;                      // the entry's __row handle
@@ -60,6 +60,8 @@ function daysAway(date: Date): number {
 
 export default function HolidayCalendar({ data, headers, canEdit = false, onSaved }: { data: SheetData[]; headers: string[]; canEdit?: boolean; onSaved?: () => void }) {
   const [editing, setEditing] = useState<Holiday | null>(null);
+  const [deleting, setDeleting] = useState<Holiday | null>(null);
+  const [editMode, setEditMode] = useState(false);   // the Edit button at the top: while on, every holiday shows its pencil
   const nameCol = headers.find(h => h.toLowerCase().includes('name'));
   const dateCol = headers.find(h => h.toLowerCase().includes('date'));
   const dayCol  = headers.find(h => h.toLowerCase().includes('day'));
@@ -139,6 +141,8 @@ export default function HolidayCalendar({ data, headers, canEdit = false, onSave
         <CalendarDays className="w-4 h-4" style={{ color: 'var(--cn-text-muted)' }} />
         <h3 className="text-sm font-semibold" style={{ color: 'var(--cn-text-primary)' }}>All Holidays</h3>
         <span className="text-xs ml-auto" style={{ color: 'var(--cn-text-muted)' }}>{holidays.length} total</span>
+        {canEdit && <ExportButton title="Holiday Calendar" fileName="cybernext-holidays" headers={headers} rows={data} />}
+        {canEdit && <EditToggle on={editMode} onChange={setEditMode} />}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {holidays.map((h, i) => {
@@ -165,7 +169,7 @@ export default function HolidayCalendar({ data, headers, canEdit = false, onSave
                 ) : (
                   <span className="text-[11px] shrink-0" style={{ color: 'var(--cn-text-faint)' }}>Past</span>
                 )}
-                {canEdit && <EditButton onClick={() => setEditing(h)} label={`Edit ${h.name}`} />}
+                {canEdit && editMode && <EntryActions name={h.name} onEdit={() => setEditing(h)} onDelete={() => setDeleting(h)} />}
               </div>
               <p className="text-sm font-semibold truncate" style={{ color: 'var(--cn-text-primary)' }}>{h.name}</p>
               <p className="text-xs mt-1" style={{ color: 'var(--cn-text-muted)' }}>
@@ -175,6 +179,10 @@ export default function HolidayCalendar({ data, headers, canEdit = false, onSave
           );
         })}
       </div>
+
+      {deleting && (
+        <DeleteConfirm kind="holidays" row={deleting.row} name={deleting.name} onClose={() => setDeleting(null)} onDeleted={() => onSaved?.()} />
+      )}
 
       {editing && (
         <EntryEditModal kind="holidays" row={editing.row} initial={editing.cells} onClose={() => setEditing(null)} onSaved={() => onSaved?.()} />

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Pencil } from 'lucide-react';
+import { X, Pencil, Check, Trash2, Download } from 'lucide-react';
+import { downloadTableXlsx } from '@/lib/tableExport';
 import { EDIT_KINDS, EditKind } from '@/lib/inhouseEdit';
 
 // The edit form of one entry of a Cybernext InHouse page (Websites, Case Studies, Brand Kit, Documentations,
@@ -80,6 +81,102 @@ export default function EntryEditModal({ kind, row, initial, onClose, onSaved }:
         </form>
       </div>
     </div>
+  );
+}
+
+// The Edit button at the top of a page: while it is on, every entry shows its pencil. Super Admin and HM only.
+export function EditToggle({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <button onClick={() => onChange(!on)} aria-pressed={on} data-testid="edit-toggle"
+      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg cursor-pointer transition-all text-xs font-semibold shrink-0"
+      style={on
+        ? { background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }
+        : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>
+      {on ? <Check className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}
+      {on ? 'Done' : 'Edit'}
+    </button>
+  );
+}
+
+// Export to Excel: every entry of the list (not only the ones the search and filters leave), one column per field
+export function ExportButton({ title, fileName, headers, rows }: { title: string; fileName: string; headers: string[]; rows: Record<string, unknown>[] }) {
+  const [busy, setBusy] = useState(false);
+  const run = async () => {
+    setBusy(true);
+    try {
+      const columns = headers.filter(h => !h.startsWith('__'));
+      const day = new Date().toISOString().slice(0, 10);
+      await downloadTableXlsx({
+        title,
+        columns: columns.map(label => ({ label })),
+        rows: rows.map(r => columns.map(h => String(r[h] ?? '').trim())),
+        fileName: `${fileName}-${day}.xlsx`,
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button onClick={() => void run()} disabled={busy} data-testid="export-excel"
+      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg cursor-pointer transition-all text-xs font-semibold shrink-0 disabled:opacity-60"
+      style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', border: '1px solid var(--cn-border)' }}>
+      <Download className="w-3.5 h-3.5" />
+      {busy ? 'Exporting…' : 'Export Excel'}
+    </button>
+  );
+}
+
+// Asks before an entry is deleted for good
+export function DeleteConfirm({ kind, row, name, onClose, onDeleted }: { kind: EditKind; row: number; name: string; onClose: () => void; onDeleted: () => void }) {
+  const def = EDIT_KINDS[kind];
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const remove = async () => {
+    setBusy(true); setError('');
+    try {
+      const res = await fetch('/api/inhouse/edit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind, action: 'delete', row }) });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) { setError(json.error || 'Could not delete.'); return; }
+      onDeleted();
+      onClose();
+    } catch {
+      setError('Could not delete. Check your connection and try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div role="alertdialog" aria-label={`Delete ${def.label}`} className="w-full max-w-sm rounded-2xl border shadow-2xl p-5 space-y-4" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}>
+        <h3 className="flex items-center gap-2 font-semibold text-base" style={{ color: 'var(--cn-text-primary)' }}>
+          <Trash2 className="w-4 h-4" style={{ color: '#dc2626' }} /> Delete {def.label}?
+        </h3>
+        <p className="text-sm" style={{ color: 'var(--cn-text-muted)' }}>
+          <b style={{ color: 'var(--cn-text-primary)' }}>{name}</b> will be removed for good. This cannot be undone.
+        </p>
+        {error && <p role="alert" className="text-xs" style={{ color: '#ef4444' }}>{error}</p>}
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer border" style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-primary)', borderColor: 'var(--cn-border)' }}>Cancel</button>
+          <button onClick={() => void remove()} disabled={busy} className="px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer disabled:opacity-60" style={{ background: '#dc2626', color: '#fff' }}>{busy ? 'Deleting…' : 'Delete'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// A card's pencil and trash buttons (shown while the Edit button at the top is on)
+export function EntryActions({ name, onEdit, onDelete }: { name: string; onEdit: () => void; onDelete: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 shrink-0">
+      <EditButton onClick={onEdit} label={`Edit ${name}`} />
+      <button onClick={onDelete} aria-label={`Delete ${name}`} title={`Delete ${name}`} data-testid="delete-entry"
+        className="inline-flex items-center justify-center w-8 h-8 rounded-full cursor-pointer transition-all shrink-0"
+        style={{ background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)', border: '1px solid var(--cn-border)' }}
+        onMouseEnter={e => (e.currentTarget.style.color = '#dc2626')}
+        onMouseLeave={e => (e.currentTarget.style.color = 'var(--cn-text-muted)')}>
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
+    </span>
   );
 }
 
