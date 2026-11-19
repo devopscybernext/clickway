@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, Globe, FolderOpen, Pencil, Archive, ArchiveRestore, RefreshCw, Plus, ExternalLink, Trash2, Lock, Link2, Users, FileText } from 'lucide-react';
-import { api, postJson, Button, Modal, Pill, STATUS_TONE, cardStyle, formatDate, openDocumentInNewTab, useFlash } from './shared';
+import { api, postJson, Button, Modal, Pill, PinButton, STATUS_TONE, cardStyle, formatDate, openDocumentInNewTab, useFlash, savePin } from './shared';
 import ProjectFormModal from './ProjectFormModal';
 import DocumentFormModal, { type TemplateOption } from './DocumentFormModal';
 import ProjectMembers, { type Member, type Person } from './ProjectMembers';
@@ -12,7 +12,7 @@ interface Detail {
   project: { id: number; name: string; client: string; platform: string; website: string; description: string; status: ProjectStatus; archived: boolean; driveFolderUrl: string; createdBy: string; createdAt: string | null };
   access: ProjectAccess; canManage: boolean; canAdd: boolean; fullAccess: boolean;
   members: Member[];
-  documents: { id: number; title: string; source: string; visibility: 'invite' | 'public'; mimeType: string; template: string; createdBy: string; createdAt: string | null; pendingSharing: boolean; canDelete: boolean }[];
+  documents: { id: number; title: string; source: string; visibility: 'invite' | 'public'; mimeType: string; template: string; createdBy: string; createdAt: string | null; pendingSharing: boolean; canDelete: boolean; pinned: boolean }[];
   people: Person[];
   templates: TemplateOption[];
 }
@@ -54,6 +54,17 @@ export default function ProjectDetail({ projectId, onBack, onChanged }: { projec
     const r = await api(`/api/projects/${projectId}/sharing`, { method: 'POST' });
     setBusy(false);
     changed(r.success ? String(r.message) : r.error!, typeof r.note === 'string' ? r.note : undefined, !r.success);
+  };
+  // Pinned documents go to the top of the list (for this person only)
+  const togglePin = async (id: number, pinned: boolean) => {
+    const set = (v: boolean) => setData(cur => cur && {
+      ...cur,
+      documents: cur.documents.map(d => (d.id === id ? { ...d, pinned: v } : d))
+        .sort((a, b) => Number(b.pinned) - Number(a.pinned) || (b.createdAt ?? '').localeCompare(a.createdAt ?? '') || b.id - a.id),
+    });
+    set(pinned);
+    const r = await savePin('document', id, pinned);
+    if (!r.success) { set(!pinned); setFlash({ kind: 'error', text: r.error! }); }
   };
   const open = async (id: number) => {
     const error = await openDocumentInNewTab(id);
@@ -151,6 +162,7 @@ export default function ProjectDetail({ projectId, onBack, onChanged }: { projec
                     ? <Pill tone="blue"><Lock className="w-3 h-3 mr-1" /> Members only</Pill>
                     : <Pill><Link2 className="w-3 h-3 mr-1" /> Anyone with link</Pill>}
                   {d.pendingSharing && data.canManage && <Pill tone="amber">Sharing pending</Pill>}
+                  <PinButton pinned={d.pinned} label={d.title} onToggle={() => void togglePin(d.id, !d.pinned)} />
                   <Button small onClick={() => void open(d.id)}><ExternalLink className="w-3.5 h-3.5" /> Open</Button>
                   {d.canDelete && (
                     <button onClick={() => void remove(d.id, d.title)} disabled={busy} aria-label={`Delete ${d.title}`} title="Delete document"

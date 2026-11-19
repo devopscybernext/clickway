@@ -37,9 +37,10 @@ export async function listProjects(actor: Actor) {
             p.created_by_name, p.created_at, p.updated_at,
             (SELECT COUNT(*) FROM doc_project_members x WHERE x.project_id = p.id) AS member_count,
             (SELECT COUNT(*) FROM doc_documents x WHERE x.project_id = p.id) AS document_count,
-            (SELECT access_level FROM doc_project_members x WHERE x.project_id = p.id AND x.user_id = ?) AS my_access
-       FROM doc_projects p WHERE ${scope.sql} ORDER BY p.updated_at DESC, p.id DESC`,
-    [actor.id, ...scope.values]
+            (SELECT access_level FROM doc_project_members x WHERE x.project_id = p.id AND x.user_id = ?) AS my_access,
+            EXISTS (SELECT 1 FROM doc_pins pin WHERE pin.user_id = ? AND pin.kind = 'project' AND pin.item_id = p.id) AS pinned
+       FROM doc_projects p WHERE ${scope.sql} ORDER BY pinned DESC, p.updated_at DESC, p.id DESC`,
+    [actor.id, actor.id, ...scope.values]
   );
   return {
     canCreate: actor.policy.create,
@@ -52,6 +53,7 @@ export async function listProjects(actor: Actor) {
       createdBy: r.created_by_name ?? '', createdAt: iso(r.created_at), updatedAt: iso(r.updated_at),
       members: Number(r.member_count), documents: Number(r.document_count),
       access: (full ? 'manager' : r.my_access) as ProjectAccess,
+      pinned: Number(r.pinned) === 1,
     })),
   };
 }
@@ -127,10 +129,11 @@ export async function getProject(actor: Actor, projectId: number) {
   );
   const [documents] = await db.query<Row[]>(
     `SELECT d.id, d.title, d.source_type, d.visibility, d.mime_type, d.created_by, d.created_by_name, d.created_at, t.name AS template_name,
-            (SELECT COUNT(*) FROM doc_document_access a WHERE a.document_id = d.id AND a.status = 'pending') AS pending
+            (SELECT COUNT(*) FROM doc_document_access a WHERE a.document_id = d.id AND a.status = 'pending') AS pending,
+            EXISTS (SELECT 1 FROM doc_pins pin WHERE pin.user_id = ? AND pin.kind = 'document' AND pin.item_id = d.id) AS pinned
        FROM doc_documents d LEFT JOIN doc_templates t ON t.id = d.template_id
-      WHERE d.project_id = ? ORDER BY d.created_at DESC, d.id DESC`,
-    [projectId]
+      WHERE d.project_id = ? ORDER BY pinned DESC, d.created_at DESC, d.id DESC`,
+    [actor.id, projectId]
   );
   // Everyone's Projects access (Admin Portal → Projects). People with full access aren't listed as
   // members (they see every project); people can be added only if they have Projects access.
@@ -160,6 +163,7 @@ export async function getProject(actor: Actor, projectId: number) {
       id: Number(d.id), title: d.title, source: d.source_type, visibility: d.visibility, mimeType: d.mime_type ?? '',
       template: d.template_name ?? '', createdBy: d.created_by_name ?? '', createdAt: iso(d.created_at),
       pendingSharing: Number(d.pending) > 0,
+      pinned: Number(d.pinned) === 1,
       canDelete: full || Number(d.created_by) === actor.id,
     })),
     people: people.map(u => ({ id: u.id, name: u.name, email: u.email, role: u.role })),
@@ -330,6 +334,7 @@ export async function deleteDocument(actor: Actor, documentId: number) {
     await c.beginTransaction();
     try {
       await c.query('DELETE FROM doc_documents WHERE id = ?', [documentId]);
+      await c.query("DELETE FROM doc_pins WHERE kind = 'document' AND item_id = ?", [documentId]);
       await c.query('UPDATE doc_projects SET updated_at = CURRENT_TIMESTAMP WHERE id = ?', [doc.project_id]);
       await logChange(c, actor, 'doc_documents', documentId, 'Document deleted', JSON.stringify({ title: doc.title, projectId: doc.project_id, driveFileId: doc.drive_file_id, drive }), null);
       await c.commit();
@@ -346,19 +351,45 @@ export async function listDocuments(actor: Actor) {
   const full = actor.policy.full;
   const [rows] = await pool().query<Row[]>(
     `SELECT d.id, d.title, d.source_type, d.visibility, d.mime_type, d.created_by, d.created_by_name, d.created_at,
-            p.id AS project_id, p.name AS project_name, p.is_archived
+            p.id AS project_id, p.name AS project_name, p.is_archived,
+            EXISTS (SELECT 1 FROM doc_pins pin WHERE pin.user_id = ? AND pin.kind = 'document' AND pin.item_id = d.id) AS pinned
        FROM doc_documents d JOIN doc_projects p ON p.id = d.project_id
-      WHERE ${scope.sql} ORDER BY d.created_at DESC, d.id DESC`,
-    scope.values
+      WHERE ${scope.sql} ORDER BY pinned DESC, d.created_at DESC, d.id DESC`,
+    [actor.id, ...scope.values]
   );
   return {
     documents: rows.map(d => ({
       id: Number(d.id), title: d.title, source: d.source_type, visibility: d.visibility, mimeType: d.mime_type ?? '',
       createdBy: d.created_by_name ?? '', createdAt: iso(d.created_at),
       projectId: Number(d.project_id), projectName: d.project_name, archived: !!d.is_archived,
+      pinned: Number(d.pinned) === 1,
       canDelete: full || Number(d.created_by) === actor.id,
     })),
   };
+}
+
+// ─── Pins ────────────────────────────────────────────────────────────────────
+
+// Pins or unpins a project or a document for the signed-in person only (it shows first in their lists).
+export async function setPin(actor: Actor, body: Record<string, unknown>) {
+  const kind = body.kind;
+  if (kind !== 'project' && kind !== 'document') throw new ProjectError('Invalid request.');
+  const id = positiveId(body.id, kind);
+  if (typeof body.pinned !== 'boolean') throw new ProjectError('Invalid request.');
+  await withConnection(async c => {
+    let projectId = id;
+    if (kind === 'document') {
+      const [rows] = await c.query<Row[]>('SELECT project_id FROM doc_documents WHERE id = ?', [id]);
+      if (!rows[0]) throw new ProjectError('This document no longer exists.', 404);
+      projectId = Number(rows[0].project_id);
+    }
+    await requireProject(actor, projectId, 'view', c);
+    if (body.pinned) {
+      await c.query('INSERT IGNORE INTO doc_pins (user_id, kind, item_id) VALUES (?, ?, ?)', [actor.id, kind, id]);
+    } else {
+      await c.query('DELETE FROM doc_pins WHERE user_id = ? AND kind = ? AND item_id = ?', [actor.id, kind, id]);
+    }
+  });
 }
 
 // ─── Templates ───────────────────────────────────────────────────────────────

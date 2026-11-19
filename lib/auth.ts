@@ -22,8 +22,8 @@ export interface AuthUser {
   role: Role;
   displayName: string;
   email?: string;
-  // Set by the page once Admin Portal → Projects settings are known: hides the Projects menu
-  // ('none') or shows Templates ('full'). Unset = the role default below.
+  // Set by the page once Admin Portal → Projects settings are known: hides Cybernext InHouse →
+  // Documents ('none') or shows its Templates tab ('full'). Unset = the role default below.
   projectsMenu?: 'none' | 'member' | 'full';
 }
 
@@ -350,24 +350,34 @@ const HELP_NAV_ADMIN: NavItem = {
   label: 'Help',
   children: [{ id: '18', subTab: 'apply', label: 'Apply' }, { id: '18', subTab: 'queries', label: 'All Queries' }],
 };
-// Projects (shared Google Drive documents per project) is in everyone's menu: people see the projects
-// they are a member of; Super Admin and HM see all of them and also get Templates. See lib/projects/rules.ts.
-const PROJECTS_NAV: NavParent = {
-  label: 'Projects',
-  children: [{ id: '21', subTab: 'projects', label: 'All Projects' }, { id: '21', subTab: 'documents', label: 'Documents' }],
-};
-const PROJECTS_NAV_FULL: NavParent = {
-  label: 'Projects',
-  children: [...PROJECTS_NAV.children, { id: '21', subTab: 'templates', label: 'Templates' }],
-};
+// Documents (shared Google Drive documents per project, page '21') is the third page of Cybernext InHouse,
+// for everyone: its tabs are Projects and All Documents, plus Templates for full access (Super Admin and HM
+// by default; Admin Portal → Projects can change who sees Documents at all). See lib/projects/rules.ts.
+// Leave Status, for the roles that have it, is the last page of Cybernext InHouse.
+const DOCUMENTS_TABS: NavLeaf[] = [
+  { id: '21', subTab: 'projects', label: 'Projects' },
+  { id: '21', subTab: 'documents', label: 'All Documents' },
+];
+const DOCUMENTS_TEMPLATES_TAB: NavLeaf = { id: '21', subTab: 'templates', label: 'Templates' };
+const documentsPage = (full: boolean): NavLeaf => ({
+  id: '21', subTab: 'projects', label: 'Documents', tabs: full ? [...DOCUMENTS_TABS, DOCUMENTS_TEMPLATES_TAB] : DOCUMENTS_TABS,
+});
 const PROJECTS_FULL_ROLES: Role[] = ['Admin', 'admin', 'HM', 'high', 'akash'];
-const withProjects = (nav: Record<Role, NavItem[]>): Record<Role, NavItem[]> =>
-  Object.fromEntries((Object.keys(nav) as Role[]).map(role => [role, [...nav[role], PROJECTS_FULL_ROLES.includes(role) ? PROJECTS_NAV_FULL : PROJECTS_NAV]])) as Record<Role, NavItem[]>;
+const isDocumentsPage = (leaf: NavLeaf) => leaf.id === '21';
+const withInHouseExtras = (nav: Record<Role, NavItem[]>): Record<Role, NavItem[]> =>
+  Object.fromEntries((Object.keys(nav) as Role[]).map(role => {
+    const items = nav[role];
+    const hasLeave = items.some(i => !isNavParent(i) && i.id === LEAVE_STATUS.id);
+    const extras: NavLeaf[] = [documentsPage(PROJECTS_FULL_ROLES.includes(role)), ...(hasLeave ? [LEAVE_STATUS] : [])];
+    return [role, items
+      .filter(i => isNavParent(i) || i.id !== LEAVE_STATUS.id)
+      .map(i => (isNavParent(i) && i.label === BUSINESS_DEV ? { ...i, children: [...i.children, ...extras] } : i))];
+  })) as Record<Role, NavItem[]>;
 
 const withHelp = (nav: Record<Role, NavItem[]>): Record<Role, NavItem[]> =>
   Object.fromEntries((Object.keys(nav) as Role[]).map(role => [role, [...nav[role], canManageHelp(role) ? HELP_NAV_ADMIN : HELP_NAV]])) as Record<Role, NavItem[]>;
 
-export const ROLE_NAV: Record<Role, NavItem[]> = withHelp(withProjects({
+export const ROLE_NAV: Record<Role, NavItem[]> = withHelp(withInHouseExtras({
   HM:    ADMIN_NAV,
   Admin: ADMIN_NAV,
   Mod:   MOD_NAV,
@@ -409,7 +419,7 @@ export const SHEET_LABELS: Record<SheetId, string> = {
   '18': 'Help',
   '19': 'Import Data',
   '20': 'Dashboard',
-  '21': 'Projects',
+  '21': 'Documents',
 };
 
 export function getSheetLabel(id: SheetId, role: Role): string {
@@ -421,7 +431,7 @@ export function getSheetLabel(id: SheetId, role: Role): string {
 // The sidebar's top-level order, the same for every role (a role simply lacks the
 // items it can't open). The page a role lands on after login is the first page of
 // this menu too (getFirstNavLeaf).
-const MENU_ORDER = ['PM Projects', 'Marketing', 'Web', 'Projects', 'Leave Status', 'Cybernext InHouse', 'Help'];
+const MENU_ORDER = ['PM Projects', 'Marketing', 'Web', 'Leave Status', 'Cybernext InHouse', 'Help'];
 const menuRank = (item: NavItem): number => {
   const label = isNavParent(item) ? item.label : SHEET_LABELS[item.id];
   const i = MENU_ORDER.indexOf(label);
@@ -431,10 +441,11 @@ const menuRank = (item: NavItem): number => {
 // access checks and the page a role may open are unchanged); the sidebar just leaves them out.
 export const TOP_BAR_MENUS = ['Help'];
 export function getNavItems(user: AuthUser): NavItem[] {
-  const items = user.projectsMenu
-    ? ROLE_NAV[user.role].flatMap(item => isNavParent(item) && item.label === 'Projects'
-        ? (user.projectsMenu === 'none' ? [] : [user.projectsMenu === 'full' ? PROJECTS_NAV_FULL : PROJECTS_NAV])
-        : [item])
+  const menu = user.projectsMenu;
+  const items = menu
+    ? ROLE_NAV[user.role].map(item => isNavParent(item) && item.label === BUSINESS_DEV
+        ? { ...item, children: item.children.flatMap(c => (isDocumentsPage(c) ? (menu === 'none' ? [] : [documentsPage(menu === 'full')]) : [c])) }
+        : item)
     : [...ROLE_NAV[user.role]];
   return items.sort((a, b) => menuRank(a) - menuRank(b));
 }

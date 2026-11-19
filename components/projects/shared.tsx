@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { X, AlertCircle, CheckCircle2, Pin, ChevronDown } from 'lucide-react';
 import type { ProjectAccess, ProjectStatus } from '@/lib/projects/rules';
 
 // Small pieces shared by the Projects pages, in the dashboard's own look (cn-card, --cn-* colours).
@@ -14,7 +14,7 @@ export const cardStyle = { background: 'var(--cn-bg-card)', borderColor: 'var(--
 export interface ProjectSummary {
   id: number; name: string; client: string; platform: string; website: string; status: ProjectStatus; archived: boolean;
   driveFolderUrl: string; createdBy: string; createdAt: string | null; updatedAt: string | null;
-  members: number; documents: number; access: ProjectAccess;
+  members: number; documents: number; access: ProjectAccess; pinned: boolean;
 }
 
 // A one-off key per form, so a double-click or a retry never creates two projects or documents
@@ -156,3 +156,31 @@ export function Pill({ children, tone = 'muted' }: { children: React.ReactNode; 
 export const STATUS_TONE: Record<ProjectStatus, 'muted' | 'accent' | 'green' | 'amber' | 'blue'> = {
   planning: 'blue', in_progress: 'accent', on_hold: 'amber', completed: 'green',
 };
+
+// Pins a project or a document to the top of the signed-in person's own lists
+export const savePin = (kind: 'project' | 'document', id: number, pinned: boolean) =>
+  postJson('/api/project-pins', { kind, id, pinned });
+
+export function PinButton({ pinned, label, onToggle, disabled }: { pinned: boolean; label: string; onToggle: () => void; disabled?: boolean }) {
+  return (
+    <button type="button" aria-pressed={pinned} aria-label={`${pinned ? 'Unpin' : 'Pin'} ${label}`} title={pinned ? 'Unpin' : 'Pin to the top'}
+      disabled={disabled}
+      onClick={e => { e.stopPropagation(); onToggle(); }}
+      onKeyDown={e => e.stopPropagation()}
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg cursor-pointer transition-colors hover:bg-black/5 disabled:opacity-50"
+      style={{ color: pinned ? 'var(--cn-accent)' : 'var(--cn-text-faint)' }}>
+      <Pin className="w-4 h-4" fill={pinned ? 'currentColor' : 'none'} style={{ transform: pinned ? 'none' : 'rotate(45deg)' }} />
+    </button>
+  );
+}
+
+// A collapsible group heading ("Pinned (2)" / "Other (14)")
+export function GroupHeading({ label, count, open, onToggle }: { label: string; count: number; open: boolean; onToggle: () => void }) {
+  return (
+    <button type="button" onClick={onToggle} aria-expanded={open}
+      className="inline-flex items-center gap-2 text-sm font-semibold cursor-pointer" style={{ color: 'var(--cn-text-muted)' }}>
+      <ChevronDown className="w-4 h-4 transition-transform" style={{ transform: open ? 'none' : 'rotate(-90deg)' }} />
+      {label} ({count})
+    </button>
+  );
+}

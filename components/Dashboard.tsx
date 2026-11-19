@@ -346,6 +346,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
       .catch(() => { /* keep the role default */ });
     return () => { live = false; };
   }, [user.username]);
+  const navUser = projectsMenu ? { ...user, projectsMenu } : user;
   const [helpSubTab, setHelpSubTab] = useState<HelpSubTab>('apply');
   const [pmBandwidthSubTab, setPmBandwidthSubTab] = useState<'current' | 'archive' | 'mine' | 'closed' | 'dashboard'>(
     firstLeaf.id === '11' && firstLeaf.subTab ? firstLeaf.subTab as 'current' | 'archive' | 'mine' | 'closed' | 'dashboard' : 'current');
@@ -999,7 +1000,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
         selectedInHouseSubTab={inHouseSubTab}
         selectedHelpSubTab={helpSubTab}
         selectedProjectsSubTab={projectsSubTab}
-        user={projectsMenu ? { ...user, projectsMenu } : user}
+        user={navUser}
         onSheetChange={handleSheetChange}
         onLogout={onLogout}
         isAdmin={isAdmin}
@@ -1169,11 +1170,11 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
             </section>
           )}
 
-          {/* ── Cybernext InHouse (Internal / Tools): the sub pages of the open page, as tabs ── */}
-          {(isTools || isInHouse) && (
+          {/* ── Cybernext InHouse (Internal / Tools / Documents): the sub pages of the open page, as tabs ── */}
+          {(isTools || isInHouse || isProjects) && (
             <BusinessDevTabs
-              pages={(getNavItems(user).find(i => isNavParent(i) && i.label === BUSINESS_DEV) as { children: NavLeaf[] } | undefined)?.children ?? []}
-              isTabActive={leaf => selectedSheet === leaf.id && leaf.subTab === (leaf.id === '14' ? toolsSubTab : inHouseSubTab)}
+              pages={(getNavItems(navUser).find(i => isNavParent(i) && i.label === BUSINESS_DEV) as { children: NavLeaf[] } | undefined)?.children ?? []}
+              isTabActive={leaf => selectedSheet === leaf.id && leaf.subTab === (leaf.id === '14' ? toolsSubTab : leaf.id === '21' ? projectsSubTab : inHouseSubTab)}
               onNavigate={handleSheetChange}
             />
           )}

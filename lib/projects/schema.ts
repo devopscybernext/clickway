@@ -109,6 +109,16 @@ export const PROJECT_TABLES_SQL: string[] = [
   \`updated_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (\`scope\`, \`scope_key\`)
 ) ${OPTIONS}`,
+
+  // Pins: each person can pin projects and documents to the top of their own lists.
+  `CREATE TABLE IF NOT EXISTS \`doc_pins\` (
+  \`user_id\` INT UNSIGNED NOT NULL,
+  \`kind\` ENUM('project','document') NOT NULL,
+  \`item_id\` INT UNSIGNED NOT NULL,
+  \`pinned_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (\`user_id\`, \`kind\`, \`item_id\`),
+  KEY \`idx_item\` (\`kind\`, \`item_id\`)
+) ${OPTIONS}`,
 ];
 
 export async function ensureProjectSchema(pool: mysql.Pool): Promise<void> {

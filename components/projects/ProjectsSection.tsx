@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, cardStyle, useFlash, type ProjectSummary } from './shared';
+import { api, cardStyle, useFlash, savePin, type ProjectSummary } from './shared';
 import ProjectList from './ProjectList';
 import ProjectDetail from './ProjectDetail';
 import ProjectFormModal from './ProjectFormModal';
@@ -10,8 +10,8 @@ import TemplatesPage from './TemplatesPage';
 
 export type ProjectsSubTab = 'projects' | 'documents' | 'templates';
 
-// The Projects menu: All Projects (cards → one project's page), Documents (every document the person
-// can see) and Templates (Super Admin and HM). Data comes from /api/projects, /api/project-documents
+// Cybernext InHouse → Documents: Projects (cards → one project's page), All Documents (every document the
+// person can see) and Templates (full access). Data comes from /api/projects, /api/project-documents
 // and /api/project-templates; every rule is checked again on the server.
 export default function ProjectsSection({ subTab, onSubTabChange }: { subTab: ProjectsSubTab; onSubTabChange: (t: ProjectsSubTab) => void }) {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -40,6 +40,17 @@ export default function ProjectsSection({ subTab, onSubTabChange }: { subTab: Pr
 
   const changed = () => { void load(); setRefreshKey(k => k + 1); };
 
+  // Pinning shows at once; it is put back if the server refuses
+  const togglePin = async (project: ProjectSummary) => {
+    const pinned = !project.pinned;
+    setProjects(list => list.map(p => (p.id === project.id ? { ...p, pinned } : p)));
+    const r = await savePin('project', project.id, pinned);
+    if (!r.success) {
+      setProjects(list => list.map(p => (p.id === project.id ? { ...p, pinned: !pinned } : p)));
+      setFlash({ kind: 'error', text: r.error! });
+    }
+  };
+
   if (subTab === 'templates') return <TemplatesPage />;
   if (subTab === 'documents') {
     return <DocumentsPage refreshKey={refreshKey} onOpenProject={id => { openNext.current = id; onSubTabChange('projects'); }} />;
@@ -53,7 +64,7 @@ export default function ProjectsSection({ subTab, onSubTabChange }: { subTab: Pr
       ) : loadError ? (
         <div className="cn-card rounded-lg border p-6 text-sm" style={{ ...cardStyle, color: '#ef4444' }}>{loadError}</div>
       ) : (
-        <ProjectList projects={projects} loading={loading} canCreate={canCreate} onOpen={setOpenId} onCreate={() => setCreating(true)} />
+        <ProjectList projects={projects} loading={loading} canCreate={canCreate} onOpen={setOpenId} onCreate={() => setCreating(true)} onTogglePin={p => void togglePin(p)} />
       )}
       {creating && (
         <ProjectFormModal

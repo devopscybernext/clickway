@@ -1,16 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Search, ExternalLink, Trash2, Lock, Link2, FileText } from 'lucide-react';
-import { api, Button, Pill, cardStyle, inputClass, inputStyle, formatDate, openDocumentInNewTab, useFlash } from './shared';
+import { Search, ExternalLink, Trash2, Lock, Link2, FileText, Pin } from 'lucide-react';
+import { api, Button, Pill, PinButton, cardStyle, inputClass, inputStyle, formatDate, openDocumentInNewTab, useFlash, savePin } from './shared';
 import styles from './DocumentsPage.module.css';
 
 interface Doc {
   id: number; title: string; source: string; visibility: 'invite' | 'public'; mimeType: string; createdBy: string; createdAt: string | null;
-  projectId: number; projectName: string; archived: boolean; canDelete: boolean;
+  projectId: number; projectName: string; archived: boolean; canDelete: boolean; pinned: boolean;
 }
 
-// Every document in the projects the person can see, newest first.
+// Every document in the projects the person can see: the ones they pinned first, then newest first.
 export default function DocumentsPage({ refreshKey, onOpenProject }: { refreshKey: number; onOpenProject: (id: number) => void }) {
   const [docs, setDocs] = useState<Doc[] | null>(null);
   const [error, setError] = useState('');
@@ -33,6 +33,15 @@ export default function DocumentsPage({ refreshKey, onOpenProject }: { refreshKe
     return (docs ?? []).filter(d => (!project || String(d.projectId) === project) && (!q || [d.title, d.projectName, d.createdBy].some(v => v.toLowerCase().includes(q))));
   }, [docs, search, project]);
 
+  const togglePin = async (d: Doc) => {
+    const pinned = !d.pinned;
+    const set = (v: boolean) => setDocs(list => (list ?? []).map(x => (x.id === d.id ? { ...x, pinned: v } : x))
+      .sort((a, b) => Number(b.pinned) - Number(a.pinned) || (b.createdAt ?? '').localeCompare(a.createdAt ?? '') || b.id - a.id));
+    set(pinned);
+    const r = await savePin('document', d.id, pinned);
+    if (!r.success) { set(!pinned); setFlash({ kind: 'error', text: r.error! }); }
+  };
+
   const open = async (id: number) => {
     const e = await openDocumentInNewTab(id);
     if (e) setFlash({ kind: 'error', text: e });
@@ -50,7 +59,7 @@ export default function DocumentsPage({ refreshKey, onOpenProject }: { refreshKe
     <div className="min-w-0 space-y-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold tracking-tight" style={{ color: 'var(--cn-text-primary)' }}>Documents</h2>
+          <h2 className="text-xl font-bold tracking-tight" style={{ color: 'var(--cn-text-primary)' }}>All Documents</h2>
           <p className="mt-1 text-sm" style={{ color: 'var(--cn-text-muted)' }}>Find and open files across your projects.</p>
         </div>
         {docs !== null && !error && <Pill>{docs.length} document{docs.length === 1 ? '' : 's'}</Pill>}
@@ -86,7 +95,10 @@ export default function DocumentsPage({ refreshKey, onOpenProject }: { refreshKe
                 <div className={styles.document}>
                   <span className={styles.icon}><FileText className="w-5 h-5" /></span>
                   <div className="min-w-0">
-                  <p className="text-sm font-semibold break-words" style={{ color: 'var(--cn-text-primary)' }}>{d.title}</p>
+                  <p className="text-sm font-semibold break-words" style={{ color: 'var(--cn-text-primary)' }}>
+                    {d.pinned && <Pin className="inline w-3.5 h-3.5 mr-1 -mt-0.5" fill="currentColor" style={{ color: 'var(--cn-accent)' }} aria-label="Pinned" />}
+                    {d.title}
+                  </p>
                   <p className="mt-1 text-xs leading-relaxed break-words" style={{ color: 'var(--cn-text-muted)' }}>
                     {[d.createdBy && `Added by ${d.createdBy}`, d.createdAt && formatDate(d.createdAt)].filter(Boolean).join(' · ')}
                   </p>
@@ -101,6 +113,7 @@ export default function DocumentsPage({ refreshKey, onOpenProject }: { refreshKe
                   : <Pill><Link2 className="w-3 h-3 mr-1" /> Anyone with link</Pill>}
                 </td><td>
                 <div className={styles.actions}>
+                <PinButton pinned={d.pinned} label={d.title} onToggle={() => void togglePin(d)} />
                 <Button small onClick={() => void open(d.id)}><ExternalLink className="w-3.5 h-3.5" /> Open</Button>
                 {d.canDelete && (
                   <button onClick={() => void remove(d)} disabled={busy} aria-label={`Delete ${d.title}`} title="Delete document"
