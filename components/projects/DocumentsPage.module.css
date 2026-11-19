@@ -1,0 +1,74 @@
+.toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 28rem) minmax(10rem, 15rem);
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid var(--cn-border);
+  border-radius: 16px;
+}
+
+.document {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 36px;
+  border: 1px solid var(--cn-border);
+  border-radius: 10px;
+  color: var(--cn-accent);
+  background: var(--cn-bg-input);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--cn-border);
+  border-radius: 16px;
+}
+
+.table {
+  width: 100%;
+  min-width: 900px;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+  color: var(--cn-text-primary);
+}
+
+.table th {
+  padding: 14px 20px;
+  background: var(--cn-bg-input);
+  color: var(--cn-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 16px 20px;
+  border-top: 1px solid var(--cn-border);
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+
+.table td:first-child { width: 30%; }
+.table td:nth-child(2) { width: 20%; }
+.table .actionsHeading { text-align: right; }
+.table tbody tr:hover { background: var(--cn-bg-input); }
+
+@media (max-width: 540px) {
+  .toolbar { grid-template-columns: minmax(0, 1fr); padding: 16px; }
+}

@@ -34,6 +34,7 @@ import EntryForm from './EntryForm';
 import { setRoster, webTeam, marketingTeam } from '@/lib/roster';
 import { ENTRY_FORMS, FormKey } from '@/lib/forms';
 import AdminPortal from './AdminPortal';
+import ProjectsSection, { type ProjectsSubTab } from './projects/ProjectsSection';
 import { AlertCircle, Sparkles, ChevronUp, ChevronDown, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 const REFRESH_INTERVAL    = 300_000;       // 5 min — core data (tasks, availability)
@@ -334,6 +335,17 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [analysisSubTab, setAnalysisSubTab] = useState<'resources' | 'pm'>('resources');
   const [toolsSubTab, setToolsSubTab] = useState<'clock' | 'holiday' | 'ai'>('clock');
   const [inHouseSubTab, setInHouseSubTab] = useState<InHouseSubTab | 'nextbot'>('websites');
+  const [projectsSubTab, setProjectsSubTab] = useState<ProjectsSubTab>('projects');
+  // Projects menu from Admin Portal → Projects settings (hidden without access, Templates with full access)
+  const [projectsMenu, setProjectsMenu] = useState<AuthUser['projectsMenu']>(undefined);
+  useEffect(() => {
+    let live = true;
+    fetch('/api/projects/access', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => { if (live && j?.success) setProjectsMenu(!j.access ? 'none' : j.full ? 'full' : 'member'); })
+      .catch(() => { /* keep the role default */ });
+    return () => { live = false; };
+  }, [user.username]);
   const [helpSubTab, setHelpSubTab] = useState<HelpSubTab>('apply');
   const [pmBandwidthSubTab, setPmBandwidthSubTab] = useState<'current' | 'archive' | 'mine' | 'closed' | 'dashboard'>(
     firstLeaf.id === '11' && firstLeaf.subTab ? firstLeaf.subTab as 'current' | 'archive' | 'mine' | 'closed' | 'dashboard' : 'current');
@@ -701,6 +713,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     if (leaf.id === '14' && leaf.subTab) setToolsSubTab(leaf.subTab as 'clock' | 'holiday' | 'ai');
     if (leaf.id === '17' && leaf.subTab) setInHouseSubTab(leaf.subTab as InHouseSubTab | 'nextbot');
     if (leaf.id === '18' && leaf.subTab) setHelpSubTab(leaf.subTab as HelpSubTab);
+    if (leaf.id === '21' && leaf.subTab) setProjectsSubTab(leaf.subTab as ProjectsSubTab);
     setSearchTerm('');
     // tableKey intentionally NOT incremented here so filters persist across tab switches
     if (leaf.id === '6') setFormSubmitted(false);
@@ -726,6 +739,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const isHelp              = selectedSheet === '18';
   const isImportData        = selectedSheet === '19';
   const isWebDashboard      = selectedSheet === '20';
+  const isProjects          = selectedSheet === '21';
 
   // "Add New Project" form — PM-tier users and the admin tier
   // Admin / HM / Mod can add and edit projects too (PMs do on My Projects and can add)
@@ -984,7 +998,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
         selectedToolsSubTab={toolsSubTab}
         selectedInHouseSubTab={inHouseSubTab}
         selectedHelpSubTab={helpSubTab}
-        user={user}
+        selectedProjectsSubTab={projectsSubTab}
+        user={projectsMenu ? { ...user, projectsMenu } : user}
         onSheetChange={handleSheetChange}
         onLogout={onLogout}
         isAdmin={isAdmin}
@@ -1002,7 +1017,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           isAdmin={isAdmin}
           canOpenAdminPortal={canManageUsers(user.role)}
           onOpenAdminPortal={() => handleSheetChange({ id: '15' })}
-          isLeafActive={leaf => selectedSheet === leaf.id && (leaf.subTab === undefined || leaf.subTab === (leaf.id === '14' ? toolsSubTab : leaf.id === '17' ? inHouseSubTab : leaf.id === '18' ? helpSubTab : undefined))}
+          isLeafActive={leaf => selectedSheet === leaf.id && (leaf.subTab === undefined || leaf.subTab === (leaf.id === '14' ? toolsSubTab : leaf.id === '17' ? inHouseSubTab : leaf.id === '18' ? helpSubTab : leaf.id === '21' ? projectsSubTab : undefined))}
           onNavigate={handleSheetChange}
           onOpenNotification={openNotification}
         />
@@ -1254,6 +1269,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               ? <section className="cn-card rounded-lg border transition-colors" style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}><NextBot /></section>
               : <InHouse subTab={subTab} refreshKey={lastUpdated} canUpload={canManageInHouseData(user.role)} canEdit={canEditInHouseEntries(user.role)} />;
           })()}
+
+          {/* ── Projects: shared Google Drive documents per project (components/projects) ── */}
+          {isProjects && <ProjectsSection subTab={projectsSubTab} onSubTabChange={setProjectsSubTab} />}
 
           {/* ── Help: the Apply form and the table of queries ── */}
           {isHelp && <Help subTab={helpSubTab} onSubTabChange={setHelpSubTab} canManage={canManageHelp(user.role)} />}

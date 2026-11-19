@@ -1,6 +1,7 @@
 import mysql from 'mysql2/promise';
 import { DATASETS, Dataset, columnName, findDataset, fixedTabs, wildcardDatasets, tabFromRange } from './datasets';
 import { DataError, SheetResult, normalizeHeaders, toRow } from './rows';
+import { ensureProjectSchema } from '../projects/schema';
 import {
   SHEET_IDS, MARKETING_TEAM_SHEET_ID, PM_BANDWIDTH_SHEET_ID, PM_BANDWIDTH_ALL_DATA_SHEET_ID,
   TAB_BANDWIDTH, TAB_MARKETING_TASKS, TAB_PM_PROJECTS,
@@ -354,6 +355,7 @@ export async function ensureSchema(): Promise<string[]> {
   await pool.query(HELP_ATTACHMENTS_SQL);
   await pool.query(NOTIFICATIONS_SQL);
   await pool.query(NOTIFICATION_LOG_SQL);
+  await ensureProjectSchema(pool); // Projects: doc_projects and its tables (lib/projects/schema.ts)
   for (const ds of DATASETS) {
     await pool.query(createTableSql(ds));
     const [existing] = await pool.query<mysql.RowDataPacket[][]>({

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useSyncExternalStore } from 'react';
-import { CalendarOff, Menu, X, ChevronDown, PanelLeftClose, PanelLeftOpen, Globe, Megaphone, Briefcase, Wrench, ShieldCheck, Building2, CircleHelp } from 'lucide-react';
+import { CalendarOff, Menu, X, ChevronDown, PanelLeftClose, PanelLeftOpen, Globe, Megaphone, Briefcase, Wrench, ShieldCheck, Building2, CircleHelp, FolderKanban } from 'lucide-react';
 import { AuthUser, SheetId, Team, NavLeaf, isNavParent, getNavItems, getSheetLabel, TOP_BAR_MENUS } from '@/lib/auth';
 import { memberPhoto } from '@/lib/memberColors';
 
@@ -12,6 +12,7 @@ interface SidebarProps {
   selectedToolsSubTab?: string;
   selectedInHouseSubTab?: string;
   selectedHelpSubTab?: string;
+  selectedProjectsSubTab?: string;
   user: AuthUser;
   onSheetChange: (leaf: NavLeaf) => void;
   onLogout: () => void;
@@ -26,6 +27,7 @@ const PARENT_ICONS: Record<string, React.ReactNode> = {
   'PM Projects': <Briefcase className="w-4 h-4 shrink-0" />,
   Tools:        <Wrench     className="w-4 h-4 shrink-0" />,
   'Cybernext InHouse': <Building2 className="w-4 h-4 shrink-0" />,
+  Projects:     <FolderKanban className="w-4 h-4 shrink-0" />,
   Help:         <CircleHelp className="w-4 h-4 shrink-0" />,
 };
 const LEAF_ICONS: Partial<Record<SheetId, React.ReactNode>> = {
@@ -72,7 +74,7 @@ const readCollapsed = () => { try { return window.localStorage.getItem(COLLAPSE_
 const subscribeCollapsed = (cb: () => void) => { collapseListeners.add(cb); return () => { collapseListeners.delete(cb); }; };
 const writeCollapsed = (v: boolean) => { try { window.localStorage.setItem(COLLAPSE_KEY, v ? '1' : '0'); } catch { /* the choice just is not remembered */ } collapseListeners.forEach(l => l()); };
 
-export default function Sidebar({ selectedSheet, selectedTeam, selectedPmSubTab, selectedToolsSubTab, selectedInHouseSubTab, selectedHelpSubTab, user, onSheetChange, isAdmin }: SidebarProps) {
+export default function Sidebar({ selectedSheet, selectedTeam, selectedPmSubTab, selectedToolsSubTab, selectedInHouseSubTab, selectedHelpSubTab, selectedProjectsSubTab, user, onSheetChange, isAdmin }: SidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   // Desktop only: collapsed, the sidebar shows just the icons
   const collapsed = useSyncExternalStore(subscribeCollapsed, readCollapsed, () => false);
@@ -84,7 +86,7 @@ export default function Sidebar({ selectedSheet, selectedTeam, selectedPmSubTab,
     if (selectedSheet !== leaf.id) return false;
     if (leaf.team !== undefined && leaf.team !== selectedTeam) return false;
     if (leaf.subTab !== undefined) {
-      const activeSubTab = leaf.id === '11' ? selectedPmSubTab : leaf.id === '14' ? selectedToolsSubTab : leaf.id === '17' ? selectedInHouseSubTab : leaf.id === '18' ? selectedHelpSubTab : undefined;
+      const activeSubTab = leaf.id === '11' ? selectedPmSubTab : leaf.id === '14' ? selectedToolsSubTab : leaf.id === '17' ? selectedInHouseSubTab : leaf.id === '18' ? selectedHelpSubTab : leaf.id === '21' ? selectedProjectsSubTab : undefined;
       if (leaf.subTab !== activeSubTab) return false;
     }
     return true;

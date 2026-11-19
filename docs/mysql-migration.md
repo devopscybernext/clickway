@@ -49,6 +49,7 @@ Each row carries a **write-back handle** (`__row`), which is its permanent MySQL
 | `news`, `ai_tools`, `holidays` | News ticker, AI Tools, Holiday calendar | 10, 54, 12 |
 | `inhouse_case_studies`, `inhouse_websites`, `inhouse_brand_kit`, `inhouse_documentations` | Cybernext InHouse | 23, 117, 7, 2 |
 | `change_log` | One row per edit: who, when, table, row, column, old and new value | n/a |
+| `doc_projects`, `doc_project_members`, `doc_documents`, `doc_document_access`, `doc_templates`, `doc_project_access` | **Projects**: projects, their members (Viewer / Editor / Creator), their Google Drive documents, the Drive sharing ledger, document templates, and the access settings from Admin Portal → Projects. Ordinary tables (not part of the dataset registry), created by `lib/projects/schema.ts` | n/a (new) |
 
 **One table, one tab.** These three were each split in two on the Google Sheets (current month / earlier). `npm run db:migrate` (`mergeTabs` in `lib/data/mysql.ts`) moves every row into the single tab and does nothing once that is done, so it is safe to run on every deploy. The PM *Current Month* tab shows the projects whose Year/Month is the real current month (or later); *Previous Months* shows the earlier ones.
 
@@ -70,7 +71,21 @@ MYSQL_USER=...                 # Cloudways: the application's database user
 MYSQL_PASSWORD=...
 MYSQL_DATABASE=...             # Cloudways: nhnrkfejab
 FORM_TIMEZONE=Asia/Kolkata     # timezone of form timestamps
+
+# Projects (Google Drive documents). The workspace Google account's OAuth client and refresh token:
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REFRESH_TOKEN=...
+PROJECT_ROOT_DRIVE_FOLDER_ID=...   # a folder per project, for "anyone with the link" documents
+PRIVATE_ROOT_DRIVE_FOLDER_ID=...   # owner-only; a private folder per project, for "members only" documents
+ADMIN_ROOT_DRIVE_FOLDER_ID=...     # uploaded templates
 ```
+
+**Projects** (sidebar → Projects; code in `lib/projects/`, `components/projects/`, `app/api/projects`, `app/api/project-documents`, `app/api/project-templates`). Who may do what is set in **Admin Portal → Projects** (per department, with per-person overrides; `lib/projects/policy.ts`). Anything left on Default follows these role defaults (`lib/projects/rules.ts`):
+- Super Admin and HM see and manage every project, get Google editing access to every restricted document, and manage Templates.
+- Super Admin, HM, Mod, the PMs and the Web team can create projects. The creator becomes the project's Creator, and the Web team (WebAdmin, WebTeam, resource, PMWebAdmin) is added as Viewers.
+- Everyone else sees only the projects they are a member of. Viewers get Google viewer access, Editors and Creators get editor access; removing someone removes their access. A document can be deleted by the person who added it, Super Admin or HM (the file goes to Drive Trash).
+- Google access goes to the account's **Email** in `users`; an account without an email gets no Google access. If sharing is ever left pending, **Retry sharing** on the project finishes it (it also removes access from removed members and removed accounts).
 
 These are no longer read, and can be deleted wherever they still exist: `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `GOOGLE_SHEET_ID_2`, `DATA_SOURCE`, `INTAKE_SECRET`.
 

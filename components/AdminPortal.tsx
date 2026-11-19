@@ -7,6 +7,7 @@ import { memberPhoto } from '@/lib/memberColors';
 import { DEPARTMENTS, NO_DEPARTMENT, SUB_DEPARTMENTS, type SubDeptKey } from '@/lib/roster';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import NotificationsAdmin from './NotificationsAdmin';
+import ProjectSettings from './projects/ProjectSettings';
 
 interface AdminUser {
   row: number;
@@ -650,10 +651,10 @@ function AddUserDialog({ roleOptions, onClose, onAdded }: {
   );
 }
 
-// Admin Portal (HM and Admin): the accounts, and the Notifications log, as two tabs
+// Admin Portal (HM and Admin): the accounts, the Notifications log and the Projects access settings, as tabs
 export default function AdminPortal({ currentUsername, onChanged }: { currentUsername?: string; onChanged?: () => void }) {
-  const [tab, setTab] = useState<'users' | 'notifications'>('users');
-  const tabs = [{ id: 'users', label: 'Users' }, { id: 'notifications', label: 'Notifications' }] as const;
+  const [tab, setTab] = useState<'users' | 'notifications' | 'projects'>('users');
+  const tabs = [{ id: 'users', label: 'Users' }, { id: 'notifications', label: 'Notifications' }, { id: 'projects', label: 'Projects' }] as const;
   return (
     <div>
       <div role="tablist" aria-label="Admin Portal" className="flex flex-wrap gap-2 px-3 sm:px-6 pt-3 sm:pt-5">
@@ -667,7 +668,7 @@ export default function AdminPortal({ currentUsername, onChanged }: { currentUse
           </button>
         ))}
       </div>
-      {tab === 'users' ? <AccountsPanel currentUsername={currentUsername} onChanged={onChanged} /> : <NotificationsAdmin />}
+      {tab === 'users' ? <AccountsPanel currentUsername={currentUsername} onChanged={onChanged} /> : tab === 'notifications' ? <NotificationsAdmin /> : <ProjectSettings />}
     </div>
   );
 }
