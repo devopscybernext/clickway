@@ -119,8 +119,42 @@ export const PROJECT_TABLES_SQL: string[] = [
   PRIMARY KEY (\`user_id\`, \`kind\`, \`item_id\`),
   KEY \`idx_item\` (\`kind\`, \`item_id\`)
 ) ${OPTIONS}`,
+
+  // Admin Portal → Projects → Always editors: email addresses given Google editor access to every
+  // "Project members only" document, whether or not they have a dashboard account or are members.
+  `CREATE TABLE IF NOT EXISTS \`doc_always_editors\` (
+  \`email\` VARCHAR(191) NOT NULL,
+  \`added_by\` VARCHAR(191) NULL,
+  \`added_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (\`email\`)
+) ${OPTIONS}`,
+
+  // Their sharing ledger, one row per (restricted document, email), like doc_document_access.
+  `CREATE TABLE IF NOT EXISTS \`doc_document_email_access\` (
+  \`document_id\` INT UNSIGNED NOT NULL,
+  \`email\` VARCHAR(191) NOT NULL,
+  \`status\` ENUM('pending','granted','revoked') NOT NULL DEFAULT 'pending',
+  \`drive_permission_id\` VARCHAR(128) NULL,
+  \`updated_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (\`document_id\`, \`email\`),
+  CONSTRAINT \`fk_doc_email_access_document\` FOREIGN KEY (\`document_id\`) REFERENCES \`doc_documents\` (\`id\`) ON DELETE CASCADE
+) ${OPTIONS}`,
+];
+
+// The first list of always editors. Added only when the table is first created, so removing someone
+// in the Admin Portal is never undone by a later migration.
+const FIRST_ALWAYS_EDITORS = [
+  'vasu@cybernext.io',
+  'vineet@cybernext.io',
+  'noor@cybernext.io',
+  'ai.ops@cybernext.io',
+  'vcybernext@gmail.com',
 ];
 
 export async function ensureProjectSchema(pool: mysql.Pool): Promise<void> {
+  const [existing] = await pool.query<mysql.RowDataPacket[]>("SHOW TABLES LIKE 'doc_always_editors'");
   for (const sql of PROJECT_TABLES_SQL) await pool.query(sql);
+  if (!existing.length) {
+    await pool.query('INSERT IGNORE INTO doc_always_editors (email, added_by) VALUES ?', [FIRST_ALWAYS_EDITORS.map(e => [e, 'setup'])]);
+  }
 }
