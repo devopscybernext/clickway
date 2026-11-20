@@ -154,7 +154,7 @@ export async function syncDocumentSharing(
 }
 
 // Opening a document: checks the person may see it, makes sure their Google account has the right
-// Drive role on a restricted document, and returns the document's own link.
+// Drive role on a restricted document (when their account has an email), and returns the document's link.
 export async function openDocument(c: Conn, actor: Actor, documentId: number): Promise<string> {
   const [rows] = await c.query<Row[]>('SELECT id, project_id, document_url, drive_file_id, visibility FROM doc_documents WHERE id = ?', [documentId]);
   const doc = rows[0];
@@ -162,9 +162,11 @@ export async function openDocument(c: Conn, actor: Actor, documentId: number): P
   const access = await projectAccess(actor, Number(doc.project_id), c);
   if (!access) throw new ProjectError('You do not have access to this document.', 403);
 
-  if (doc.visibility === 'invite') {
+  // An account without an email address (often Super Admin or HM) gets no Google access from here: the
+  // document simply opens, and Google lets them in if the Google account they are signed in to already
+  // has access (for example the workspace account that owns the files, or an always editor).
+  if (doc.visibility === 'invite' && actor.email) {
     if (!doc.drive_file_id) throw new ProjectError('This document is unavailable.');
-    if (!actor.email) throw new ProjectError('Your account has no email address, so Google access cannot be given. Ask an administrator to add it in the Admin Portal.');
     if ((await loadAlwaysEditors(c)).has(actor.email)) {
       // An always editor: make sure they are a Drive editor, through their own ledger
       await grantDocument(String(doc.drive_file_id), actor.email, 'writer');
