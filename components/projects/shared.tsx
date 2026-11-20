@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, AlertCircle, CheckCircle2, Pin, ChevronDown } from 'lucide-react';
+import { X, AlertCircle, CheckCircle2, Star, ChevronDown } from 'lucide-react';
 import type { ProjectAccess, ProjectStatus } from '@/lib/projects/rules';
 
 // Small pieces shared by the Projects pages, in the dashboard's own look (cn-card, --cn-* colours).
@@ -169,7 +169,7 @@ export function PinButton({ pinned, label, onToggle, disabled }: { pinned: boole
       onKeyDown={e => e.stopPropagation()}
       className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg cursor-pointer transition-colors hover:bg-black/5 disabled:opacity-50"
       style={{ color: pinned ? 'var(--cn-accent)' : 'var(--cn-text-faint)' }}>
-      <Pin className="w-4 h-4" fill={pinned ? 'currentColor' : 'none'} style={{ transform: pinned ? 'none' : 'rotate(45deg)' }} />
+      <Star className="w-5 h-5" fill={pinned ? 'currentColor' : 'none'} />
     </button>
   );
 }

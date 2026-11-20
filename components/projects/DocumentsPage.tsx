@@ -113,7 +113,6 @@ export default function DocumentsPage({ refreshKey, onOpenProject }: { refreshKe
                   : <Pill><Link2 className="w-3 h-3 mr-1" /> Anyone with link</Pill>}
                 </td><td>
                 <div className={styles.actions}>
-                <PinButton pinned={d.pinned} label={d.title} onToggle={() => void togglePin(d)} />
                 <Button small onClick={() => void open(d.id)}><ExternalLink className="w-3.5 h-3.5" /> Open</Button>
                 {d.canDelete && (
                   <button onClick={() => void remove(d)} disabled={busy} aria-label={`Delete ${d.title}`} title="Delete document"
@@ -121,6 +120,7 @@ export default function DocumentsPage({ refreshKey, onOpenProject }: { refreshKe
                     <Trash2 className="w-4 h-4" />
                   </button>
                 )}
+                <PinButton pinned={d.pinned} label={d.title} onToggle={() => void togglePin(d)} />
                 </div>
               </td></tr>
             ))}

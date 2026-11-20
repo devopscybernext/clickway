@@ -58,15 +58,15 @@ export default function ProjectList({ projects, loading, canCreate, onOpen, onCr
   const card = (p: ProjectSummary) => (
             <div key={p.id} role="button" tabIndex={0} onClick={() => onOpen(p.id)} onKeyDown={e => { if (e.key === 'Enter') onOpen(p.id); }}
               className="min-w-0 rounded-3xl border p-7 cursor-pointer transition-shadow hover:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#FE4A23] flex flex-col gap-5" style={cardStyle}>
-              <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="grid grid-cols-[minmax(0,1fr)_36px] items-start gap-3">
                 <div className="min-w-0">
                   <h3 className="text-2xl font-bold leading-tight tracking-tight break-words" style={{ color: 'var(--cn-text-primary)' }}>{p.name}</h3>
                   {p.client && <p className="mt-1 text-sm break-words" style={{ color: 'var(--cn-text-muted)' }}>{p.client}</p>}
-                </div>
-                <div className="flex items-center gap-1">
+                  <div className="mt-3">
                   <Pill tone={STATUS_TONE[p.status]}>{STATUS_LABELS[p.status]}</Pill>
-                  <PinButton pinned={p.pinned} label={p.name} onToggle={() => onTogglePin(p)} />
+                  </div>
                 </div>
+                <PinButton pinned={p.pinned} label={p.name} onToggle={() => onTogglePin(p)} />
               </div>
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: 'var(--cn-text-muted)' }}>
                 <span className="inline-flex items-center gap-1"><Users className="w-3.5 h-3.5" /> {p.members} member{p.members === 1 ? '' : 's'}</span>
