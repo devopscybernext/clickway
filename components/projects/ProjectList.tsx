@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Search, Plus, Users, FileText, Globe, FolderOpen, FolderKanban } from 'lucide-react';
+import { Search, Plus, Users, FileText, Globe, FolderKanban } from 'lucide-react';
 import { Button, Pill, PinButton, GroupHeading, STATUS_TONE, inputClass, inputStyle, cardStyle, formatDate, type ProjectSummary } from './shared';
 import styles from './ProjectFilters.module.css';
 import { ACCESS_LABELS, PROJECT_STATUSES, STATUS_LABELS } from '@/lib/projects/rules';
@@ -72,20 +72,18 @@ export default function ProjectList({ projects, loading, canCreate, onOpen, onCr
                 <span className="inline-flex items-center gap-1"><Users className="w-3.5 h-3.5" /> {p.members} member{p.members === 1 ? '' : 's'}</span>
                 <span className="inline-flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> {p.documents} document{p.documents === 1 ? '' : 's'}</span>
                 {p.platform && <span>{p.platform}</span>}
+                {p.website && (
+                  <a href={p.website} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}
+                    className="inline-flex items-center gap-1 font-semibold hover:underline" style={{ color: 'var(--cn-accent)' }}>
+                    <Globe className="w-3.5 h-3.5" /> Visit Website
+                  </a>
+                )}
               </div>
               <div className="flex flex-wrap items-center gap-2 mt-auto border-t pt-5" style={{ borderColor: 'var(--cn-border)' }}>
-                {p.website && (
-                  <a href={p.website} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                    className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full text-xs font-semibold transition-colors hover:brightness-95" style={{ background: 'var(--cn-accent)', color: '#fff' }}>
-                    <Globe className="w-3.5 h-3.5" /> Website
-                  </a>
-                )}
-                {p.driveFolderUrl && (
-                  <a href={p.driveFolderUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                    className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full border text-xs font-semibold transition-colors hover:bg-black/5" style={{ color: 'var(--cn-text-primary)', borderColor: 'var(--cn-border)' }}>
-                    <FolderOpen className="w-3.5 h-3.5" /> Drive folder
-                  </a>
-                )}
+                <button type="button" onClick={e => { e.stopPropagation(); onOpen(p.id); }} onKeyDown={e => e.stopPropagation()}
+                  className="inline-flex items-center px-5 py-2.5 rounded-full text-xs font-semibold cursor-pointer transition-colors hover:brightness-95" style={{ background: 'var(--cn-accent)', color: '#fff' }}>
+                  View Project
+                </button>
                 <span className="w-full text-xs leading-relaxed break-words" style={{ color: 'var(--cn-text-faint)' }}>
                   {p.access ? ACCESS_LABELS[p.access] : ''}{p.createdBy ? ` · by ${p.createdBy}` : ''}{p.createdAt ? ` · ${formatDate(p.createdAt)}` : ''}
                 </span>

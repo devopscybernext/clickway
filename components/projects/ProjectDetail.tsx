@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, Globe, FolderOpen, Pencil, Archive, ArchiveRestore, RefreshCw, Plus, ExternalLink, Trash2, Lock, Link2, Users, FileText } from 'lucide-react';
+import { ArrowLeft, Globe, Pencil, Archive, ArchiveRestore, RefreshCw, Plus, ExternalLink, Trash2, Lock, Link2, Users, FileText } from 'lucide-react';
 import { api, postJson, Button, Modal, Pill, PinButton, STATUS_TONE, cardStyle, formatDate, openDocumentInNewTab, useFlash, savePin } from './shared';
 import ProjectFormModal from './ProjectFormModal';
 import DocumentFormModal, { type TemplateOption } from './DocumentFormModal';
@@ -128,11 +128,6 @@ export default function ProjectDetail({ projectId, onBack, onChanged }: { projec
               <Globe className="w-4 h-4" /> {p.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
             </a>
           )}
-          {p.driveFolderUrl && (
-            <a href={p.driveFolderUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-semibold hover:underline" style={{ color: 'var(--cn-accent)' }}>
-              <FolderOpen className="w-4 h-4" /> Drive folder
-            </a>
-          )}
         </div>
         {pending && data.canManage && (
           <p className="text-xs" style={{ color: '#d97706' }}>Some Google sharing is still pending. Use Retry sharing to finish it.</p>
@@ -162,7 +157,7 @@ export default function ProjectDetail({ projectId, onBack, onChanged }: { projec
                     ? <Pill tone="blue"><Lock className="w-3 h-3 mr-1" /> Members only</Pill>
                     : <Pill><Link2 className="w-3 h-3 mr-1" /> Anyone with link</Pill>}
                   {d.pendingSharing && data.canManage && <Pill tone="amber">Sharing pending</Pill>}
-                  <PinButton pinned={d.pinned} label={d.title} onToggle={() => void togglePin(d.id, !d.pinned)} />
+                  <div className="flex shrink-0 items-center gap-2">
                   <Button small onClick={() => void open(d.id)}><ExternalLink className="w-3.5 h-3.5" /> Open</Button>
                   {d.canDelete && (
                     <button onClick={() => void remove(d.id, d.title)} disabled={busy} aria-label={`Delete ${d.title}`} title="Delete document"
@@ -170,6 +165,8 @@ export default function ProjectDetail({ projectId, onBack, onChanged }: { projec
                       <Trash2 className="w-4 h-4" />
                     </button>
                   )}
+                  <PinButton pinned={d.pinned} label={d.title} onToggle={() => void togglePin(d.id, !d.pinned)} />
+                  </div>
                 </li>
               ))}
             </ul>
