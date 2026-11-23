@@ -189,7 +189,7 @@ export default function QATesting({ data, headers, onCellChange, canEdit = true 
     setTimeout(() => setCopiedRowIdx(null), 2000);
   };
 
-  const COPY_COLS = ['Project Name', 'Task Name', 'Task URL', 'Time Logged On Ac', 'Status'];
+  const COPY_COLS = ['Project Name', 'Task Name', 'Task URL', 'Daily Logged', 'Status'];
   const copyTable = async () => {
     const todayRows = rows.filter(r => {
       const b = bucketCol ? String(r[bucketCol] ?? '').trim().toLowerCase() : '';
@@ -391,7 +391,7 @@ export default function QATesting({ data, headers, onCellChange, canEdit = true 
                   <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Project</th>
                   <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task</th>
                   <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Link</th>
-                  {canEdit && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Time Logged On Ac</th>}
+                  {canEdit && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Daily Logged</th>}
                   <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Today&apos;s Bucket Set</th>
                   <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Status</th>
                 </tr>

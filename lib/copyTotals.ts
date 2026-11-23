@@ -38,7 +38,7 @@ export function formatTotalTime(minutes: number): string {
 export function isTimeColumn(label: string): boolean {
   const l = label.trim().toLowerCase();
   if (l.includes('timestamp')) return false;
-  return /\b(time|hours?)\b/.test(l);
+  return /\b(time|hours?|logged|billable)\b/.test(l);
 }
 
 // One cell per column: the label in the first non-time column, the summed

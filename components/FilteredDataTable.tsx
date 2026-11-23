@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { ChevronUp, ChevronDown, ChevronsUpDown, X, ChevronDown as ChevDown, ChevronLeft, ChevronRight, Copy, Check, Pencil, Send, Eye } from 'lucide-react';
 import { SheetData } from '@/lib/dataStore';
+import { taskColumnLabel } from '@/lib/columnLabels';
 import { pmRowTint } from '@/lib/pmRowTint';
 import RowActions from './RowActions';
 import BulkDeleteBar, { SelectBox, useRowSelection } from './BulkDelete';
@@ -155,7 +156,7 @@ function findCol(headers: string[], term: string): string | undefined {
 // The sheet's "Time Estimation" column is called "Daily Time" on screen: the time a task takes
 // per day, next to "Total Time Est" for the whole task. Only the label changes — the column,
 // and everything that reads it, still goes by "Time Estimation".
-const columnLabel = (h: string) => (h.trim().toLowerCase() === 'time estimation' ? 'Daily Time' : h);
+const columnLabel = taskColumnLabel;
 
 // ─── Multi-Select Dropdown ───────────────────────────────────────────────────
 interface MultiSelectProps {
@@ -1116,7 +1117,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
   <thead>
     <tr style="background-color:#FE4A23;color:#ffffff;">
       <th style="border:1px solid #555;padding:8px 12px;text-align:left;white-space:nowrap;">#</th>
-      ${cols.map(h => `<th style="border:1px solid #555;padding:8px 12px;text-align:left;white-space:nowrap;">${h}</th>`).join('')}
+      ${cols.map(h => `<th style="border:1px solid #555;padding:8px 12px;text-align:left;white-space:nowrap;">${columnLabel(h)}</th>`).join('')}
     </tr>
   </thead>
   <tbody>
@@ -1130,7 +1131,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
 
     // Plain-text fallback (tab-separated)
     const text = [
-      ['#', ...cols].join('\t'),
+      ['#', ...cols.map(columnLabel)].join('\t'),
       ...rows.map((row, i) => [i + 1, ...cols.map(h => String(row[h] ?? ''))].join('\t')),
       ...(total ? [totalRowText(total)] : []),
     ].join('\n');
@@ -1227,7 +1228,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
           {!editMode && pushableRows.length > 0 && (
             <button
               onClick={() => { setPushError(''); setShowPushConfirm(true); }}
-              title="Push logged hours to Total Time"
+              title="Push logged hours to Total Logged"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg cursor-pointer transition-all text-xs font-semibold"
               style={{ background: 'var(--cn-accent)', color: '#fff', border: '1px solid var(--cn-accent)' }}
             >
@@ -1260,7 +1261,7 @@ export default function FilteredDataTable({ data, headers, sheetNum, onStatusCha
             <p className="text-xs leading-snug" style={{ color: 'var(--cn-text-primary)' }}>
               Are you sure you want to push to admin? This adds{' '}
               <span className="font-semibold">{Math.round(pushTotalHours * 100) / 100}h</span>{' '}
-              across {pushableRows.length} task{pushableRows.length === 1 ? '' : 's'} onto Total Time, and clears Time Logged On Ac.
+              across {pushableRows.length} task{pushableRows.length === 1 ? '' : 's'} onto Total Logged, and clears Daily Logged.
             </p>
             {pushError && <p className="text-xs mt-1" style={{ color: '#ef4444' }}>{pushError}</p>}
           </div>

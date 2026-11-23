@@ -301,7 +301,7 @@ export default function EntryForm({ formKey, onSubmitted, compact = false, optio
             style={{ border: `1px solid ${err ? '#ef4444' : 'var(--cn-border)'}`, background: 'var(--cn-bg-card)' }}>
             <legend className="sr-only">{f.header}</legend>
             <label htmlFor={`${id}-input`} className="block text-sm font-semibold" style={{ color: 'var(--cn-text-primary)' }}>
-              {f.header}{f.required && <span style={{ color: '#ef4444' }}> *</span>}
+              {formKey === 'marketing-task' && f.header === 'Task Estimation' ? 'Billable Hours' : f.header}{f.required && <span style={{ color: '#ef4444' }}> *</span>}
             </label>
 
             {(f.type === 'text' || f.type === 'date') && (

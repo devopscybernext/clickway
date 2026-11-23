@@ -814,8 +814,8 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
   // Same columns/format as the Tasks Bucket table (FilteredDataTable.copyTable)
   // for Web; Marketing gets its own detail-field set instead.
   const COPY_COLS = showMarketingCols
-    ? ['Project Name', 'Task Name', 'Est. Hours', 'Total Hours', 'Time Logged On AC', 'Action Taken Today', 'Performance Signal/Insights', 'Blocker', 'Next Steps', 'Task Status Updation']
-    : ['Project Name', 'Task Name', 'Task URL', 'Time Estimation', 'Time Logged On AC', 'Task Status'];
+    ? ['Project Name', 'Task Name', 'Billable Hours', 'Total Logged', 'Daily Logged', 'Action Taken Today', 'Performance Signal/Insights', 'Blocker', 'Next Steps', 'Task Status Updation']
+    : ['Project Name', 'Task Name', 'Task URL', 'Time Estimation', 'Daily Logged', 'Task Status'];
   const copyTable = async () => {
     // Only Today / Everyday tasks get copied — others (Tomorrow, Submitted, etc.) are excluded
     const copyableTasks = visibleTasks.filter(t => {
@@ -980,7 +980,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
         {!editMode && pushableTasks.length > 0 && (
           <button
             onClick={e => { e.stopPropagation(); setShowPushConfirm(true); }}
-            title="Push logged hours to Total Hours"
+            title="Push logged hours to Total Logged"
             className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold cursor-pointer transition-all"
             style={{ background: 'var(--cn-accent)', color: '#fff' }}
           >
@@ -1025,7 +1025,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
           <p className="text-xs leading-snug" style={{ color: 'var(--cn-text-primary)' }}>
             Are you sure you want to push to admin? This adds{' '}
             <span className="font-semibold">{Math.round(pushTotalHours * 100) / 100}h</span>{' '}
-            across {pushableTasks.length} task{pushableTasks.length === 1 ? '' : 's'} onto Total Hours, and clears Time Logged On Ac.
+            across {pushableTasks.length} task{pushableTasks.length === 1 ? '' : 's'} onto Total Logged, and clears Daily Logged.
           </p>
           <div className="flex items-center gap-2 shrink-0">
             <button
@@ -1057,7 +1057,7 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
             const sumTotal = tasks.reduce((s, t) => s + parseHours(t.totalHoursVal), 0);
             const pending = sumEst - sumTotal;
             const isSurpassed = pending < 0;
-            const pendingWordLabel = isSurpassed ? 'Surpass Hours' : 'Pending Hours';
+            const pendingWordLabel = isSurpassed ? 'Surpass Hours' : 'Remaining Hours';
             const pendingValueLabel = isSurpassed ? `+${Math.abs(pending).toFixed(2)}h` : `${pending.toFixed(2)}h`;
             const deadlines = tasks.map(t => parseDeadlineDate(t.deadline)).filter((d): d is Date => d !== null);
             const earliestDeadline = deadlines.length ? new Date(Math.min(...deadlines.map(d => d.getTime()))) : null;
@@ -1075,8 +1075,8 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                 <div className="flex items-center gap-2 shrink-0">
                   {showProjectStats && (
                     <div className="flex items-center gap-2 text-[10px]">
-                      <span style={{ color: 'var(--cn-text-muted)' }}>Est. Hours <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{sumEst.toFixed(2)}h</span></span>
-                      <span style={{ color: 'var(--cn-text-muted)' }}>Spend Hours <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{sumTotal.toFixed(2)}h</span></span>
+                      <span style={{ color: 'var(--cn-text-muted)' }}>Billable Hours <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{sumEst.toFixed(2)}h</span></span>
+                      <span style={{ color: 'var(--cn-text-muted)' }}>Logged Hours <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{sumTotal.toFixed(2)}h</span></span>
                       <span style={{ color: isSurpassed ? '#dc2626' : 'var(--cn-text-muted)' }}>{pendingWordLabel} <span className="font-semibold">{pendingValueLabel}</span></span>
                       {daysLeft !== null && (
                         <span className="px-1.5 py-0.5 rounded-full font-semibold" style={{ background: daysLeftColor + '18', color: daysLeftColor }}>
@@ -1114,15 +1114,15 @@ function ResourceCard({ row, onLeave, isOpen, onToggle, onStatusChange, pmStatus
                 {!groupByProject && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Project</th>}
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task</th>
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Link</th>
-                <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Est.</th>
-                {showTotalHours && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Total Hours</th>}
+                <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Billable Hours</th>
+                {showTotalHours && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Total Logged</th>}
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task Daily Bucket</th>
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Bucket Set</th>
                 {showMarketingCols && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Action Taken Today</th>}
                 {showMarketingCols && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Performance Signal/Insights</th>}
                 {showMarketingCols && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Blocker</th>}
                 {showMarketingCols && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Next Steps</th>}
-                {showTimeLogged && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Time Logged On AC</th>}
+                {showTimeLogged && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Daily Logged</th>}
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Status</th>
                 <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">PM Status</th>
               </tr>
@@ -1348,8 +1348,8 @@ function ClosedTasksTable({ tasks, showPerson }: { tasks: ClosedTask[]; showPers
               <th className={th}>Project</th>
               <th className={th}>Task</th>
               <th className={th}>Link</th>
-              <th className={th}>Est.</th>
-              <th className={th}>Total Hours</th>
+              <th className={th}>Billable Hours</th>
+              <th className={th}>Total Logged</th>
               <th className={th}>PM Status</th>
             </tr>
           </thead>
@@ -1441,8 +1441,8 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
   const COPY_COLS = vinayQaMode
     ? ['Assigned Person', 'Project Name', 'Task Name', 'Task URL', 'Task Daily Bucket', 'Task Status']
     : showMarketingCols
-      ? ['Assigned Person', 'Project Name', 'Task Name', 'Est. Hours', 'Total Hours', 'Time Logged On AC', 'Action Taken Today', 'Performance Signal/Insights', 'Blocker', 'Next Steps', 'Task Status Updation']
-      : ['Assigned Person', 'Project Name', 'Task Name', 'Task URL', 'Time Estimation', 'Time Logged On AC', 'Task Status'];
+      ? ['Assigned Person', 'Project Name', 'Task Name', 'Billable Hours', 'Total Logged', 'Daily Logged', 'Action Taken Today', 'Performance Signal/Insights', 'Blocker', 'Next Steps', 'Task Status Updation']
+      : ['Assigned Person', 'Project Name', 'Task Name', 'Task URL', 'Time Estimation', 'Daily Logged', 'Task Status'];
   const copyTable = async () => {
     const rowsToCopy = vinayQaMode
       ? flatTasks.map(t => [t.person, t.project, t.task, t.taskUrl, t.bucket, t.status])
@@ -1528,8 +1528,8 @@ function FlatTasksTable({ rows, onStatusChange, pmStatusColName, canEditPmStatus
               <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Project</th>
               <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task</th>
               <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Link</th>
-              {!vinayQaMode && !showMarketingCols && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Est.</th>}
-              {showTotalHours && !vinayQaMode && !showMarketingCols && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Total Hours</th>}
+              {!vinayQaMode && !showMarketingCols && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Billable Hours</th>}
+              {showTotalHours && !vinayQaMode && !showMarketingCols && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Total Logged</th>}
               <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task Daily Bucket</th>
               {!vinayQaMode && <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Bucket Set</th>}
               <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Status</th>
@@ -3483,8 +3483,8 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
                     <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Project Name</th>
                     <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task Name</th>
                     <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Link</th>
-                    <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Est.</th>
-                    <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Total Time</th>
+                    <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Billable Hours</th>
+                    <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Total Logged</th>
                     <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task Daily Bucket</th>
                     <th className="text-left px-4 py-2 font-semibold uppercase tracking-wide text-[10px]">Task Status Updation</th>
                   </tr>

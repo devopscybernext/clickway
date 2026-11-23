@@ -16,7 +16,10 @@ const TIME_COLS = ['time estimation', 'task estimation', 'total time est', 'time
 // Columns shown as coloured pills
 const PILL_COLS = ['task status updation', 'pm status', 'task daily bucket', 'today bucket set', 'task priority'];
 // Names on screen that differ from the column's name
-const LABELS: Record<string, string> = { 'time estimation': 'Daily Time', 'timestamp': 'Added On', 'email address': 'Added By', 'email': 'Added By' };
+const LABELS: Record<string, string> = {
+  'time estimation': 'Daily Time', 'total time est': 'Billable Hours', 'task estimation': 'Billable Hours', 'total time': 'Total Logged', 'total hours': 'Total Logged',
+  'time logged on ac': 'Daily Logged', 'timestamp': 'Added On', 'email address': 'Added By', 'email': 'Added By',
+};
 
 function safeUrl(raw: string): string | null {
   const v = raw.trim();
