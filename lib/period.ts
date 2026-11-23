@@ -1,3 +1,4 @@
+import { DAILY_HOURS, RETAINER_HOURS } from './capacity';
 import { DAY_MS, parseTimestamp, startOfDay, startOfMonth, startOfWeek, type DateOrder } from './dates';
 
 // The Today / Weekly / Monthly switch at the top of a team's Dashboard. One definition, used by the Project State
@@ -5,8 +6,8 @@ import { DAY_MS, parseTimestamp, startOfDay, startOfMonth, startOfWeek, type Dat
 //   today    the Today and Everyday tasks (as the Team Bandwidth page always showed)
 //   weekly   the tasks added this week (Monday to Sunday) plus the recurring Everyday ones
 //   monthly  the tasks added this month plus the recurring Everyday ones
-// A person's capacity grows with the period: 7 h a day, 35 h a week (5 working days), 7 h x the month's working days.
-// PPC and SEO work to a monthly retainer of 125 h, spread over the month's working days.
+// A person's capacity grows with the period: 8 h a day, 40 h a week (5 working days), 8 h x the month's working days.
+// PPC and SEO work to a monthly retainer of 160 h, spread over the month's working days.
 
 export type Period = 'today' | 'weekly' | 'monthly';
 
@@ -48,14 +49,14 @@ export function taskInPeriod(p: PeriodInfo, bucket: string, timestamp: string): 
 
 // The hours a person can take in the period
 export function periodCapacity(p: PeriodInfo, monthlyBlock: boolean): number {
-  if (p.kind === 'today') return monthlyBlock ? 125 : 7;
-  if (p.kind === 'weekly') return monthlyBlock ? (125 * 5) / p.workingDays : 35;
-  return monthlyBlock ? 125 : 7 * p.workingDays;
+  if (p.kind === 'today') return monthlyBlock ? RETAINER_HOURS : DAILY_HOURS;
+  if (p.kind === 'weekly') return monthlyBlock ? (RETAINER_HOURS * 5) / p.workingDays : DAILY_HOURS * 5;
+  return monthlyBlock ? RETAINER_HOURS : DAILY_HOURS * p.workingDays;
 }
 
 // Hours of a longer period as the equivalent of one day (so the usual Available / Occupied colours and the
 // percentage read the same whatever the period)
 export function dailyEquivalent(p: PeriodInfo, monthlyBlock: boolean, hours: number): number {
-  const base = monthlyBlock ? 125 : 7;
+  const base = monthlyBlock ? RETAINER_HOURS : DAILY_HOURS;
   return hours * (base / periodCapacity(p, monthlyBlock));
 }

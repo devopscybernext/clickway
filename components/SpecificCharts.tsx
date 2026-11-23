@@ -84,6 +84,7 @@ function DateFilterPills({ value, onChange }: { value: DateFilter; onChange: (f:
 }
 import QATesting from './QATesting';
 import WorkloadBar, { workloadColor } from './WorkloadBar';
+import { DAILY_HOURS, RETAINER_HOURS, HALF_DAY_HOURS, workloadBandForPct } from '@/lib/capacity';
 
 interface Props {
   sheet1Data: SheetData[];
@@ -313,8 +314,8 @@ function leaveHoursDeduction(v: string): number {
   const t = v.trim().toLowerCase();
   if (!isOnLeaveText(t)) return 0;
   if (t.includes('short leave')) return 2;
-  if (t.includes('half day')) return 3.5;
-  return 7; // Full Day Leave, Two/Three/More than Three Days Leave, or anything else non-blank.
+  if (t.includes('half day')) return HALF_DAY_HOURS;
+  return DAILY_HOURS; // Full Day Leave, Two/Three/More than Three Days Leave, or anything else non-blank.
 }
 
 // Deadline column is "M/D/YYYY" (confirmed against the live Marketing sheet,
@@ -340,7 +341,7 @@ function parseDeadlineDate(val: string): Date | null {
 // closed counts, submitted ones included. PPC and SEO, who work to a monthly
 // retainer, keep the plain Time Estimation.
 const HANDED_OFF_STATUSES = ['submitted to client', 'submitted to pm', 'submitted to akash', 'submitted to web admin', 'submitted to admin'];
-// Everyone on a daily 7h day (Web and SMM) — i.e. everyone except the monthly-retainer PPC / SEO names
+// Everyone on a daily 8h day (Web and SMM) — i.e. everyone except the monthly-retainer PPC / SEO names
 const usesLoggedTimeRule = (name: string) => !MONTHLY_BLOCK_MARKETING_NAMES.has(name.trim().toLowerCase());
 const webTaskLoad = (estHours: number, loggedHours: number) => Math.max(estHours, loggedHours);
 // PPC and SEO (monthly retainer): a task takes its estimate minus the hours already spent on it (Total Hours),
@@ -359,26 +360,12 @@ const bucketRank = (raw: string) => {
 const findTotalHoursCol = (headers: string[]) =>
   headers.find(h => h.toLowerCase().includes('total hours') || (h.toLowerCase().includes('total time') && !h.toLowerCase().includes('est')));
 
-// The band (label) is only used internally for the bar's colour; the screens show
-// the percentage — assigned hours / capacity (7h a day, or 125h a month for the
-// monthly-retainer PPC & SEO) — not the label.
+// The screens show the percentage (assigned hours / capacity: 8h a day, or 160h a month for the monthly-retainer
+// PPC & SEO) in the colour of its band (lib/capacity.ts); the band's name is only used inside the code.
 function workloadStatus(hours: number, isMonthlyBlock: boolean): { label: string; bg: string; pct: number } {
-  const pct = Math.round((hours / (isMonthlyBlock ? 125 : 7)) * 100);
-  return { ...workloadBand(hours, isMonthlyBlock), bg: workloadColor(pct), pct };
-}
-function workloadBand(hours: number, isMonthlyBlock: boolean): { label: string; bg: string } {
-  if (isMonthlyBlock) {
-    if (hours <= 40)  return { label: 'Available',           bg: '#22c55e' };
-    if (hours <= 70)  return { label: 'Partially Available', bg: '#16a34a' };
-    if (hours <= 100) return { label: 'Partially Occupied',  bg: '#f59e0b' };
-    if (hours <= 125) return { label: 'Occupied',            bg: '#ea580c' };
-    return                     { label: 'Overload',            bg: '#dc2626' };
-  }
-  if (hours === 0)  return { label: 'Available',           bg: '#22c55e' };
-  if (hours <= 3.5) return { label: 'Partially Available', bg: '#16a34a' };
-  if (hours <= 6.5) return { label: 'Partially Occupied',  bg: '#f59e0b' };
-  if (hours <= 7)   return { label: 'Occupied',            bg: '#ea580c' };
-  return                     { label: 'Overload',            bg: '#dc2626' };
+  const pct = Math.round((hours / (isMonthlyBlock ? RETAINER_HOURS : DAILY_HOURS)) * 100);
+  const band = workloadBandForPct(pct);
+  return { label: band.label, bg: band.color, pct };
 }
 
 // Status based on todayHours (today+everyday) — matches the badge shown on the card.
@@ -3356,11 +3343,11 @@ export function TeamWorkloadCards({ sheet1Data, sheet1Headers, availData, availH
       : workloadStatus(period ? dailyEquivalent(period, isMonthlyBlock, loadHours) : loadHours, isMonthlyBlock);
 
     // Bandwidth — same "headroom left before Overload"
-    // formula as PM Projects, just against this person's own daily (7h)
-    // or monthly-retainer (125h) ceiling instead of the PM 450h one. A
+    // formula as PM Projects, just against this person's own daily (8h)
+    // or monthly-retainer (160h) ceiling instead of the PM 300h one. A
     // leave entry knocks its hours off too, so someone on Full Day Leave
     // (or worse) shows 0 instead of their full untouched cap.
-    const cap = period ? periodCapacity(period, isMonthlyBlock) : (isMonthlyBlock ? 125 : 7);
+    const cap = period ? periodCapacity(period, isMonthlyBlock) : (isMonthlyBlock ? RETAINER_HOURS : DAILY_HOURS);
     const availableHours = Math.max(0, cap - loadHours - leaveDeduction);
 
     // All of this person's tasks for the month, flat — not grouped by
@@ -3611,9 +3598,9 @@ export function MyWorkloadSummary({ sheet1Data, sheet1Headers, availData, availH
   }
 
   const status = onLeave ? { label: 'On Leave', bg: '#ef4444' } : workloadStatus(loadHours, isMonthlyBlock);
-  // Gauge reads against the Overload threshold — 125h/month for PPC & SEO,
-  // 7h/day for everyone else.
-  const cap = isMonthlyBlock ? 125 : 7;
+  // Gauge reads against the Overload threshold — 160h/month for PPC & SEO,
+  // 8h/day for everyone else.
+  const cap = isMonthlyBlock ? RETAINER_HOURS : DAILY_HOURS;
   const pct = Math.min((loadHours / cap) * 100, 100);
   const hoursLabel = isMonthlyBlock
     ? `${formatHoursClock(loadHours)}h of ${formatHoursClock(cap)}h this month`
@@ -3745,10 +3732,10 @@ export function ResourceBandwidthChips({ sheet1Data, sheet1Headers, availData, a
       : workloadStatus(loadHours, isMonthlyBlock);
 
     // Bandwidth — same "headroom left before Overload"
-    // formula as PM Projects, against this person's own daily (7h) or
-    // monthly-retainer (125h) ceiling instead of the PM 450h one, minus
+    // formula as PM Projects, against this person's own daily (8h) or
+    // monthly-retainer (160h) ceiling instead of the PM 300h one, minus
     // whatever a leave entry knocks off.
-    const cap = isMonthlyBlock ? 125 : 7;
+    const cap = isMonthlyBlock ? RETAINER_HOURS : DAILY_HOURS;
     const availableHours = Math.max(0, cap - loadHours - leaveDeduction);
 
     // the hours shown are the time the bar is built from, so the figure and the % agree
@@ -3887,7 +3874,7 @@ export function InsightCards({ sheet1Data, sheet1Headers, availData, availHeader
       const av = availData.find(r => String(r[availNameCol] ?? '').trim().toLowerCase() === name.toLowerCase());
       if (av) leaveDeduction = leaveHoursDeduction(String(av[availStatusCol] ?? '').trim());
     }
-    const cap = period ? periodCapacity(period, isMonthlyBlock) : (isMonthlyBlock ? 125 : 7);
+    const cap = period ? periodCapacity(period, isMonthlyBlock) : (isMonthlyBlock ? RETAINER_HOURS : DAILY_HOURS);
     return sum + Math.max(0, cap - hours - leaveDeduction);
   }, 0);
 

@@ -15,7 +15,8 @@ import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { downloadTableXlsx, type TableExport } from '@/lib/tableExport';
 import { downloadDetailsPdf, type DetailPdfProject, type ReportPdfSummary } from '@/lib/projectReportPdf';
 import { isFlaggedStatus } from '@/lib/statusFlags';
-import WorkloadBar, { workloadColor } from './WorkloadBar';
+import WorkloadBar from './WorkloadBar';
+import { PM_MONTHLY_HOURS, workloadBandForPct } from '@/lib/capacity';
 import DownloadReportDialog, { ALL_DOWNLOAD_PDF_KEYS } from './DownloadReportDialog';
 
 const PAGE_SIZE = 50;
@@ -350,7 +351,7 @@ const LEVEL_FIELDS_PM: Record<'low' | 'medium' | 'full', string[]> = {
 
 // Bandwidth-formula ceiling — same 300h threshold pmWorkloadStatus already
 // bands Overload at. Available Hours = how much headroom is left under it.
-const PM_BANDWIDTH_CAPACITY = 300;
+const PM_BANDWIDTH_CAPACITY = PM_MONTHLY_HOURS;
 
 // PM workload badge — bands on raw Total Hours (not a rate, not net of
 // current-month progress; deliberately simple per explicit request).
@@ -358,14 +359,8 @@ const PM_BANDWIDTH_CAPACITY = 300;
 // the band only picks the bar's colour.
 function pmWorkloadStatus(totalHours: number): { label: string; bg: string; pct: number } {
   const pct = Math.round((totalHours / PM_BANDWIDTH_CAPACITY) * 100);
-  return { ...pmWorkloadBand(totalHours), bg: workloadColor(pct), pct };
-}
-function pmWorkloadBand(totalHours: number): { label: string; bg: string } {
-  if (totalHours < 100) return { label: 'Available', bg: '#22c55e' };
-  if (totalHours < 180) return { label: 'Partially Available', bg: '#f59e0b' };
-  if (totalHours < 230) return { label: 'Partially Occupied', bg: '#f59e0b' };
-  if (totalHours < PM_BANDWIDTH_CAPACITY) return { label: 'Occupied', bg: '#f97316' };
-  return { label: 'Overload', bg: '#dc2626' };
+  const band = workloadBandForPct(pct);
+  return { label: band.label, bg: band.color, pct };
 }
 
 // Same idea, but for populating the H/M dropdowns when opening a cell to edit.

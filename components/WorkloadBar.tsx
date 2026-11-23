@@ -1,23 +1,16 @@
 'use client';
 
+import { workloadBandForPct } from '@/lib/capacity';
+
 // The workload meter that replaced the "Available / Partially Occupied /
 // Occupied / Overload" labels: a small bar filled 0-100% with the percentage
 // beside it. The percentage is the real figure (it can pass 100 when someone is
 // over capacity); the bar itself stops at full. "On Leave" is not a workload, so
 // it keeps a small pill instead of a bar.
-// Colour by how full the day is — free bandwidth is red (someone can take work),
-// a full day is green:
-//   0-30% red   31-40% red-orange   41-50% orange   51-60% amber
-//   61-70% yellow   71-80% lime   81-90% light green   91%+ green
+// The colour is the band of the percentage (see lib/capacity.ts): above 100% dark green, 75-100% green,
+// 50-74% orange, 25-49% yellow, 0-24% red. Free bandwidth is red (someone can take work), a full day is green.
 export function workloadColor(pct: number): string {
-  if (pct <= 30) return '#dc2626';
-  if (pct <= 40) return '#ea580c';
-  if (pct <= 50) return '#f97316';
-  if (pct <= 60) return '#f59e0b';
-  if (pct <= 70) return '#eab308';
-  if (pct <= 80) return '#84cc16';
-  if (pct <= 90) return '#4ade80';
-  return '#16a34a';
+  return workloadBandForPct(pct).color;
 }
 
 export interface WorkloadStatusLike {

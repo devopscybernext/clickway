@@ -5,6 +5,7 @@ import { SheetData } from '@/lib/dataStore';
 import { Card, Empty, CountCards } from './TeamDashboard';
 import { computeStatsFor, statusColor, STATUS_OPTIONS, PHASE_OPTIONS, PAYMENT_STATUS_OPTIONS } from './PMProjectBandwidth';
 import WorkloadBar, { workloadColor } from './WorkloadBar';
+import { PM_MONTHLY_HOURS } from '@/lib/capacity';
 import { memberPhoto, memberColor } from '@/lib/memberColors';
 import { hhmmToDecimalHours, formatHoursClock } from './SpecificCharts';
 
@@ -14,7 +15,7 @@ import { hhmmToDecimalHours, formatHoursClock } from './SpecificCharts';
 
 const lc = (v: unknown) => String(v ?? '').trim().toLowerCase();
 const FOLLOWUP_DUE_DAYS = 7;
-const PM_CAPACITY = 300;   // same ceiling as the PM workload bar on Current Month
+const PM_CAPACITY = PM_MONTHLY_HOURS;   // same ceiling as the PM workload bar on Current Month
 const palette = ['#3b82f6', '#f59e0b', '#16a34a', '#8b5cf6', '#ec4899', '#06b6d4', '#ef4444', '#9ca3af'];
 
 // A time cell is either a plain number of hours or "HH.MM Hours" (see parseDurationDecimal on the Current Month page)

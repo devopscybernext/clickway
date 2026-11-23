@@ -23,8 +23,8 @@ test('the sidebar collapses to icons, expands again, and remembers the choice', 
   await expect(aside.getByRole('button', { name: 'Cybernext InHouse', exact: true })).toBeVisible();
 
   // a page can still be opened from the icons
-  await aside.getByRole('button', { name: 'Leave Status', exact: true }).click();
-  await expect(page.getByRole('banner').getByText('Leave Status')).toBeVisible();
+  await aside.getByRole('button', { name: 'PM Projects', exact: true }).click();
+  await expect(page.getByRole('banner').getByText('PM Projects')).toBeVisible();
 
   // it stays collapsed after a reload, then opens again
   await page.reload();
