@@ -28,7 +28,7 @@ const REPORTS: { id: ReportId; title: string; description: string; Icon: LucideI
   {
     id: 'productivity',
     title: 'Productivity Meter',
-    description: 'See who finished tasks within the estimated time. Pick dates and resources. Green means on time, red means over the estimate.',
+    description: 'See who finished tasks within the billable hours. Pick dates and resources. Green means on time, red means over the billable hours.',
     Icon: Gauge,
     teams: ['web', 'marketing'],
   },
@@ -181,7 +181,7 @@ function ProductivityDialog({ format, team, roster, people, data, headers, onClo
   return (
     <DialogFrame
       title={`Productivity Meter${teamSuffix(team)}`}
-      intro="Choose the dates and the resources. Each task is flagged green when it took no longer than its estimate, red when it ran over."
+      intro="Choose the dates and the resources. Each task is flagged green when it took no longer than its billable hours, red when it ran over."
       format={format} busy={g.busy} error={g.error} canGenerate={canGenerate} onClose={onClose} onGenerate={generate}
       footer={`${plural(selected.size, 'resource')} · ${plural(total, 'task')}`}
     >

@@ -5,7 +5,7 @@
 
 import { clean } from './projectReportPdf';
 import { timeToMinutes, formatTotalTime } from './copyTotals';
-import { FLAG_STYLE, TEAM_LABELS, fmtDuration, type PersonSummary, type ProductivityTask, type ReportTeam } from './productivity';
+import { FLAG_STYLE, TEAM_LABELS, timeHeading, fmtDuration, type PersonSummary, type ProductivityTask, type ReportTeam } from './productivity';
 
 const PAGE_W = 297;
 const PAGE_H = 210;
@@ -70,9 +70,9 @@ export async function downloadProductivityPdf(opts: {
   // Headline strip
   const stats = [
     { label: 'Tasks', value: String(totalTasks) },
-    { label: 'Time estimated', value: fmtDuration(estAll) },
-    { label: 'Time taken', value: fmtDuration(takenAll) },
-    { label: 'Within estimate', value: cmpAll ? `${withinAll} of ${cmpAll}  (${Math.round((withinAll / cmpAll) * 100)}%)` : '-' },
+    { label: 'Billable Hours', value: fmtDuration(estAll) },
+    { label: 'Total Logged', value: fmtDuration(takenAll) },
+    { label: 'Within billable', value: cmpAll ? `${withinAll} of ${cmpAll}  (${Math.round((withinAll / cmpAll) * 100)}%)` : '-' },
   ];
   const stripH = 21;
   doc.setDrawColor(...RULE); doc.setLineWidth(0.3);
@@ -95,7 +95,7 @@ export async function downloadProductivityPdf(opts: {
   const COL_PAGE = 8;
   autoTable(doc, {
     startY: y,
-    head: [['RESOURCE', 'TASKS', 'ESTIMATED', 'TIME TAKEN', 'WITHIN ESTIMATE', 'OVER ESTIMATE', 'EFFICIENCY', 'VERDICT', 'PAGE']],
+    head: [['RESOURCE', 'TASKS', 'BILLABLE HOURS', 'TOTAL LOGGED', 'WITHIN BILLABLE', 'OVER BILLABLE', 'EFFICIENCY', 'VERDICT', 'PAGE']],
     body: summaries.map(p => [
       clean(p.person),
       String(p.taskCount),
@@ -147,14 +147,14 @@ export async function downloadProductivityPdf(opts: {
   let ly = afterTable + 7;
   if (ly > PAGE_H - 22) { doc.addPage(); strip(); ly = 18; }
   doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...MUTED);
-  doc.text('Efficiency = time estimated / time taken, over tasks that have both. 100% = exactly on plan; above 100% = finished faster than estimated.', MARGIN, ly);
+  doc.text('Efficiency = billable hours / total logged, over tasks that have both. 100% = exactly on plan; above 100% = finished faster than billed.', MARGIN, ly);
   ly += 4.6;
   doc.setFillColor(...rgb(FLAG_STYLE.under.fill)); doc.roundedRect(MARGIN, ly - 3, 4, 3.4, 0.8, 0.8, 'F');
-  doc.text('Green = within the estimate', MARGIN + 6, ly);
+  doc.text('Green = within the billable hours', MARGIN + 6, ly);
   doc.setFillColor(...rgb(FLAG_STYLE.over.fill)); doc.roundedRect(MARGIN + 52, ly - 3, 4, 3.4, 0.8, 0.8, 'F');
-  doc.text('Red = over the estimate', MARGIN + 58, ly);
+  doc.text('Red = over the billable hours', MARGIN + 58, ly);
   doc.setFillColor(...rgb(FLAG_STYLE.none.fill)); doc.roundedRect(MARGIN + 100, ly - 3, 4, 3.4, 0.8, 0.8, 'F');
-  doc.text('Grey = no estimate or no time logged', MARGIN + 106, ly);
+  doc.text('Grey = no billable hours or no time logged', MARGIN + 106, ly);
 
   // ── One section per resource ─────────────────────────────────────────────
   const startPage: number[] = [];
@@ -188,9 +188,9 @@ export async function downloadProductivityPdf(opts: {
     d.setFont('helvetica', 'normal'); d.setFontSize(9.5); d.setTextColor(...MUTED);
     const bits = [
       `${p.taskCount} task${p.taskCount === 1 ? '' : 's'}`,
-      `Estimated ${fmtDuration(p.estMin)}`,
-      `Taken ${fmtDuration(p.totalMin)}`,
-      p.comparable ? `Within estimate ${p.withinEstimate} of ${p.comparable}` : 'No comparable tasks',
+      `Billable ${fmtDuration(p.estMin)}`,
+      `Logged ${fmtDuration(p.totalMin)}`,
+      p.comparable ? `Within billable ${p.withinEstimate} of ${p.comparable}` : 'No comparable tasks',
       p.efficiencyPct === null ? '' : `Efficiency ${p.efficiencyPct}%`,
     ].filter(Boolean);
     d.text(clean(bits.join('   |   ')), MARGIN, ry);
@@ -200,7 +200,7 @@ export async function downloadProductivityPdf(opts: {
     const sumTaken = p.tasks.reduce((s, t) => s + t.totalMin, 0);
     autoTable(d, {
       startY: ry + 5,
-      head: [['#', 'PROJECT NAME', 'TASK NAME', 'LINK', labels.est.toUpperCase(), labels.total.toUpperCase(), 'DEADLINE', 'TASK STATUS', 'PM STATUS', 'FLAG']],
+      head: [['#', 'PROJECT NAME', 'TASK NAME', 'LINK', timeHeading(team, 'est'), timeHeading(team, 'total'), 'DEADLINE', 'TASK STATUS', 'PM STATUS', 'FLAG']],
       body: p.tasks.map((t: ProductivityTask, i: number) => [
         String(i + 1), clean(t.project || '-'), clean(t.task || '-'), t.url ? 'Open' : '-',
         timeText(t.estRaw), timeText(t.totalRaw), clean(t.deadline || '-'), clean(t.taskStatus || '-'), clean(t.pmStatus || '-'),

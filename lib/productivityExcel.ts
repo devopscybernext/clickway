@@ -3,7 +3,7 @@
 // flag filled green / red / grey and the task link clickable.
 
 import { timeToMinutes, formatTotalTime } from './copyTotals';
-import { FLAG_STYLE, TEAM_LABELS, fmtDuration, type PersonSummary, type ReportTeam } from './productivity';
+import { FLAG_STYLE, TEAM_LABELS, timeHeading, fmtDuration, type PersonSummary, type ReportTeam } from './productivity';
 
 const HEADER = { fontWeight: 'bold' as const, backgroundColor: '#f3f4f6', textColor: '#6b7280', wrap: true, alignVertical: 'center' as const };
 const TOTAL_BG = '#fff1ec';
@@ -41,7 +41,7 @@ export async function downloadProductivityExcel(opts: {
   const withinAll = summaries.reduce((s, p) => s + p.withinEstimate, 0);
   const overAll = summaries.reduce((s, p) => s + p.overEstimate, 0);
 
-  const summaryHead = ['RESOURCE', 'TASKS', 'TIME ESTIMATED', 'TIME TAKEN', 'WITHIN ESTIMATE', 'OVER ESTIMATE', 'EFFICIENCY', 'VERDICT']
+  const summaryHead = ['RESOURCE', 'TASKS', 'BILLABLE HOURS', 'TOTAL LOGGED', 'WITHIN BILLABLE', 'OVER BILLABLE', 'EFFICIENCY', 'VERDICT']
     .map(value => ({ value, ...HEADER }));
   const summaryBody = summaries.map(p => {
     const v = FLAG_STYLE[p.verdict.kind];
@@ -71,7 +71,7 @@ export async function downloadProductivityExcel(opts: {
     data: [
       [{ value: team === 'web' ? 'Productivity Meter' : `Productivity Meter - ${labels.team}`, fontWeight: 'bold' as const, fontSize: 14 }],
       [{ value: rangeLabel, textColor: '#6b7280' }],
-      [{ value: 'Efficiency = time estimated / time taken, over tasks that have both. 100% = on plan; above = faster than estimated.', textColor: '#6b7280' }],
+      [{ value: 'Efficiency = billable hours / total logged, over tasks that have both. 100% = on plan; above = faster than billed.', textColor: '#6b7280' }],
       [],
       summaryHead,
       ...summaryBody,
@@ -83,7 +83,7 @@ export async function downloadProductivityExcel(opts: {
 
   // ── One sheet per resource ───────────────────────────────────────────────
   const personSheets = summaries.map((p, i) => {
-    const head = ['#', 'PROJECT NAME', 'TASK NAME', 'TASK URL', labels.est.toUpperCase(), labels.total.toUpperCase(), 'DEADLINE', 'TASK STATUS', 'PM STATUS', 'FLAG', 'MESSAGE']
+    const head = ['#', 'PROJECT NAME', 'TASK NAME', 'TASK URL', timeHeading(team, 'est'), timeHeading(team, 'total'), 'DEADLINE', 'TASK STATUS', 'PM STATUS', 'FLAG', 'MESSAGE']
       .map(value => ({ value, ...HEADER }));
     const body = p.tasks.map((t, ti) => {
       const st = FLAG_STYLE[t.flag.kind];

@@ -3,6 +3,7 @@
 // the Excel file always come from the same place.
 
 import { timeToMinutes } from './copyTotals';
+import { taskColumnLabel } from './columnLabels';
 
 // ── Teams ──────────────────────────────────────────────────────────────────
 // Web and Marketing keep the same kind of task rows, but name the two time
@@ -13,6 +14,10 @@ export const TEAM_LABELS: Record<ReportTeam, { team: string; est: string; total:
   web: { team: 'Web', est: 'Total Time Est', total: 'Total Time' },
   marketing: { team: 'Marketing', est: 'Task Estimation', total: 'Total Hours' },
 };
+
+// What the two time columns are called on the PDF and in the Excel file: the names of the columns are used to find
+// them in the rows (above), the headings use the on-screen names (Billable Hours, Total Logged).
+export const timeHeading = (team: ReportTeam, which: 'est' | 'total'): string => taskColumnLabel(TEAM_LABELS[team][which]).toUpperCase();
 
 // ── Dates ──────────────────────────────────────────────────────────────────
 // The Web sheet stores dates day-first ("21/04/2026 17:42:25"), the Marketing
@@ -72,20 +77,20 @@ export function compareTimes(estRaw: string, totalRaw: string): TimeFlag {
   const est = hasTime(estRaw) ? timeToMinutes(estRaw) : 0;
   const actual = hasTime(totalRaw) ? timeToMinutes(totalRaw) : 0;
   if (!est) {
-    return { kind: 'none', message: estRaw.trim() && !hasTime(estRaw) ? `Estimate: ${estRaw.trim()}` : 'No estimate set', diffMin: 0 };
+    return { kind: 'none', message: estRaw.trim() && !hasTime(estRaw) ? `Billable: ${estRaw.trim()}` : 'No billable hours set', diffMin: 0 };
   }
   if (!actual) return { kind: 'none', message: 'No time logged yet', diffMin: 0 };
   const diff = actual - est;
-  if (diff < 0) return { kind: 'under', message: `Finished ${fmtDuration(diff)} under the estimate`, diffMin: diff };
-  if (diff > 0) return { kind: 'over', message: `Took ${fmtDuration(diff)} over the estimate`, diffMin: diff };
-  return { kind: 'on', message: 'Right on the estimate', diffMin: 0 };
+  if (diff < 0) return { kind: 'under', message: `Finished ${fmtDuration(diff)} under the billable hours`, diffMin: diff };
+  if (diff > 0) return { kind: 'over', message: `Took ${fmtDuration(diff)} over the billable hours`, diffMin: diff };
+  return { kind: 'on', message: 'Right on the billable hours', diffMin: 0 };
 }
 
 /** Colours used for the flag everywhere (PDF fills, Excel fills, UI). */
 export const FLAG_STYLE: Record<FlagKind, { fill: string; text: string; label: string }> = {
-  under: { fill: '#dcfce7', text: '#166534', label: 'Under estimate' },
-  on:    { fill: '#dcfce7', text: '#166534', label: 'On estimate' },
-  over:  { fill: '#fee2e2', text: '#991b1b', label: 'Over estimate' },
+  under: { fill: '#dcfce7', text: '#166534', label: 'Under billable' },
+  on:    { fill: '#dcfce7', text: '#166534', label: 'On billable' },
+  over:  { fill: '#fee2e2', text: '#991b1b', label: 'Over billable' },
   none:  { fill: '#f3f4f6', text: '#4b5563', label: 'Not comparable' },
 };
 
@@ -245,9 +250,9 @@ export function summarise(tasks: ProductivityTask[], order: string[]): PersonSum
     const overEstimate = comparableTasks.filter(t => t.flag.kind === 'over').length;
     const verdict: PersonSummary['verdict'] =
       efficiencyPct === null ? { kind: 'none', label: 'Not enough data' }
-      : efficiencyPct >= 100 ? { kind: 'under', label: 'On or under estimate' }
-      : efficiencyPct >= 85 ? { kind: 'over', label: 'Slightly over estimate' }
-      : { kind: 'over', label: 'Well over estimate' };
+      : efficiencyPct >= 100 ? { kind: 'under', label: 'On or under billable' }
+      : efficiencyPct >= 85 ? { kind: 'over', label: 'Slightly over billable' }
+      : { kind: 'over', label: 'Well over billable' };
     return {
       person,
       tasks: list,
