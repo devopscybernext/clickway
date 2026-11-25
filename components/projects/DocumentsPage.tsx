@@ -59,7 +59,7 @@ export default function DocumentsPage({ refreshKey, onOpenProject }: { refreshKe
     <div className="min-w-0 space-y-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold tracking-tight" style={{ color: 'var(--cn-text-primary)' }}>All Documents</h2>
+          <h2 className="text-xl font-bold tracking-tight" style={{ color: 'var(--cn-text-primary)' }}>My Documents</h2>
           <p className="mt-1 text-sm" style={{ color: 'var(--cn-text-muted)' }}>Find and open files across your projects.</p>
         </div>
         {docs !== null && !error && <Pill>{docs.length} document{docs.length === 1 ? '' : 's'}</Pill>}

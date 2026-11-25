@@ -19,13 +19,16 @@ function optionsOf(projects: ProjectSummary[], pick: (p: ProjectSummary) => stri
 
 // The project cards, with search, status, platform, client, creator and archive filters. Projects the person pinned come first,
 // in their own "Pinned" group.
-export default function ProjectList({ projects, loading, canCreate, onOpen, onCreate, onTogglePin }: {
+export default function ProjectList({ projects, loading, canCreate, onOpen, onCreate, onTogglePin, title, subtitle, emptyText }: {
   projects: ProjectSummary[];
   loading: boolean;
   canCreate: boolean;
   onOpen: (id: number) => void;
   onCreate: () => void;
   onTogglePin: (project: ProjectSummary) => void;
+  title?: string;
+  subtitle?: string;
+  emptyText?: string;   // when there are no projects at all
 }) {
   const [openGroups, setOpenGroups] = useState({ pinned: true, other: true });
   const [search, setSearch] = useState('');
@@ -66,7 +69,7 @@ export default function ProjectList({ projects, loading, canCreate, onOpen, onCr
                   <Pill tone={STATUS_TONE[p.status]}>{STATUS_LABELS[p.status]}</Pill>
                   </div>
                 </div>
-                <PinButton pinned={p.pinned} label={p.name} onToggle={() => onTogglePin(p)} />
+                {p.access ? <PinButton pinned={p.pinned} label={p.name} onToggle={() => onTogglePin(p)} /> : <span aria-hidden="true" />}
               </div>
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: 'var(--cn-text-muted)' }}>
                 <span className="inline-flex items-center gap-1"><Users className="w-3.5 h-3.5" /> {p.members} member{p.members === 1 ? '' : 's'}</span>
@@ -85,7 +88,7 @@ export default function ProjectList({ projects, loading, canCreate, onOpen, onCr
                   View Project
                 </button>
                 <span className="w-full text-xs leading-relaxed break-words" style={{ color: 'var(--cn-text-faint)' }}>
-                  {p.access ? ACCESS_LABELS[p.access] : ''}{p.createdBy ? ` · by ${p.createdBy}` : ''}{p.createdAt ? ` · ${formatDate(p.createdAt)}` : ''}
+                  {p.access ? ACCESS_LABELS[p.access] : 'Not a member'}{p.createdBy ? ` · by ${p.createdBy}` : ''}{p.createdAt ? ` · ${formatDate(p.createdAt)}` : ''}
                 </span>
               </div>
             </div>
@@ -95,8 +98,8 @@ export default function ProjectList({ projects, loading, canCreate, onOpen, onCr
     <div className="min-w-0 space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold tracking-tight" style={{ color: 'var(--cn-text-primary)' }}>Project workspace</h2>
-          <p className="mt-1 text-sm" style={{ color: 'var(--cn-text-muted)' }}>Keep your clients, documents, and team in one place.</p>
+          <h2 className="text-xl font-bold tracking-tight" style={{ color: 'var(--cn-text-primary)' }}>{title ?? 'Project workspace'}</h2>
+          <p className="mt-1 text-sm" style={{ color: 'var(--cn-text-muted)' }}>{subtitle ?? 'Keep your clients, documents, and team in one place.'}</p>
         </div>
         {canCreate && <Button primary onClick={onCreate}><Plus className="w-4 h-4" /> New project</Button>}
       </div>
@@ -160,7 +163,7 @@ export default function ProjectList({ projects, loading, canCreate, onOpen, onCr
           <FolderKanban className="w-8 h-8 mx-auto mb-3" style={{ color: 'var(--cn-text-faint)' }} />
           <p className="text-sm" style={{ color: 'var(--cn-text-muted)' }}>
             {projects.length === 0
-              ? canCreate ? 'No projects yet. Create the first one.' : 'You have not been added to any project yet.'
+              ? emptyText ?? (canCreate ? 'No projects yet. Create the first one.' : 'You have not been added to any project yet.')
               : 'No projects match these filters.'}
           </p>
         </div>

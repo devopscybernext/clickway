@@ -1174,7 +1174,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           {(isTools || isInHouse || isProjects) && (
             <BusinessDevTabs
               pages={(getNavItems(navUser).find(i => isNavParent(i) && i.label === BUSINESS_DEV) as { children: NavLeaf[] } | undefined)?.children ?? []}
-              isTabActive={leaf => selectedSheet === leaf.id && leaf.subTab === (leaf.id === '14' ? toolsSubTab : leaf.id === '21' ? projectsSubTab : inHouseSubTab)}
+              isTabActive={leaf => selectedSheet === leaf.id && leaf.subTab === (leaf.id === '14' ? toolsSubTab : leaf.id === '21' ? (projectsSubTab === 'documents' ? 'projects' : projectsSubTab) : inHouseSubTab)}
               onNavigate={handleSheetChange}
             />
           )}
@@ -1272,7 +1272,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           })()}
 
           {/* ── Projects: shared Google Drive documents per project (components/projects) ── */}
-          {isProjects && <ProjectsSection subTab={projectsSubTab} onSubTabChange={setProjectsSubTab} />}
+          {isProjects && <ProjectsSection subTab={projectsSubTab} onSubTabChange={setProjectsSubTab} hasAccess={projectsMenu !== 'none'} />}
 
           {/* ── Help: the Apply form and the table of queries ── */}
           {isHelp && <Help subTab={helpSubTab} onSubTabChange={setHelpSubTab} canManage={canManageHelp(user.role)} />}

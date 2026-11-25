@@ -1,7 +1,7 @@
 import type mysql from 'mysql2/promise';
 import { randomUUID } from 'crypto';
 import {
-  type Actor, type Conn, type Row, ProjectError, pool, withConnection, withLock, logChange, requireProject, projectScope,
+  type Actor, type Conn, type Row, ProjectError, pool, withConnection, withLock, logChange, requireProject, projectScope, projectAccess,
   SHARING_LOCK, text, positiveId, webUrl, websiteUrl, creationKey,
 } from './store';
 import {
@@ -55,6 +55,74 @@ export async function listProjects(actor: Actor) {
       access: (full ? 'manager' : r.my_access) as ProjectAccess,
       pinned: Number(r.pinned) === 1,
     })),
+  };
+}
+
+// All Projects: every project, for everyone signed in (even without Projects access), so people can
+// see what already exists before creating something similar. Only the project's description fields:
+// no documents and no Drive links. `access` says whether the person can open the full project.
+export async function listAllProjects(actor: Actor) {
+  const full = actor.policy.full;
+  const [rows] = await pool().query<Row[]>(
+    `SELECT p.id, p.name, p.client_name, p.platform, p.website_url, p.status, p.is_archived,
+            p.created_by_name, p.created_at, p.updated_at,
+            (SELECT COUNT(*) FROM doc_project_members x WHERE x.project_id = p.id) AS member_count,
+            (SELECT COUNT(*) FROM doc_documents x WHERE x.project_id = p.id) AS document_count,
+            (SELECT access_level FROM doc_project_members x WHERE x.project_id = p.id AND x.user_id = ?) AS my_access,
+            EXISTS (SELECT 1 FROM doc_pins pin WHERE pin.user_id = ? AND pin.kind = 'project' AND pin.item_id = p.id) AS pinned
+       FROM doc_projects p ORDER BY p.updated_at DESC, p.id DESC`,
+    [actor.id, actor.id]
+  );
+  return {
+    canCreate: actor.policy.create,
+    projects: rows.map(r => {
+      const access = !actor.policy.access ? null : full ? 'manager' : (r.my_access as ProjectAccess | null) ?? null;
+      return {
+        id: Number(r.id), name: r.name, client: r.client_name ?? '', platform: r.platform ?? '', website: r.website_url ?? '',
+        status: r.status as ProjectStatus, archived: !!r.is_archived, driveFolderUrl: '',
+        createdBy: r.created_by_name ?? '', createdAt: iso(r.created_at), updatedAt: iso(r.updated_at),
+        members: Number(r.member_count), documents: Number(r.document_count),
+        access, pinned: access !== null && Number(r.pinned) === 1,
+      };
+    }),
+  };
+}
+
+// A read-only overview of any project (All Projects), for people who aren't in it: what it is, who
+// created it, and the list of its documents (titles and details only: no links, nothing to open).
+export async function getProjectOverview(actor: Actor, projectId: number) {
+  const db = pool();
+  const [rows] = await db.query<Row[]>('SELECT * FROM doc_projects WHERE id = ?', [projectId]);
+  const p = rows[0];
+  if (!p) throw new ProjectError('This project no longer exists.', 404);
+  const [members] = await db.query<Row[]>(
+    `SELECT m.user_id, m.access_level, u.username, u.display_name
+       FROM doc_project_members m LEFT JOIN users u ON u.id = m.user_id
+      WHERE m.project_id = ? ORDER BY FIELD(m.access_level, 'manager', 'editor', 'viewer'), u.display_name`,
+    [projectId]
+  );
+  const [documents] = await db.query<Row[]>(
+    `SELECT d.title, d.source_type, d.visibility, d.mime_type, d.created_by_name, d.created_at, t.name AS template_name
+       FROM doc_documents d LEFT JOIN doc_templates t ON t.id = d.template_id
+      WHERE d.project_id = ? ORDER BY d.created_at DESC, d.id DESC`,
+    [projectId]
+  );
+  const policyOf = new Map((await loadPeople(db)).map(x => [x.id, x.policy]));
+  const access = actor.policy.access ? await projectAccess(actor, projectId) : null;
+  return {
+    project: {
+      id: Number(p.id), name: p.name, client: p.client_name ?? '', platform: p.platform ?? '', website: p.website_url ?? '',
+      description: p.description ?? '', status: p.status as ProjectStatus, archived: !!p.is_archived,
+      createdBy: p.created_by_name ?? '', createdAt: iso(p.created_at), updatedAt: iso(p.updated_at),
+    },
+    documents: documents.map(d => ({
+      title: String(d.title), source: String(d.source_type), visibility: String(d.visibility), mimeType: String(d.mime_type ?? ''),
+      template: d.template_name ?? '', createdBy: d.created_by_name ?? '', createdAt: iso(d.created_at),
+    })),
+    members: members
+      .filter(m => m.username !== null && m.username !== undefined && !policyOf.get(Number(m.user_id))?.full)
+      .map(m => ({ name: String(m.display_name || m.username), access: m.access_level as ProjectAccess })),
+    access,
   };
 }
 

@@ -22,8 +22,8 @@ export interface AuthUser {
   role: Role;
   displayName: string;
   email?: string;
-  // Set by the page once Admin Portal → Projects settings are known: hides Cybernext InHouse →
-  // Documents ('none') or shows its Templates tab ('full'). Unset = the role default below.
+  // Set by the page once Admin Portal → Projects settings are known: Cybernext InHouse → Documents shows
+  // only All Projects ('none'), or also Templates ('full'). Unset = the role default below.
   projectsMenu?: 'none' | 'member' | 'full';
 }
 
@@ -351,24 +351,26 @@ const HELP_NAV_ADMIN: NavItem = {
   children: [{ id: '18', subTab: 'apply', label: 'Apply' }, { id: '18', subTab: 'queries', label: 'All Queries' }],
 };
 // Documents (shared Google Drive documents per project, page '21') is the third page of Cybernext InHouse,
-// for everyone: its tabs are Projects and All Documents, plus Templates for full access (Super Admin and HM
-// by default; Admin Portal → Projects can change who sees Documents at all). See lib/projects/rules.ts.
+// for every department and person. Its tabs:
+//   All Projects  every project, for everyone (no documents), so nobody creates a duplicate
+//   My Projects   the projects the person is in, with My Documents as a sub-tab (needs Projects access,
+//                 set in Admin Portal → Projects)
+//   Templates     full access only (Super Admin and HM by default)
 // Leave Status, for the roles that have it, is the last page of Cybernext InHouse.
-const DOCUMENTS_TABS: NavLeaf[] = [
-  { id: '21', subTab: 'projects', label: 'Projects' },
-  { id: '21', subTab: 'documents', label: 'All Documents' },
-];
+type DocumentsLevel = 'none' | 'member' | 'full';
+const ALL_PROJECTS_TAB: NavLeaf = { id: '21', subTab: 'all', label: 'All Projects' };
+const MY_PROJECTS_TAB: NavLeaf = { id: '21', subTab: 'projects', label: 'My Projects' };
 const DOCUMENTS_TEMPLATES_TAB: NavLeaf = { id: '21', subTab: 'templates', label: 'Templates' };
-const documentsPage = (full: boolean): NavLeaf => ({
-  id: '21', subTab: 'projects', label: 'Documents', tabs: full ? [...DOCUMENTS_TABS, DOCUMENTS_TEMPLATES_TAB] : DOCUMENTS_TABS,
-});
+const documentsPage = (level: DocumentsLevel): NavLeaf => level === 'none'
+  ? { id: '21', subTab: 'all', label: 'Documents', tabs: [ALL_PROJECTS_TAB] }
+  : { id: '21', subTab: 'projects', label: 'Documents', tabs: [ALL_PROJECTS_TAB, MY_PROJECTS_TAB, ...(level === 'full' ? [DOCUMENTS_TEMPLATES_TAB] : [])] };
 const PROJECTS_FULL_ROLES: Role[] = ['Admin', 'admin', 'HM', 'high', 'akash'];
 const isDocumentsPage = (leaf: NavLeaf) => leaf.id === '21';
 const withInHouseExtras = (nav: Record<Role, NavItem[]>): Record<Role, NavItem[]> =>
   Object.fromEntries((Object.keys(nav) as Role[]).map(role => {
     const items = nav[role];
     const hasLeave = items.some(i => !isNavParent(i) && i.id === LEAVE_STATUS.id);
-    const extras: NavLeaf[] = [documentsPage(PROJECTS_FULL_ROLES.includes(role)), ...(hasLeave ? [LEAVE_STATUS] : [])];
+    const extras: NavLeaf[] = [documentsPage(PROJECTS_FULL_ROLES.includes(role) ? 'full' : 'member'), ...(hasLeave ? [LEAVE_STATUS] : [])];
     return [role, items
       .filter(i => isNavParent(i) || i.id !== LEAVE_STATUS.id)
       .map(i => (isNavParent(i) && i.label === BUSINESS_DEV ? { ...i, children: [...i.children, ...extras] } : i))];
@@ -444,7 +446,7 @@ export function getNavItems(user: AuthUser): NavItem[] {
   const menu = user.projectsMenu;
   const items = menu
     ? ROLE_NAV[user.role].map(item => isNavParent(item) && item.label === BUSINESS_DEV
-        ? { ...item, children: item.children.flatMap(c => (isDocumentsPage(c) ? (menu === 'none' ? [] : [documentsPage(menu === 'full')]) : [c])) }
+        ? { ...item, children: item.children.map(c => (isDocumentsPage(c) ? documentsPage(menu) : c)) }
         : item)
     : [...ROLE_NAV[user.role]];
   return items.sort((a, b) => menuRank(a) - menuRank(b));
