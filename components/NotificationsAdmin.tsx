@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Download, RefreshCw, Trash2 } from 'lucide-react';
-import { LOG_DAYS, NOTIFICATION_TYPE_LABELS, type NotificationLogRow } from '@/lib/notifications';
+import { LOG_DAYS, NOTIFICATION_TYPE_LABELS, notificationSourceName, type NotificationLogRow } from '@/lib/notifications';
 
 const when = (iso: string) => new Date(iso).toLocaleString([], { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-const teamName = (t: string) => (t === 'web' ? 'Web' : 'Marketing');
+const teamName = notificationSourceName;
 
 // Admin Portal > Notifications (HM and Admin): every notification of the last thirty days in one
 // table, with an Excel download. The Super Admin can also clear them all at once.

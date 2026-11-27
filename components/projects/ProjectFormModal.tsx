@@ -7,7 +7,7 @@ import { PROJECT_STATUSES, STATUS_LABELS, type ProjectStatus } from '@/lib/proje
 export interface ProjectFields { name: string; client: string; platform: string; website: string; description: string; status: ProjectStatus }
 const EMPTY: ProjectFields = { name: '', client: '', platform: '', website: '', description: '', status: 'planning' };
 
-// New project (creates its Drive folder and adds the people set in Admin Portal → Projects) or editing an existing one.
+// New project (creates its Drive folder; the creator becomes its Creator) or editing an existing one.
 export default function ProjectFormModal({ projectId, initial, onClose, onSaved }: {
   projectId?: number;                  // set when editing
   initial?: ProjectFields;
@@ -61,7 +61,7 @@ export default function ProjectFormModal({ projectId, initial, onClose, onSaved 
         </Field>
         {!editing && (
           <p className="text-xs" style={{ color: 'var(--cn-text-faint)' }}>
-            A Google Drive folder is made for the project. You become its Creator, and the people set to join new projects automatically are added.
+            A Google Drive folder is made for the project. You become its Creator; add the rest of the team from Members.
           </p>
         )}
         {error && <Notice kind="error">{error}</Notice>}

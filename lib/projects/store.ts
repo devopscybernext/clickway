@@ -31,13 +31,12 @@ export const USERS_WHERE = 'u.sheet_id = ? AND u.sheet_tab = ?';
 export const USERS_KEYS = [USER_DETAILS_SHEET_ID, TAB_USERS];
 
 // The signed-in person, read fresh from `users` so a role changed in the Admin Portal applies at once,
-// with what they may do in Projects (Admin Portal → Projects). Anyone without Projects access is
-// refused here, unless `allowNoAccess` (the menu check needs to answer them).
+// with what their role lets them do in Projects (lib/projects/policy.ts).
 export async function actorFrom(req: NextRequest, opts: { allowNoAccess?: boolean } = {}): Promise<Actor> {
   const session = verifySession(req.cookies.get(COOKIE_NAME)?.value);
   if (!session) throw new ProjectError('Please sign in again.', 401);
   const [rows] = await pool().query<Row[]>(
-    `SELECT u.id, u.username, u.role, u.display_name, u.email, u.department, u.sub_department FROM users u
+    `SELECT u.id, u.username, u.role, u.display_name, u.email FROM users u
       WHERE ${USERS_WHERE} AND LOWER(TRIM(u.username)) = LOWER(TRIM(?))
       ORDER BY (LOWER(TRIM(u.email)) = LOWER(TRIM(?))) DESC, u.id LIMIT 1`,
     [...USERS_KEYS, session.username, session.email ?? '']
@@ -46,7 +45,7 @@ export async function actorFrom(req: NextRequest, opts: { allowNoAccess?: boolea
   if (!u) throw new ProjectError('Your account was not found. Please sign in again.', 401);
   const role = String(u.role ?? '').trim();
   const name = String(u.display_name || u.username || '');
-  const policy = await policyFor(pool(), { id: Number(u.id), role, name, department: String(u.department ?? ''), sub: String(u.sub_department ?? '') });
+  const policy = await policyFor(pool(), { role });
   if (!policy.access && !opts.allowNoAccess) throw new ProjectError('You do not have access to Projects. Ask an administrator if you need it.', 403);
   return { id: Number(u.id), username: String(u.username ?? ''), role, name, email: String(u.email ?? '').trim().toLowerCase(), policy };
 }

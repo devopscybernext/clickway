@@ -15,6 +15,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     const result = await addDocument(actor, projectId, {
       creationKey: str('creationKey'), title: str('title'), visibility: str('visibility'), source: str('source'),
       templateId: str('templateId'), url: str('url'), upload: file instanceof File ? file : null,
+      permissions: str('permissions'),
     });
     return { ...result, message: 'Document added.' };
   });

@@ -1,8 +1,11 @@
 // Notifications (the bell in the top bar, and the log in the Admin Portal).
 // Shared by the server (lib/data/notifications.ts) and the screens.
 
-export type NotificationType = 'task-added' | 'pm-status' | 'task-status';
+export type NotificationType = 'task-added' | 'pm-status' | 'task-status' | 'access-request' | 'access-granted';
 export type NotificationTeam = 'web' | 'marketing';
+// Where a notification came from: a task team, or Projects (Cybernext InHouse → Documents)
+export type NotificationSource = NotificationTeam | 'projects';
+export const notificationSourceName = (t: string) => (t === 'web' ? 'Web' : t === 'projects' ? 'Projects' : 'Marketing');
 
 // The bell keeps three days, then everyone starts fresh. The Admin Portal log keeps thirty.
 export const BELL_DAYS = 3;
@@ -20,16 +23,18 @@ export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   'task-added': 'Task Added',
   'pm-status': 'PM Status',
   'task-status': 'Task Status',
+  'access-request': 'Access Request',
+  'access-granted': 'Access Granted',
 };
 
 // One notification as the bell shows it
 export interface NotificationItem {
   id: number;
   type: NotificationType;
-  team: NotificationTeam;
+  team: NotificationSource;
   title: string;
   body: string;
-  taskRef: string;   // the task's __id ("<tab>::<row>"), so a click can jump to it
+  taskRef: string;   // the task's __id ("<tab>::<row>"), or "project::<id>", so a click can jump to it
   actor: string;
   createdAt: string; // ISO
   read: boolean;
@@ -40,7 +45,7 @@ export interface NotificationLogRow {
   id: number;
   createdAt: string; // ISO
   type: NotificationType;
-  team: NotificationTeam;
+  team: NotificationSource;
   project: string;
   task: string;
   assignee: string;

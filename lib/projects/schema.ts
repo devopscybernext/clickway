@@ -1,7 +1,7 @@
 import type mysql from 'mysql2/promise';
 
 // The Projects tables. `npm run db:migrate` (lib/data/mysql.ts → ensureSchema) creates them when
-// missing and never changes or drops them. People are the dashboard's own accounts: user_id is the
+// missing, adds the Member level to older doc_project_members tables, and never drops anything. People are the dashboard's own accounts: user_id is the
 // `users` table's id. There is deliberately no foreign key to `users`, so removing an account in the
 // Admin Portal works exactly as before; the sharing ledger keeps the email each grant went to, so that
 // person's Drive access can still be removed afterwards (Retry sharing on the project does it).
@@ -33,7 +33,7 @@ export const PROJECT_TABLES_SQL: string[] = [
   `CREATE TABLE IF NOT EXISTS \`doc_project_members\` (
   \`project_id\` INT UNSIGNED NOT NULL,
   \`user_id\` INT UNSIGNED NOT NULL,
-  \`access_level\` ENUM('viewer','editor','manager') NOT NULL DEFAULT 'viewer',
+  \`access_level\` ENUM('member','viewer','editor','manager') NOT NULL DEFAULT 'viewer',
   \`added_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (\`project_id\`, \`user_id\`),
   KEY \`idx_user\` (\`user_id\`),
@@ -139,6 +139,28 @@ export const PROJECT_TABLES_SQL: string[] = [
   PRIMARY KEY (\`document_id\`, \`email\`),
   CONSTRAINT \`fk_doc_email_access_document\` FOREIGN KEY (\`document_id\`) REFERENCES \`doc_documents\` (\`id\`) ON DELETE CASCADE
 ) ${OPTIONS}`,
+
+  // A person's level on one "Project members only" document, when it differs from what their project
+  // level gives them (lib/projects/rules.ts → defaultDocLevel). It wins over the project level.
+  `CREATE TABLE IF NOT EXISTS \`doc_document_permissions\` (
+  \`document_id\` INT UNSIGNED NOT NULL,
+  \`user_id\` INT UNSIGNED NOT NULL,
+  \`level\` ENUM('none','viewer','editor') NOT NULL,
+  \`set_by\` VARCHAR(191) NULL,
+  \`updated_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (\`document_id\`, \`user_id\`),
+  KEY \`idx_user\` (\`user_id\`),
+  CONSTRAINT \`fk_doc_permission_document\` FOREIGN KEY (\`document_id\`) REFERENCES \`doc_documents\` (\`id\`) ON DELETE CASCADE
+) ${OPTIONS}`,
+
+  // "Request Access" from All Projects: one open request per person and project, until they are added.
+  `CREATE TABLE IF NOT EXISTS \`doc_access_requests\` (
+  \`project_id\` INT UNSIGNED NOT NULL,
+  \`user_id\` INT UNSIGNED NOT NULL,
+  \`requested_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (\`project_id\`, \`user_id\`),
+  CONSTRAINT \`fk_doc_request_project\` FOREIGN KEY (\`project_id\`) REFERENCES \`doc_projects\` (\`id\`) ON DELETE CASCADE
+) ${OPTIONS}`,
 ];
 
 // The first list of always editors. Added only when the table is first created, so removing someone
@@ -154,6 +176,13 @@ const FIRST_ALWAYS_EDITORS = [
 export async function ensureProjectSchema(pool: mysql.Pool): Promise<void> {
   const [existing] = await pool.query<mysql.RowDataPacket[]>("SHOW TABLES LIKE 'doc_always_editors'");
   for (const sql of PROJECT_TABLES_SQL) await pool.query(sql);
+  // The Member level (added later): tables created before it get it added to their list of levels.
+  const [levels] = await pool.query<mysql.RowDataPacket[]>(
+    "SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'doc_project_members' AND COLUMN_NAME = 'access_level'"
+  );
+  if (levels[0] && !String(levels[0].COLUMN_TYPE).includes("'member'")) {
+    await pool.query("ALTER TABLE `doc_project_members` MODIFY `access_level` ENUM('member','viewer','editor','manager') NOT NULL DEFAULT 'viewer'");
+  }
   if (!existing.length) {
     await pool.query('INSERT IGNORE INTO doc_always_editors (email, added_by) VALUES ?', [FIRST_ALWAYS_EDITORS.map(e => [e, 'setup'])]);
   }

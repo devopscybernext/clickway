@@ -336,6 +336,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [toolsSubTab, setToolsSubTab] = useState<'clock' | 'holiday' | 'ai'>('clock');
   const [inHouseSubTab, setInHouseSubTab] = useState<InHouseSubTab | 'nextbot'>('websites');
   const [projectsSubTab, setProjectsSubTab] = useState<ProjectsSubTab>('projects');
+  const [projectsFocus, setProjectsFocus] = useState<{ projectId: number; n: number; members?: boolean } | undefined>(undefined);
   // Projects menu from Admin Portal → Projects settings (hidden without access, Templates with full access)
   const [projectsMenu, setProjectsMenu] = useState<AuthUser['projectsMenu']>(undefined);
   useEffect(() => {
@@ -696,9 +697,16 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   // changes on every click, so clicking the same notification again shows its task again
   const [focusClicks, setFocusClicks] = useState(0);
   const openNotification = (n: NotificationItem) => {
+    // Access requests and approvals open the project (Documents → My Projects)
+    if (n.type === 'access-request' || n.type === 'access-granted') {
+      const projectId = Number(n.taskRef.split('::')[1]);
+      handleSheetChange({ id: '21', subTab: 'projects' });
+      if (projectId > 0) setProjectsFocus(f => ({ projectId, n: (f?.n ?? 0) + 1, members: n.type === 'access-request' }));
+      return;
+    }
     // New-task notifications take the people who assign tasks to Tasks Assigned, everyone else to Tasks Overview
     const toAssigned = n.type === 'task-added' && opensTasksAssignedForNewTask(user.role);
-    handleSheetChange({ id: toAssigned ? '1' : '9', team: n.team });
+    handleSheetChange({ id: toAssigned ? '1' : '9', team: n.team as Team });
     setFocusTask(n.taskRef);
     setFocusField(n.type);
     setFocusClicks(c => c + 1);
@@ -1272,7 +1280,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           })()}
 
           {/* ── Projects: shared Google Drive documents per project (components/projects) ── */}
-          {isProjects && <ProjectsSection subTab={projectsSubTab} onSubTabChange={setProjectsSubTab} hasAccess={projectsMenu !== 'none'} />}
+          {isProjects && <ProjectsSection subTab={projectsSubTab} onSubTabChange={setProjectsSubTab} hasAccess={projectsMenu !== 'none'} focus={projectsFocus} />}
 
           {/* ── Help: the Apply form and the table of queries ── */}
           {isHelp && <Help subTab={helpSubTab} onSubTabChange={setHelpSubTab} canManage={canManageHelp(user.role)} />}

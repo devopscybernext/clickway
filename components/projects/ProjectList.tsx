@@ -19,13 +19,14 @@ function optionsOf(projects: ProjectSummary[], pick: (p: ProjectSummary) => stri
 
 // The project cards, with search, status, platform, client, creator and archive filters. Projects the person pinned come first,
 // in their own "Pinned" group.
-export default function ProjectList({ projects, loading, canCreate, onOpen, onCreate, onTogglePin, title, subtitle, emptyText }: {
+export default function ProjectList({ projects, loading, canCreate, onOpen, onCreate, onTogglePin, onRequestAccess, title, subtitle, emptyText }: {
   projects: ProjectSummary[];
   loading: boolean;
   canCreate: boolean;
   onOpen: (id: number) => void;
   onCreate: () => void;
   onTogglePin: (project: ProjectSummary) => void;
+  onRequestAccess?: (project: ProjectSummary) => Promise<void>;   // All Projects: cards of projects the person isn't in
   title?: string;
   subtitle?: string;
   emptyText?: string;   // when there are no projects at all
@@ -57,10 +58,19 @@ export default function ProjectList({ projects, loading, canCreate, onOpen, onCr
   const archivedCount = projects.filter(p => p.archived).length;
   const pinned = shown.filter(p => p.pinned);
   const others = shown.filter(p => !p.pinned);
+  const [asking, setAsking] = useState<number | null>(null);
+  const ask = async (p: ProjectSummary) => {
+    if (!onRequestAccess || asking !== null) return;
+    setAsking(p.id);
+    try { await onRequestAccess(p); } finally { setAsking(null); }
+  };
 
-  const card = (p: ProjectSummary) => (
-            <div key={p.id} role="button" tabIndex={0} onClick={() => onOpen(p.id)} onKeyDown={e => { if (e.key === 'Enter') onOpen(p.id); }}
-              className="min-w-0 rounded-3xl border p-7 cursor-pointer transition-shadow hover:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#FE4A23] flex flex-col gap-5" style={cardStyle}>
+  // A project the person isn't in can't be opened: its card offers Request Access instead
+  const card = (p: ProjectSummary) => {
+    const canOpen = !!p.access;
+    return (
+            <div key={p.id} {...(canOpen ? { role: 'button', tabIndex: 0, onClick: () => onOpen(p.id), onKeyDown: (e: { key: string }) => { if (e.key === 'Enter') onOpen(p.id); } } : {})}
+              className={`min-w-0 rounded-3xl border p-7 flex flex-col gap-5 ${canOpen ? 'cursor-pointer transition-shadow hover:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#FE4A23]' : ''}`} style={cardStyle}>
               <div className="grid grid-cols-[minmax(0,1fr)_36px] items-start gap-3">
                 <div className="min-w-0">
                   <h3 className="text-2xl font-bold leading-tight tracking-tight break-words" style={{ color: 'var(--cn-text-primary)' }}>{p.name}</h3>
@@ -83,16 +93,28 @@ export default function ProjectList({ projects, loading, canCreate, onOpen, onCr
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2 mt-auto border-t pt-5" style={{ borderColor: 'var(--cn-border)' }}>
-                <button type="button" onClick={e => { e.stopPropagation(); onOpen(p.id); }} onKeyDown={e => e.stopPropagation()}
-                  className="inline-flex items-center px-5 py-2.5 rounded-full text-xs font-semibold cursor-pointer transition-colors hover:brightness-95" style={{ background: 'var(--cn-accent)', color: '#fff' }}>
-                  View Project
-                </button>
+                {canOpen ? (
+                  <button type="button" onClick={e => { e.stopPropagation(); onOpen(p.id); }} onKeyDown={e => e.stopPropagation()}
+                    className="inline-flex items-center px-5 py-2.5 rounded-full text-xs font-semibold cursor-pointer transition-colors hover:brightness-95" style={{ background: 'var(--cn-accent)', color: '#fff' }}>
+                    View Project
+                  </button>
+                ) : p.requested ? (
+                  <span className="inline-flex items-center px-5 py-2.5 rounded-full text-xs font-semibold border" style={{ borderColor: 'var(--cn-border)', color: 'var(--cn-text-muted)' }}>
+                    Access requested
+                  </span>
+                ) : onRequestAccess ? (
+                  <button type="button" onClick={() => void ask(p)} disabled={asking !== null}
+                    className="inline-flex items-center px-5 py-2.5 rounded-full text-xs font-semibold cursor-pointer transition-colors hover:brightness-95 disabled:opacity-60 disabled:cursor-wait" style={{ background: 'var(--cn-accent)', color: '#fff' }}>
+                    {asking === p.id ? 'Sending…' : 'Request Access'}
+                  </button>
+                ) : null}
                 <span className="w-full text-xs leading-relaxed break-words" style={{ color: 'var(--cn-text-faint)' }}>
                   {p.access ? ACCESS_LABELS[p.access] : 'Not a member'}{p.createdBy ? ` · by ${p.createdBy}` : ''}{p.createdAt ? ` · ${formatDate(p.createdAt)}` : ''}
                 </span>
               </div>
             </div>
-  );
+    );
+  };
 
   return (
     <div className="min-w-0 space-y-5">

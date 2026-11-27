@@ -12,7 +12,8 @@
 
 # testing
 /coverage
- 
+/components-dashboard/*
+
 # next.js
 /.next/
 /out/

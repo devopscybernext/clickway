@@ -3,25 +3,24 @@
 import { useState } from 'react';
 import { UserPlus, X, MailWarning } from 'lucide-react';
 import { Button, inputClass, inputStyle, postJson } from './shared';
-import { ACCESS_LABELS, type ProjectAccess } from '@/lib/projects/rules';
+import { ACCESS_LABELS, ACCESS_HINTS, PROJECT_LEVELS, type ProjectAccess } from '@/lib/projects/rules';
+import { formatDate } from './shared';
 
-export interface Member { userId: number; access: ProjectAccess; name: string; email: string; role: string; removedAccount: boolean; isMe: boolean; noAccess?: boolean }
+export interface Member { userId: number; access: ProjectAccess; name: string; email: string; role: string; removedAccount: boolean; isMe: boolean }
 export interface Person { id: number; name: string; email: string; role: string }
+export interface AccessRequest { userId: number; name: string; email: string; role: string; requestedAt: string | null }
 
-const LEVELS: ProjectAccess[] = ['viewer', 'editor', 'manager'];
-const LEVEL_HINT: Record<ProjectAccess, string> = {
-  viewer: 'Can open documents (Google viewer)',
-  editor: 'Can add documents and edit them (Google editor)',
-  manager: 'Editor, plus manages members and the project',
-};
+const LEVELS = PROJECT_LEVELS;
+const LEVEL_HINT = ACCESS_HINTS;
 
-// The project's members. Creators (and Super Admin / HM) add people, change their level or remove
-// them; Google access to the restricted documents follows at once. Super Admin and HM are never
-// listed: they have access to every project already.
-export default function ProjectMembers({ projectId, members, people, canManage, fullAccess, onChanged }: {
+// The project's members. Creators (and Super Admin / HM / Mod) add people, change their level or
+// remove them, and answer access requests; Google access to the restricted documents follows at once.
+// Super Admin, HM and Mod are never listed: they have access to every project already.
+export default function ProjectMembers({ projectId, members, people, requests = [], canManage, fullAccess, onChanged }: {
   projectId: number;
   members: Member[];
   people: Person[];
+  requests?: AccessRequest[];
   canManage: boolean;
   fullAccess: boolean;
   onChanged: (message: string, note?: string, error?: boolean) => void;
@@ -29,8 +28,9 @@ export default function ProjectMembers({ projectId, members, people, canManage, 
   const [busy, setBusy] = useState<number | null>(null);
   const [addId, setAddId] = useState('');
   const [addLevel, setAddLevel] = useState<ProjectAccess>('viewer');
+  const [requestLevel, setRequestLevel] = useState<Record<number, ProjectAccess>>({});
 
-  const save = async (userId: number, access: ProjectAccess | 'remove') => {
+  const save = async (userId: number, access: ProjectAccess | 'remove' | 'decline') => {
     setBusy(userId);
     const r = await postJson(`/api/projects/${projectId}/members`, { userId, access });
     setBusy(null);
@@ -41,6 +41,30 @@ export default function ProjectMembers({ projectId, members, people, canManage, 
 
   return (
     <div className="space-y-5">
+      {canManage && requests.length > 0 && (
+        <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: 'var(--cn-accent)' }}>
+          <p className="text-xs font-semibold" style={{ color: 'var(--cn-text-primary)' }}>Access requests ({requests.length})</p>
+          <ul className="space-y-3">
+            {requests.map(q => (
+              <li key={q.userId} className="flex flex-wrap items-center gap-3">
+                <div className="min-w-0 flex-1" style={{ flexBasis: '12rem' }}>
+                  <p className="text-sm font-semibold truncate" style={{ color: 'var(--cn-text-primary)' }}>{q.name}</p>
+                  <p className="text-xs break-all" style={{ color: 'var(--cn-text-faint)' }}>{q.email || 'No email'}{q.requestedAt ? ` · asked ${formatDate(q.requestedAt)}` : ''}</p>
+                </div>
+                <div className="ml-auto flex shrink-0 items-center gap-2">
+                  <select value={requestLevel[q.userId] ?? 'member'} disabled={busy !== null} aria-label={`Level for ${q.name}`}
+                    onChange={e => setRequestLevel(v => ({ ...v, [q.userId]: e.target.value as ProjectAccess }))}
+                    className="h-9 rounded-lg border px-3 text-xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#FE4A23]/30" style={{ ...inputStyle, width: '8rem' }}>
+                    {LEVELS.map(l => <option key={l} value={l}>{ACCESS_LABELS[l]}</option>)}
+                  </select>
+                  <Button small primary disabled={busy !== null} onClick={() => void save(q.userId, requestLevel[q.userId] ?? 'member')}>Add</Button>
+                  <Button small disabled={busy !== null} onClick={() => void save(q.userId, 'decline')}>Decline</Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <ul className="divide-y" style={{ borderColor: 'var(--cn-border)' }}>
         {members.length === 0 && <li className="py-3 text-sm" style={{ color: 'var(--cn-text-muted)' }}>No members yet.</li>}
         {members.map(m => {
@@ -53,7 +77,7 @@ export default function ProjectMembers({ projectId, members, people, canManage, 
                   {m.name}{m.isMe && <span className="font-normal" style={{ color: 'var(--cn-text-faint)' }}> (you)</span>}
                 </p>
                 <p className="text-xs break-all inline-flex items-center gap-1" style={{ color: m.email ? 'var(--cn-text-faint)' : '#d97706' }}>
-                  {m.removedAccount ? 'Account removed' : m.noAccess ? 'No Projects access (Admin Portal → Projects)' : m.email || <><MailWarning className="w-3 h-3" /> No email: no Google access</>}
+                  {m.removedAccount ? 'Account removed' : m.email || <><MailWarning className="w-3 h-3" /> No email: no Google access</>}
                 </p>
               </div>
               {editable ? (
@@ -94,7 +118,7 @@ export default function ProjectMembers({ projectId, members, people, canManage, 
               <Button primary disabled={!addId || busy !== null} onClick={() => void save(Number(addId), addLevel)}>Add</Button>
             </div>
           )}
-          <div className="grid gap-3 sm:grid-cols-3 pt-2">{LEVELS.map(l => <div key={l} className="rounded-lg p-3" style={{ background: 'var(--cn-bg-input)' }}><p className="text-xs font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{ACCESS_LABELS[l]}</p><p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--cn-text-muted)' }}>{LEVEL_HINT[l]}</p></div>)}</div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 pt-2">{LEVELS.map(l => <div key={l} className="rounded-lg p-3" style={{ background: 'var(--cn-bg-input)' }}><p className="text-xs font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{ACCESS_LABELS[l]}</p><p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--cn-text-muted)' }}>{LEVEL_HINT[l]}</p></div>)}</div>
         </div>
       )}
     </div>

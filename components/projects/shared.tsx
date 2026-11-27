@@ -15,6 +15,7 @@ export interface ProjectSummary {
   id: number; name: string; client: string; platform: string; website: string; status: ProjectStatus; archived: boolean;
   driveFolderUrl: string; createdBy: string; createdAt: string | null; updatedAt: string | null;
   members: number; documents: number; access: ProjectAccess | null; pinned: boolean;   // access null: not in the project (All Projects)
+  requested?: boolean;   // All Projects: the person has asked for access
 }
 
 // A one-off key per form, so a double-click or a retry never creates two projects or documents

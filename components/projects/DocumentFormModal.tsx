@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { Modal, Field, Button, Notice, inputClass, inputStyle, newKey, api } from './shared';
 import { UPLOAD_ACCEPT, MAX_UPLOAD_BYTES } from '@/lib/projects/formats';
+import { AccessTable, permissionsOf, rowsFromMembers, type AccessRow } from './DocumentAccess';
+import type { Member } from './ProjectMembers';
 
 export interface TemplateOption { id: number; name: string; category: string; platform: string; mimeType: string }
 type Source = 'template' | 'upload' | 'url';
@@ -15,10 +17,12 @@ const SOURCES: { id: Source; label: string }[] = [
 
 // Adding a document to a project: a copy of a template, an uploaded file (converted to a Google Doc or
 // Sheet), or a pasted Google Docs / Sheets link. "Project members only" documents are copied into the
-// project's private folder and shared with each member at their level.
-export default function DocumentFormModal({ projectId, templates, onClose, onSaved }: {
+// project's private folder; before it is added, a second step lists the project's members so each one's
+// access to this document can be set (it starts from their project level; Member = No access).
+export default function DocumentFormModal({ projectId, templates, members = [], onClose, onSaved }: {
   projectId: number;
   templates: TemplateOption[];
+  members?: Member[];
   onClose: () => void;
   onSaved: (message: string, note?: string) => void;
 }) {
@@ -31,14 +35,27 @@ export default function DocumentFormModal({ projectId, templates, onClose, onSav
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [step, setStep] = useState<'details' | 'access'>('details');
+  const [access, setAccess] = useState<AccessRow[]>(() => rowsFromMembers(members));
 
-  const save = async () => {
+  const check = (): boolean => {
     setError('');
     if (source === 'upload') {
-      if (!file) { setError('Choose a file to upload.'); return; }
-      if (file.size > MAX_UPLOAD_BYTES) { setError('Choose a file no larger than 10 MB.'); return; }
+      if (!file) { setError('Choose a file to upload.'); return false; }
+      if (file.size > MAX_UPLOAD_BYTES) { setError('Choose a file no larger than 10 MB.'); return false; }
     }
-    if (source === 'template' && !templateId) { setError('Choose a template.'); return; }
+    if (source === 'template' && !templateId) { setError('Choose a template.'); return false; }
+    return true;
+  };
+
+  const next = () => {
+    if (!check()) return;
+    if (visibility === 'invite') setStep('access');
+    else void save();
+  };
+
+  const save = async () => {
+    if (!check()) return;
     const form = new FormData();
     form.set('creationKey', key);
     form.set('title', title);
@@ -47,6 +64,7 @@ export default function DocumentFormModal({ projectId, templates, onClose, onSav
     if (source === 'template') form.set('templateId', templateId);
     if (source === 'url') form.set('url', url);
     if (source === 'upload' && file) form.set('upload', file);
+    if (visibility === 'invite') form.set('permissions', JSON.stringify(permissionsOf(access)));
     setBusy(true);
     const r = await api(`/api/projects/${projectId}/documents`, { method: 'POST', body: form });
     setBusy(false);
@@ -54,16 +72,35 @@ export default function DocumentFormModal({ projectId, templates, onClose, onSav
     onSaved(String(r.message ?? 'Document added.'), typeof r.note === 'string' ? r.note : undefined);
   };
 
+  if (step === 'access') {
+    return (
+      <Modal wide title="Who can open this document" onClose={busy ? () => {} : onClose}>
+        <form onSubmit={e => { e.preventDefault(); void save(); }} className="space-y-5">
+          <p className="text-sm" style={{ color: 'var(--cn-text-muted)' }}>
+            <span className="font-semibold" style={{ color: 'var(--cn-text-primary)' }}>{title || 'This document'}</span> is for project members only.
+            Choose each member&apos;s access to it. This only applies to this document; Members start with No access.
+          </p>
+          <AccessTable rows={access} disabled={busy} onChange={(id, level) => setAccess(list => list.map(x => (x.userId === id ? { ...x, level } : x)))} />
+          {error && <Notice kind="error">{error}</Notice>}
+          <div className="flex flex-wrap justify-between gap-2 border-t pt-5 border-[var(--cn-border)]">
+            <Button onClick={() => setStep('details')} disabled={busy}>Back</Button>
+            <Button type="submit" primary disabled={busy}>{busy ? 'Adding… (this can take a moment)' : 'Add document'}</Button>
+          </div>
+        </form>
+      </Modal>
+    );
+  }
+
   return (
     <Modal wide title="Add document" onClose={busy ? () => {} : onClose}>
-      <form onSubmit={e => { e.preventDefault(); void save(); }} className="space-y-6">
+      <form onSubmit={e => { e.preventDefault(); next(); }} className="space-y-6">
         <Field label="Document title *" htmlFor="df-title">
           <input id="df-title" required maxLength={255} value={title} onChange={e => setTitle(e.target.value)} className={inputClass} style={inputStyle} autoFocus />
         </Field>
 
         <Field label="Who can open it">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {([['invite', 'Project members only', 'Restricted. Each member gets Google access at their level.'], ['public', 'Anyone with the link', 'Viewable by anyone who has the link.']] as const).map(([v, label, hint]) => (
+            {([['invite', 'Project members only', 'Restricted. You choose each member\'s access next.'], ['public', 'Anyone with the link', 'Viewable by anyone who has the link.']] as const).map(([v, label, hint]) => (
               <label key={v} className="flex items-start gap-2 rounded-xl border p-4 cursor-pointer text-sm"
                 style={{ ...inputStyle, borderColor: visibility === v ? 'var(--cn-accent)' : 'var(--cn-border)' }}>
                 <input type="radio" name="visibility" checked={visibility === v} onChange={() => setVisibility(v)} className="mt-0.5 accent-[#FE4A23]" />
@@ -116,7 +153,7 @@ export default function DocumentFormModal({ projectId, templates, onClose, onSav
         {error && <Notice kind="error">{error}</Notice>}
         <div className="flex flex-wrap justify-end gap-2 border-t pt-5 border-[var(--cn-border)]">
           <Button onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button type="submit" primary disabled={busy || (source === 'template' && templates.length === 0)}>{busy ? 'Adding… (this can take a moment)' : 'Add document'}</Button>
+          <Button type="submit" primary disabled={busy || (source === 'template' && templates.length === 0)}>{busy ? 'Adding… (this can take a moment)' : visibility === 'invite' ? 'Next: choose access' : 'Add document'}</Button>
         </div>
       </form>
     </Modal>

@@ -1,32 +1,36 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, Globe, Pencil, Archive, ArchiveRestore, RefreshCw, Plus, ExternalLink, Trash2, Lock, Link2, Users, FileText } from 'lucide-react';
+import { ArrowLeft, Globe, Pencil, Archive, ArchiveRestore, RefreshCw, Plus, ExternalLink, Trash2, Lock, Link2, Users, FileText, ShieldCheck } from 'lucide-react';
 import { api, postJson, Button, Modal, Pill, PinButton, STATUS_TONE, cardStyle, formatDate, openDocumentInNewTab, useFlash, savePin } from './shared';
 import ProjectFormModal from './ProjectFormModal';
 import DocumentFormModal, { type TemplateOption } from './DocumentFormModal';
-import ProjectMembers, { type Member, type Person } from './ProjectMembers';
-import { ACCESS_LABELS, STATUS_LABELS, type ProjectAccess, type ProjectStatus } from '@/lib/projects/rules';
+import ProjectMembers, { type Member, type Person, type AccessRequest } from './ProjectMembers';
+import { DocumentAccessModal } from './DocumentAccess';
+import { ACCESS_LABELS, STATUS_LABELS, type DocLevel, type ProjectAccess, type ProjectStatus } from '@/lib/projects/rules';
 
 interface Detail {
   project: { id: number; name: string; client: string; platform: string; website: string; description: string; status: ProjectStatus; archived: boolean; driveFolderUrl: string; createdBy: string; createdAt: string | null };
   access: ProjectAccess; canManage: boolean; canAdd: boolean; fullAccess: boolean;
   members: Member[];
-  documents: { id: number; title: string; source: string; visibility: 'invite' | 'public'; mimeType: string; template: string; createdBy: string; createdAt: string | null; pendingSharing: boolean; canDelete: boolean; pinned: boolean }[];
+  documents: { id: number; title: string; source: string; visibility: 'invite' | 'public'; mimeType: string; template: string; createdBy: string; createdAt: string | null; pendingSharing: boolean; canDelete: boolean; pinned: boolean; myLevel: DocLevel | 'link'; canOpen: boolean; canSetAccess: boolean }[];
   people: Person[];
+  requests: AccessRequest[];
   templates: TemplateOption[];
 }
 
 const SOURCE_LABELS: Record<string, string> = { template: 'Template', upload: 'Upload', url: 'Link' };
 
 // One project: its details, documents and members.
-export default function ProjectDetail({ projectId, onBack, onChanged }: { projectId: number; onBack: () => void; onChanged: () => void }) {
+// openMembersKey: a new non-zero value opens the Members popup (an access request notification was clicked)
+export default function ProjectDetail({ projectId, onBack, onChanged, openMembersKey = 0 }: { projectId: number; onBack: () => void; onChanged: () => void; openMembersKey?: number }) {
   const [data, setData] = useState<Detail | null>(null);
   const [loadError, setLoadError] = useState('');
   const [editing, setEditing] = useState(false);
   const [adding, setAdding] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [accessFor, setAccessFor] = useState<{ id: number; title: string } | null>(null);
   const { flash, setFlash } = useFlash();
 
   const load = useCallback(async () => {
@@ -36,6 +40,7 @@ export default function ProjectDetail({ projectId, onBack, onChanged }: { projec
     setData(r as unknown as Detail);
   }, [projectId]);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (openMembersKey) { setMembersOpen(true); void load(); } }, [openMembersKey, load]);
 
   const changed = (text: string, note?: string, error?: boolean) => {
     setFlash({ kind: error ? 'error' : note ? 'info' : 'ok', text: note ? `${text} ${note}` : text });
@@ -122,7 +127,7 @@ export default function ProjectDetail({ projectId, onBack, onChanged }: { projec
         </div>
         {p.description && <p className="text-sm whitespace-pre-line" style={{ color: 'var(--cn-text-primary)' }}>{p.description}</p>}
         <div className="flex flex-wrap items-center gap-4">
-          <Button small onClick={() => setMembersOpen(true)}><Users className="w-4 h-4" /> Members ({data.members.length})</Button>
+          <Button small onClick={() => setMembersOpen(true)}><Users className="w-4 h-4" /> Members ({data.members.length}){data.canManage && data.requests.length > 0 ? ` · ${data.requests.length} request${data.requests.length === 1 ? '' : 's'}` : ''}</Button>
           {p.website && (
             <a href={p.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-semibold hover:underline" style={{ color: 'var(--cn-accent)' }}>
               <Globe className="w-4 h-4" /> {p.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
@@ -157,8 +162,14 @@ export default function ProjectDetail({ projectId, onBack, onChanged }: { projec
                     ? <Pill tone="blue"><Lock className="w-3 h-3 mr-1" /> Members only</Pill>
                     : <Pill><Link2 className="w-3 h-3 mr-1" /> Anyone with link</Pill>}
                   {d.pendingSharing && data.canManage && <Pill tone="amber">Sharing pending</Pill>}
+                  {!d.canOpen && <Pill tone="muted"><Lock className="w-3 h-3 mr-1" /> No access</Pill>}
                   <div className="flex shrink-0 items-center gap-2">
-                  <Button small onClick={() => void open(d.id)}><ExternalLink className="w-3.5 h-3.5" /> Open</Button>
+                  {d.canOpen && <Button small onClick={() => void open(d.id)}><ExternalLink className="w-3.5 h-3.5" /> Open</Button>}
+                  {d.canSetAccess && (
+                    <Button small onClick={() => setAccessFor({ id: d.id, title: d.title })} title="Choose who can open this document">
+                      <ShieldCheck className="w-3.5 h-3.5" /> Access
+                    </Button>
+                  )}
                   {d.canDelete && (
                     <button onClick={() => void remove(d.id, d.title)} disabled={busy} aria-label={`Delete ${d.title}`} title="Delete document"
                       className="p-1.5 rounded-lg cursor-pointer disabled:opacity-50" style={{ color: '#ef4444' }}>
@@ -181,12 +192,17 @@ export default function ProjectDetail({ projectId, onBack, onChanged }: { projec
           <div className="space-y-5">
             <div className="rounded-xl border p-4" style={{ ...cardStyle, background: 'var(--cn-bg-input)' }}>
               <p className="font-semibold break-words" style={{ color: 'var(--cn-text-primary)' }}>{p.name}</p>
-              <p className="mt-1 text-sm" style={{ color: 'var(--cn-text-muted)' }}>{data.members.length} member{data.members.length === 1 ? '' : 's'} · People with full access (set in Admin Portal → Projects) can open every project.</p>
+              <p className="mt-1 text-sm" style={{ color: 'var(--cn-text-muted)' }}>{data.members.length} member{data.members.length === 1 ? '' : 's'}{data.fullAccess ? ' · Super Admin, HM and Mod can open every project.' : ''}</p>
             </div>
             {flash}
-            <ProjectMembers projectId={projectId} members={data.members} people={data.people} canManage={data.canManage} fullAccess={data.fullAccess} onChanged={changed} />
+            <ProjectMembers projectId={projectId} members={data.members} people={data.people} requests={data.requests} canManage={data.canManage} fullAccess={data.fullAccess} onChanged={changed} />
           </div>
         </Modal>
+      )}
+      {accessFor && (
+        <DocumentAccessModal documentId={accessFor.id} title={accessFor.title}
+          onClose={() => setAccessFor(null)}
+          onSaved={(message, note) => { setAccessFor(null); changed(message, note); }} />
       )}
       {editing && (
         <ProjectFormModal projectId={projectId}
@@ -195,7 +211,7 @@ export default function ProjectDetail({ projectId, onBack, onChanged }: { projec
           onSaved={(_, message) => { setEditing(false); changed(message); }} />
       )}
       {adding && (
-        <DocumentFormModal projectId={projectId} templates={data.templates}
+        <DocumentFormModal projectId={projectId} templates={data.templates} members={data.members}
           onClose={() => setAdding(false)}
           onSaved={(message, note) => { setAdding(false); changed(message, note); }} />
       )}

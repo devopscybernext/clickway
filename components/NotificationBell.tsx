@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Bell, CheckCheck } from 'lucide-react';
-import { BELL_DAYS, NOTIFICATION_TYPE_LABELS, type NotificationItem } from '@/lib/notifications';
+import { BELL_DAYS, NOTIFICATION_TYPE_LABELS, notificationSourceName, type NotificationItem } from '@/lib/notifications';
 
 const POLL_MS = 45_000;
 
@@ -163,7 +163,7 @@ export default function NotificationBell({ onOpen }: { onOpen: (n: NotificationI
                   </span>
                   <span className="block text-xs mt-0.5 break-words" style={{ color: 'var(--cn-text-secondary)' }}>{n.body}</span>
                   <span className="block text-[11px] mt-1" style={{ color: 'var(--cn-text-muted)' }}>
-                    {NOTIFICATION_TYPE_LABELS[n.type]} · {n.team === 'web' ? 'Web' : 'Marketing'} · by {n.actor} · {ago(n.createdAt)}
+                    {NOTIFICATION_TYPE_LABELS[n.type]} · {notificationSourceName(n.team)} · by {n.actor} · {ago(n.createdAt)}
                   </span>
                 </span>
               </button>
