@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'crypto';
+import { createHash, createHmac, randomUUID, timingSafeEqual } from 'crypto';
 import type mysql from 'mysql2/promise';
 import { getPool, LOGIN_ATTEMPTS_SQL } from './mysql';
 import { clientIp, describeAgent } from './loginLog';
@@ -9,9 +9,13 @@ import { clientIp, describeAgent } from './loginLog';
 //
 // How a device is recognised:
 //   device cookie   a random id (cn_device, httpOnly, one year) the server gives every browser that
-//                   opens the login. Each browser counts its own wrong attempts.
-//   fingerprint     IP address + browser string. Used for a request without a device cookie, so
-//                   clearing cookies (or a script that never keeps them) doesn't reset the count.
+//                   opens the login, signed with SESSION_SECRET together with the time it was given,
+//                   so it can't be made up. Each browser counts its own wrong attempts.
+//   fingerprint     IP address + browser string. A request without a valid device cookie, or with one
+//                   given in the last 15 minutes, is also counted by its fingerprint. So clearing
+//                   cookies (and getting a new one) doesn't reset the count: the wrong attempts made
+//                   from this machine and browser before still block it. A browser that had its cookie
+//                   for longer (a colleague on the same office network) is counted only by its own.
 // A successful login clears the device's wrong attempts.
 
 export const MAX_FAILED = 3;
@@ -21,28 +25,50 @@ const DEVICE_COOKIE_MAX_AGE = 365 * 24 * 60 * 60;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface Device {
-  id: string;            // the device cookie's id (new when the browser had none)
-  hadCookie: boolean;
+  id: string;            // the device cookie's id (new when the browser had no valid cookie)
+  issuedAt: number;      // when the cookie was given (seconds)
+  hadCookie: boolean;    // the request carried a valid, signed device cookie
+  isNew: boolean;        // no valid cookie, or one given within the last WINDOW_MINUTES
   fingerprint: string;   // sha256 of IP + browser string
   ip: string;
   userAgent: string;
 }
 
+function sign(id: string, issuedAt: number): string {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) throw new Error('SESSION_SECRET is not set');
+  return createHmac('sha256', secret).update(`device:${id}.${issuedAt}`).digest('base64url');
+}
+
+// "<id>.<issued at>.<signature>", or null when missing, made up or from the older unsigned format
+function readCookie(value: string | undefined): { id: string; issuedAt: number } | null {
+  const [id, issued, sig] = (value ?? '').split('.');
+  const issuedAt = Number(issued);
+  if (!id || !UUID.test(id) || !Number.isInteger(issuedAt) || issuedAt <= 0 || !sig) return null;
+  const expected = Buffer.from(sign(id.toLowerCase(), issuedAt));
+  const given = Buffer.from(sig);
+  if (expected.length !== given.length || !timingSafeEqual(expected, given)) return null;
+  return { id: id.toLowerCase(), issuedAt };
+}
+
 export function identifyDevice(cookieValue: string | undefined, headers: Headers): Device {
   const ip = clientIp(headers);
   const userAgent = (headers.get('user-agent') ?? '').slice(0, 512);
-  const hadCookie = !!cookieValue && UUID.test(cookieValue);
+  const now = Math.floor(Date.now() / 1000);
+  const cookie = readCookie(cookieValue);
   return {
-    id: hadCookie ? cookieValue!.toLowerCase() : randomUUID(),
-    hadCookie,
+    id: cookie?.id ?? randomUUID(),
+    issuedAt: cookie?.issuedAt ?? now,
+    hadCookie: !!cookie,
+    isNew: !cookie || now - cookie.issuedAt < WINDOW_MINUTES * 60,
     fingerprint: createHash('sha256').update(`${ip}|${userAgent}`).digest('hex'),
     ip, userAgent,
   };
 }
 
-// The cookie options for the device id (set on every login answer)
-export const deviceCookie = (id: string) => ({
-  name: DEVICE_COOKIE, value: id,
+// The signed device cookie (set on every login answer)
+export const deviceCookie = (d: Device) => ({
+  name: DEVICE_COOKIE, value: `${d.id}.${d.issuedAt}.${sign(d.id, d.issuedAt)}`,
   options: { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' as const, path: '/', maxAge: DEVICE_COOKIE_MAX_AGE },
 });
 
@@ -72,27 +98,32 @@ async function withTable<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
-// Which rows count for this device: its cookie id, or (without a cookie) its fingerprint
-const deviceWhere = (d: Device): [string, string] =>
-  d.hadCookie ? ['device_id = ?', d.id] : ['fingerprint = ?', d.fingerprint];
-
 export interface GuardState { blocked: boolean; failed: number; retryMinutes: number }
 
-// How many wrong attempts this device has in the window, and whether it is blocked now
+// Wrong attempts in the window for one way of recognising the device
+async function countRecent(where: string, value: string): Promise<{ failed: number; retry: number }> {
+  const [rows] = await withTable(() => getPool().query<mysql.RowDataPacket[]>(
+    `SELECT COUNT(*) AS failed,
+            GREATEST(0, CEIL(TIMESTAMPDIFF(SECOND, NOW(), MIN(created_at) + INTERVAL ? MINUTE) / 60)) AS retry
+       FROM (SELECT created_at FROM login_attempts
+              WHERE ${where} AND created_at >= NOW() - INTERVAL ? MINUTE
+              ORDER BY created_at DESC LIMIT ?) recent`,
+    [WINDOW_MINUTES, value, WINDOW_MINUTES, MAX_FAILED]
+  ));
+  return { failed: Number(rows[0]?.failed ?? 0), retry: Number(rows[0]?.retry ?? 0) };
+}
+
+// How many wrong attempts this device has in the window, and whether it is blocked now: counted by its
+// cookie id, and (for a new or missing cookie) by its fingerprint as well, whichever is higher
 export async function checkDevice(d: Device): Promise<GuardState> {
   try {
-    const [where, value] = deviceWhere(d);
-    const [rows] = await withTable(() => getPool().query<mysql.RowDataPacket[]>(
-      `SELECT COUNT(*) AS failed,
-              GREATEST(0, CEIL(TIMESTAMPDIFF(SECOND, NOW(), MIN(created_at) + INTERVAL ? MINUTE) / 60)) AS retry
-         FROM (SELECT created_at FROM login_attempts
-                WHERE ${where} AND created_at >= NOW() - INTERVAL ? MINUTE
-                ORDER BY created_at DESC LIMIT ?) recent`,
-      [WINDOW_MINUTES, value, WINDOW_MINUTES, MAX_FAILED]
-    ));
-    const failed = Number(rows[0]?.failed ?? 0);
+    const counts = [await countRecent('device_id = ?', d.id)];
+    if (d.isNew) counts.push(await countRecent('fingerprint = ?', d.fingerprint));
+    const failed = Math.max(...counts.map(c => c.failed));
+    const blocking = counts.filter(c => c.failed >= MAX_FAILED);
     // Blocked until the oldest of the last MAX_FAILED wrong attempts leaves the window
-    return { blocked: failed >= MAX_FAILED, failed, retryMinutes: Math.max(1, Number(rows[0]?.retry ?? WINDOW_MINUTES)) };
+    const retry = blocking.length ? Math.max(...blocking.map(c => c.retry)) : 0;
+    return { blocked: blocking.length > 0, failed, retryMinutes: Math.max(1, retry || WINDOW_MINUTES) };
   } catch (error) {
     // The check never locks everyone out if the database has a problem
     console.error('[login-guard] check', error);
@@ -178,9 +209,14 @@ export async function listFailedDevices(): Promise<FailedDevice[]> {
 export async function unblockDevice(key: string): Promise<boolean> {
   const m = key.match(/^(d):([0-9a-f-]{36})$|^(f):([0-9a-f]{64})$/i);
   if (!m) return false;
+  // The device's own attempts, and every attempt from the same machine and browser (fingerprint), so a
+  // new cookie on that machine isn't still blocked by them
+  const value = (m[2] ?? m[4]).toLowerCase();
   const [res] = await withTable(() => getPool().query<mysql.ResultSetHeader>(
-    m[1] ? 'DELETE FROM login_attempts WHERE device_id = ?' : 'DELETE FROM login_attempts WHERE fingerprint = ?',
-    [(m[2] ?? m[4]).toLowerCase()]
+    m[1]
+      ? `DELETE FROM login_attempts WHERE device_id = ? OR fingerprint IN (SELECT fingerprint FROM (SELECT DISTINCT fingerprint FROM login_attempts WHERE device_id = ?) f)`
+      : 'DELETE FROM login_attempts WHERE fingerprint = ?',
+    m[1] ? [value, value] : [value]
   ));
   return res.affectedRows > 0;
 }

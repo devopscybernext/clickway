@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   const device = identifyDevice(req.cookies.get(DEVICE_COOKIE)?.value, req.headers);
   const reply = (body: Record<string, unknown>, status = 200) => {
     const res = NextResponse.json(body, { status });
-    const c = deviceCookie(device.id);
+    const c = deviceCookie(device);
     res.cookies.set(c.name, c.value, c.options);
     return res;
   };
