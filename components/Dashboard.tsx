@@ -693,7 +693,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [dashNow, setDashNow] = useState(() => Date.now());
   const dashPeriodInfo = periodInfo(navTeam === 'marketing' ? 'today' : dashPeriod, dashNow, navTeam === 'marketing' ? 'mdy' : 'dmy');
   const [focusTask, setFocusTask] = useState<string | null>(null);
-  const [focusField, setFocusField] = useState<NotificationItem['type'] | undefined>(undefined);
+  const [focusField, setFocusField] = useState<Exclude<NotificationItem['type'], 'access-request' | 'access-granted'> | undefined>(undefined); // task notifications only
   // changes on every click, so clicking the same notification again shows its task again
   const [focusClicks, setFocusClicks] = useState(0);
   const openNotification = (n: NotificationItem) => {
@@ -708,7 +708,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     const toAssigned = n.type === 'task-added' && opensTasksAssignedForNewTask(user.role);
     handleSheetChange({ id: toAssigned ? '1' : '9', team: n.team as Team });
     setFocusTask(n.taskRef);
-    setFocusField(n.type);
+    setFocusField(n.type as Exclude<NotificationItem['type'], 'access-request' | 'access-granted'>);
     setFocusClicks(c => c + 1);
     void fetchAll();
     setEntryRefreshKey(k => k + 1);

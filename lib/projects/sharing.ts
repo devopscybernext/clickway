@@ -27,7 +27,7 @@ export async function loadAlwaysEditors(c: Pick<Conn, 'query'>): Promise<Set<str
 // ('link'); for "Project members only" documents see the list above.
 export type EffectiveLevel = DocLevel | 'link';
 export function effectiveLevel(
-  doc: { visibility?: unknown; created_by?: unknown },
+  doc: Record<string, unknown>,   // a doc_documents row: needs visibility and created_by
   person: { id: number; full: boolean; access: ProjectAccess | null },
   override: DocLevel | undefined,
 ): EffectiveLevel | null {
