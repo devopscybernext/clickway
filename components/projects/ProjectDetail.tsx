@@ -1,19 +1,20 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, Globe, Pencil, Archive, ArchiveRestore, RefreshCw, Plus, ExternalLink, Trash2, Lock, Link2, Users, FileText, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Globe, Pencil, Check, RotateCcw, RefreshCw, Plus, ExternalLink, Trash2, Lock, Link2, Users, FileText, ShieldCheck } from 'lucide-react';
 import { api, postJson, Button, Modal, Pill, PinButton, STATUS_TONE, cardStyle, formatDate, openDocumentInNewTab, useFlash, savePin } from './shared';
 import ProjectFormModal from './ProjectFormModal';
 import DocumentFormModal, { type TemplateOption } from './DocumentFormModal';
 import ProjectMembers, { type Member, type Person, type AccessRequest } from './ProjectMembers';
 import { DocumentAccessModal } from './DocumentAccess';
-import { ACCESS_LABELS, STATUS_LABELS, type DocLevel, type ProjectAccess, type ProjectStatus } from '@/lib/projects/rules';
+import DocumentEditModal, { type EditableDocument } from './DocumentEditModal';
+import { ACCESS_LABELS, LINK_ROLE_LABELS, STATUS_LABELS, type DocLevel, type LinkRole, type ProjectAccess, type ProjectStatus } from '@/lib/projects/rules';
 
 interface Detail {
   project: { id: number; name: string; client: string; platform: string; website: string; description: string; status: ProjectStatus; archived: boolean; driveFolderUrl: string; createdBy: string; createdAt: string | null };
-  access: ProjectAccess; canManage: boolean; canAdd: boolean; fullAccess: boolean; canAssignCreator: boolean;
+  access: ProjectAccess; canManage: boolean; canAdd: boolean; fullAccess: boolean;
   members: Member[];
-  documents: { id: number; title: string; source: string; visibility: 'invite' | 'public'; mimeType: string; template: string; createdBy: string; createdAt: string | null; pendingSharing: boolean; canDelete: boolean; pinned: boolean; myLevel: DocLevel | 'link'; canOpen: boolean; canSetAccess: boolean }[];
+  documents: { id: number; title: string; source: string; visibility: 'invite' | 'public'; mimeType: string; template: string; createdBy: string; createdAt: string | null; pendingSharing: boolean; canDelete: boolean; pinned: boolean; myLevel: DocLevel | 'link'; canOpen: boolean; canSetAccess: boolean; linkRole: LinkRole; inDrive: boolean; canEdit: boolean }[];
   people: Person[];
   requests: AccessRequest[];
   templates: TemplateOption[];
@@ -23,7 +24,8 @@ const SOURCE_LABELS: Record<string, string> = { template: 'Template', upload: 'U
 
 // One project: its details, documents and members.
 // openMembersKey: a new non-zero value opens the Members popup (an access request notification was clicked)
-export default function ProjectDetail({ projectId, onBack, onChanged, openMembersKey = 0 }: { projectId: number; onBack: () => void; onChanged: () => void; openMembersKey?: number }) {
+// reloadKey: a new value reloads the project (the top bar's Refresh, or a change made elsewhere)
+export default function ProjectDetail({ projectId, onBack, onChanged, openMembersKey = 0, reloadKey = 0 }: { projectId: number; onBack: () => void; onChanged: () => void; openMembersKey?: number; reloadKey?: number }) {
   const [data, setData] = useState<Detail | null>(null);
   const [loadError, setLoadError] = useState('');
   const [editing, setEditing] = useState(false);
@@ -31,6 +33,7 @@ export default function ProjectDetail({ projectId, onBack, onChanged, openMember
   const [membersOpen, setMembersOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [accessFor, setAccessFor] = useState<{ id: number; title: string } | null>(null);
+  const [editingDoc, setEditingDoc] = useState<EditableDocument | null>(null);
   const { flash, setFlash } = useFlash();
 
   const load = useCallback(async () => {
@@ -39,7 +42,7 @@ export default function ProjectDetail({ projectId, onBack, onChanged, openMember
     setLoadError('');
     setData(r as unknown as Detail);
   }, [projectId]);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); }, [load, reloadKey]);
   useEffect(() => { if (openMembersKey) { setMembersOpen(true); void load(); } }, [openMembersKey, load]);
 
   const changed = (text: string, note?: string, error?: boolean) => {
@@ -47,12 +50,13 @@ export default function ProjectDetail({ projectId, onBack, onChanged, openMember
     if (!error) { void load(); onChanged(); }
   };
 
-  const archive = async (archived: boolean) => {
-    if (archived && !confirm('Archive this project? It moves to the Archived list; nothing is deleted.')) return;
+  // Completed projects move to the Completed list (their status becomes Completed); nothing is deleted
+  const complete = async (completed: boolean) => {
+    if (completed && !confirm('Mark this project as completed? It moves to the Completed list; nothing is deleted.')) return;
     setBusy(true);
-    const r = await postJson(`/api/projects/${projectId}`, { archived }, 'PATCH');
+    const r = await postJson(`/api/projects/${projectId}`, { archived: completed }, 'PATCH');
     setBusy(false);
-    changed(r.success ? (archived ? 'Project archived.' : 'Project restored.') : r.error!, undefined, !r.success);
+    changed(r.success ? (completed ? 'Project marked as completed.' : 'Project reopened.') : r.error!, undefined, !r.success);
   };
   const retry = async () => {
     setBusy(true);
@@ -106,7 +110,6 @@ export default function ProjectDetail({ projectId, onBack, onChanged, openMember
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-xl sm:text-2xl font-bold tracking-tight break-words" style={{ color: 'var(--cn-text-primary)' }}>{p.name}</h2>
               <Pill tone={STATUS_TONE[p.status]}>{STATUS_LABELS[p.status]}</Pill>
-              {p.archived && <Pill tone="amber">Archived</Pill>}
             </div>
             <p className="text-xs mt-1" style={{ color: 'var(--cn-text-muted)' }}>
               {[p.client, p.platform, p.createdBy && `Created by ${p.createdBy}`, formatDate(p.createdAt)].filter(Boolean).join(' · ')}
@@ -116,8 +119,8 @@ export default function ProjectDetail({ projectId, onBack, onChanged, openMember
           {data.canManage && (
             <div className="flex flex-wrap gap-2">
               <Button small onClick={() => setEditing(true)} disabled={busy}><Pencil className="w-3.5 h-3.5" /> Edit</Button>
-              <Button small onClick={() => void archive(!p.archived)} disabled={busy}>
-                {p.archived ? <><ArchiveRestore className="w-3.5 h-3.5" /> Restore</> : <><Archive className="w-3.5 h-3.5" /> Archive</>}
+              <Button small onClick={() => void complete(!p.archived)} disabled={busy}>
+                {p.archived ? <><RotateCcw className="w-3.5 h-3.5" /> Reopen</> : <><Check className="w-3.5 h-3.5" /> Mark completed</>}
               </Button>
               <Button small onClick={() => void retry()} disabled={busy} title="Bring every restricted document's Google access in line with the members">
                 <RefreshCw className="w-3.5 h-3.5" /> Retry sharing
@@ -160,11 +163,16 @@ export default function ProjectDetail({ projectId, onBack, onChanged, openMember
                   </div>
                   {d.visibility === 'invite'
                     ? <Pill tone="blue"><Lock className="w-3 h-3 mr-1" /> Members only</Pill>
-                    : <Pill><Link2 className="w-3 h-3 mr-1" /> Anyone with link</Pill>}
+                    : <Pill><Link2 className="w-3 h-3 mr-1" /> Anyone with link{d.inDrive ? ` · ${LINK_ROLE_LABELS[d.linkRole]}` : ''}</Pill>}
                   {d.pendingSharing && data.canManage && <Pill tone="amber">Sharing pending</Pill>}
                   {!d.canOpen && <Pill tone="muted"><Lock className="w-3 h-3 mr-1" /> No access</Pill>}
                   <div className="flex shrink-0 items-center gap-2">
                   {d.canOpen && <Button small onClick={() => void open(d.id)}><ExternalLink className="w-3.5 h-3.5" /> Open</Button>}
+                  {d.canEdit && (
+                    <Button small onClick={() => setEditingDoc(d)} title="Edit title and sharing">
+                      <Pencil className="w-3.5 h-3.5" /> Edit
+                    </Button>
+                  )}
                   {d.canSetAccess && (
                     <Button small onClick={() => setAccessFor({ id: d.id, title: d.title })} title="Choose who can open this document">
                       <ShieldCheck className="w-3.5 h-3.5" /> Access
@@ -195,9 +203,13 @@ export default function ProjectDetail({ projectId, onBack, onChanged, openMember
               <p className="mt-1 text-sm" style={{ color: 'var(--cn-text-muted)' }}>{data.members.length} member{data.members.length === 1 ? '' : 's'}{data.fullAccess ? ' · Super Admin, HM and Mod can open every project.' : ''}</p>
             </div>
             {flash}
-            <ProjectMembers projectId={projectId} members={data.members} people={data.people} requests={data.requests} canManage={data.canManage} fullAccess={data.fullAccess} canAssignCreator={data.canAssignCreator} onChanged={changed} />
+            <ProjectMembers projectId={projectId} members={data.members} people={data.people} requests={data.requests} canManage={data.canManage} fullAccess={data.fullAccess} onChanged={changed} />
           </div>
         </Modal>
+      )}
+      {editingDoc && (
+        <DocumentEditModal doc={editingDoc} onClose={() => setEditingDoc(null)}
+          onSaved={(message, note) => { setEditingDoc(null); changed(message, note); }} />
       )}
       {accessFor && (
         <DocumentAccessModal documentId={accessFor.id} title={accessFor.title}

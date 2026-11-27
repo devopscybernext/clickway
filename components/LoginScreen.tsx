@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Eye, EyeOff, LogIn } from 'lucide-react';
 import { AuthUser } from '@/lib/auth';
+import { getBrowserLocation, locationMessage } from '@/lib/geo';
 
 interface Props {
   onLogin: (user: AuthUser) => void;
@@ -26,16 +27,18 @@ export default function LoginScreen({ onLogin }: Props) {
     setLoading(true);
 
     try {
+      // Signing in needs the location: the browser asks for permission the first time
+      const place = await getBrowserLocation();
       const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier, password }),
+        body: JSON.stringify({ identifier, password, location: place.ok ? place.coords : null }),
       });
       const json = await res.json();
       if (json.success) {
         onLogin(json.user as AuthUser);
       } else {
-        setError(json.error ?? 'Invalid credentials.');
+        setError(json.code === 'location-required' && !place.ok ? locationMessage(place.reason) : json.error ?? 'Invalid credentials.');
       }
     } catch {
       setError('Could not reach the server. Please try again.');

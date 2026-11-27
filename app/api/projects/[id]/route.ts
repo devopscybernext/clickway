@@ -4,7 +4,7 @@ import { getProject, updateProject } from '@/lib/projects/projects';
 
 export const runtime = 'nodejs';
 
-// One project: its details, members and documents (GET); edit or archive it (PATCH).
+// One project: its details, members and documents (GET); edit it or mark it completed (PATCH).
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   return respond(req, async () => getProject(await actorFrom(req), positiveId((await ctx.params).id, 'project')));
 }

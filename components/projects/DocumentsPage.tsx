@@ -1,15 +1,18 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Search, ExternalLink, Trash2, Lock, Link2, FileText, Pin, ShieldCheck } from 'lucide-react';
+import { Search, ExternalLink, Trash2, Lock, Link2, FileText, Pin, ShieldCheck, Pencil } from 'lucide-react';
 import { api, Button, Pill, PinButton, cardStyle, inputClass, inputStyle, formatDate, openDocumentInNewTab, useFlash, savePin } from './shared';
 import styles from './DocumentsPage.module.css';
 import { DocumentAccessModal } from './DocumentAccess';
+import DocumentEditModal from './DocumentEditModal';
+import { LINK_ROLE_LABELS, type LinkRole } from '@/lib/projects/rules';
 
 interface Doc {
   id: number; title: string; source: string; visibility: 'invite' | 'public'; mimeType: string; createdBy: string; createdAt: string | null;
   projectId: number; projectName: string; archived: boolean; canDelete: boolean; pinned: boolean;
-  canOpen: boolean; canSetAccess: boolean;
+  canOpen: boolean; canSetAccess: boolean; linkRole: LinkRole; inDrive: boolean; canEdit: boolean;
+  shared?: boolean;   // outside the project: only this document was shared with them
 }
 
 // Every document in the projects the person can see: the ones they pinned first, then newest first.
@@ -20,6 +23,7 @@ export default function DocumentsPage({ refreshKey, onOpenProject }: { refreshKe
   const [project, setProject] = useState('');
   const [busy, setBusy] = useState(false);
   const [accessFor, setAccessFor] = useState<Doc | null>(null);
+  const [editingDoc, setEditingDoc] = useState<Doc | null>(null);
   const { flash, setFlash } = useFlash();
 
   const load = useCallback(async () => {
@@ -108,16 +112,24 @@ export default function DocumentsPage({ refreshKey, onOpenProject }: { refreshKe
                   </div>
                 </div>
                 </td><td>
-                  <button onClick={() => onOpenProject(d.projectId)} className="text-left text-sm font-medium break-words hover:underline cursor-pointer" style={{ color: 'var(--cn-accent)' }}>{d.projectName}</button>
-                  {d.archived && <p className="mt-1 text-xs" style={{ color: 'var(--cn-text-muted)' }}>Archived project</p>}
+                  {d.shared ? (
+                    <>
+                      <p className="text-sm font-medium break-words" style={{ color: 'var(--cn-text-primary)' }}>{d.projectName}</p>
+                      <p className="mt-1 text-xs" style={{ color: 'var(--cn-text-muted)' }}>Shared with you (this document only)</p>
+                    </>
+                  ) : (
+                    <button onClick={() => onOpenProject(d.projectId)} className="text-left text-sm font-medium break-words hover:underline cursor-pointer" style={{ color: 'var(--cn-accent)' }}>{d.projectName}</button>
+                  )}
+                  {d.archived && <p className="mt-1 text-xs" style={{ color: 'var(--cn-text-muted)' }}>Completed project</p>}
                 </td><td>
                 {d.visibility === 'invite'
                   ? <Pill tone="blue"><Lock className="w-3 h-3 mr-1" /> Members only</Pill>
-                  : <Pill><Link2 className="w-3 h-3 mr-1" /> Anyone with link</Pill>}
+                  : <Pill><Link2 className="w-3 h-3 mr-1" /> Anyone with link{d.inDrive ? ` · ${LINK_ROLE_LABELS[d.linkRole]}` : ''}</Pill>}
                 {!d.canOpen && <span className="ml-1"><Pill tone="muted"><Lock className="w-3 h-3 mr-1" /> No access</Pill></span>}
                 </td><td>
                 <div className={styles.actions}>
                 {d.canOpen && <Button small onClick={() => void open(d.id)}><ExternalLink className="w-3.5 h-3.5" /> Open</Button>}
+                {d.canEdit && <Button small onClick={() => setEditingDoc(d)} title="Edit title and sharing"><Pencil className="w-3.5 h-3.5" /> Edit</Button>}
                 {d.canSetAccess && <Button small onClick={() => setAccessFor(d)} title="Choose who can open this document"><ShieldCheck className="w-3.5 h-3.5" /> Access</Button>}
                 {d.canDelete && (
                   <button onClick={() => void remove(d)} disabled={busy} aria-label={`Delete ${d.title}`} title="Delete document"
@@ -133,6 +145,10 @@ export default function DocumentsPage({ refreshKey, onOpenProject }: { refreshKe
         )}
         {docs !== null && !error && <p className="py-3 text-xs" style={{ borderColor: 'var(--cn-border)', color: 'var(--cn-text-muted)' }} aria-live="polite">Showing {shown.length} of {docs.length} documents</p>}
       </section>
+      {editingDoc && (
+        <DocumentEditModal doc={editingDoc} onClose={() => setEditingDoc(null)}
+          onSaved={(message, note) => { setEditingDoc(null); setFlash({ kind: note ? 'info' : 'ok', text: note ? `${message} ${note}` : message }); void load(); }} />
+      )}
       {accessFor && (
         <DocumentAccessModal documentId={accessFor.id} title={accessFor.title}
           onClose={() => setAccessFor(null)}

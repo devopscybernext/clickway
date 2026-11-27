@@ -5,12 +5,12 @@ import {
   SHARING_LOCK, text, positiveId, webUrl, websiteUrl, creationKey,
 } from './store';
 import {
-  canManageProject, canAddDocuments, defaultDocLevel, ACCESS_LABELS, DOC_LEVEL_LABELS,
-  DOC_LEVELS, PROJECT_STATUSES, type DocLevel, type ProjectAccess, type ProjectStatus,
+  canManageProject, canAddDocuments, defaultDocLevel, ACCESS_LABELS, DOC_LEVEL_LABELS, LINK_ROLE_LABELS,
+  DOC_LEVELS, LINK_ROLES, PROJECT_STATUSES, type DocLevel, type LinkRole, type ProjectAccess, type ProjectStatus,
 } from './rules';
 import {
   ensureProjectFolder, ensurePrivateFolder, createNativeFile, readNativeFile, readUpload, fileUrl,
-  protectPrivateFile, makePublic, trashDocumentFile, type SavedFile, type Upload,
+  protectPrivateFile, makePublic, removePublic, updateFile, trashDocumentFile, type SavedFile, type Upload,
 } from './drive';
 import { DriveError } from './google';
 import { syncDocumentSharing, effectiveLevel, loadDocPermissions, type SharingResult } from './sharing';
@@ -157,9 +157,9 @@ export async function createProject(actor: Actor, body: Record<string, unknown>)
     await c.beginTransaction();
     try {
       const [res] = await c.query<mysql.ResultSetHeader>(
-        `INSERT INTO doc_projects (name, client_name, platform, website_url, description, status, drive_folder_id, drive_folder_url, creation_key, created_by, created_by_name)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [p.name, p.client || null, p.platform || null, p.website, p.description || null, p.status, folder.id, folder.url, key, actor.id, actor.name]
+        `INSERT INTO doc_projects (name, client_name, platform, website_url, description, status, is_archived, drive_folder_id, drive_folder_url, creation_key, created_by, created_by_name)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [p.name, p.client || null, p.platform || null, p.website, p.description || null, p.status, p.status === 'completed' ? 1 : 0, folder.id, folder.url, key, actor.id, actor.name]
       );
       const id = res.insertId;
       if (!actor.policy.full) {
@@ -192,7 +192,7 @@ export async function getProject(actor: Actor, projectId: number) {
     [projectId]
   );
   const [documents] = await db.query<Row[]>(
-    `SELECT d.id, d.title, d.source_type, d.visibility, d.mime_type, d.created_by, d.created_by_name, d.created_at, t.name AS template_name,
+    `SELECT d.id, d.title, d.source_type, d.visibility, d.link_role, d.drive_file_id, d.mime_type, d.created_by, d.created_by_name, d.created_at, t.name AS template_name,
             (SELECT level FROM doc_document_permissions dp WHERE dp.document_id = d.id AND dp.user_id = ?) AS my_level,
             (SELECT COUNT(*) FROM doc_document_access a WHERE a.document_id = d.id AND a.status = 'pending') AS pending,
             EXISTS (SELECT 1 FROM doc_pins pin WHERE pin.user_id = ? AND pin.kind = 'document' AND pin.item_id = d.id) AS pinned
@@ -224,8 +224,6 @@ export async function getProject(actor: Actor, projectId: number) {
       createdBy: p.created_by_name ?? '', createdAt: iso(p.created_at), updatedAt: iso(p.updated_at),
     },
     access, canManage: manage, canAdd: canAddDocuments(access), fullAccess: full,
-    // Making people Creators: full access, or the person who created the project
-    canAssignCreator: manage && (full || Number(p.created_by) === actor.id),
     members: members.filter(m => !policyOf.get(Number(m.user_id))?.full).map(m => ({
       userId: Number(m.user_id), access: m.access_level as ProjectAccess,
       name: String(m.display_name || m.username || '(removed account)'), email: m.email ?? '', role: m.role ?? '',
@@ -240,6 +238,7 @@ export async function getProject(actor: Actor, projectId: number) {
         pinned: Number(d.pinned) === 1,
         myLevel: level ?? 'none', canOpen: !!level && level !== 'none',
         canDelete: full || Number(d.created_by) === actor.id,
+        ...documentExtras(d, full, actor.id),
         // A Creator whose own access to this document is No access can't change who opens it
         canSetAccess: d.visibility === 'invite' && level === 'editor' && (manage || Number(d.created_by) === actor.id),
       };
@@ -256,16 +255,23 @@ export async function getProject(actor: Actor, projectId: number) {
 export async function updateProject(actor: Actor, projectId: number, body: Record<string, unknown>) {
   await withConnection(async c => {
     await requireProject(actor, projectId, 'manage', c);
+    // Mark completed / reopen (the Completed list). Completed is also the project's status, so the two
+    // always agree; reopening puts the project back In progress.
     if (body.archived !== undefined && Object.keys(body).length === 1) {
-      const archived = body.archived === true;
-      await c.query('UPDATE doc_projects SET is_archived = ? WHERE id = ?', [archived ? 1 : 0, projectId]);
-      await logChange(c, actor, 'doc_projects', projectId, archived ? 'Project archived' : 'Project restored', null, null);
+      const completed = body.archived === true;
+      await c.query(
+        completed
+          ? "UPDATE doc_projects SET is_archived = 1, status = 'completed' WHERE id = ?"
+          : "UPDATE doc_projects SET is_archived = 0, status = IF(status = 'completed', 'in_progress', status) WHERE id = ?",
+        [projectId]
+      );
+      await logChange(c, actor, 'doc_projects', projectId, completed ? 'Project completed' : 'Project reopened', null, null);
       return;
     }
     const p = projectInput(body);
     await c.query(
-      'UPDATE doc_projects SET name = ?, client_name = ?, platform = ?, website_url = ?, description = ?, status = ? WHERE id = ?',
-      [p.name, p.client || null, p.platform || null, p.website, p.description || null, p.status, projectId]
+      'UPDATE doc_projects SET name = ?, client_name = ?, platform = ?, website_url = ?, description = ?, status = ?, is_archived = ? WHERE id = ?',
+      [p.name, p.client || null, p.platform || null, p.website, p.description || null, p.status, p.status === 'completed' ? 1 : 0, projectId]
     );
     await logChange(c, actor, 'doc_projects', projectId, 'Project updated', null, JSON.stringify(p));
   });
@@ -278,21 +284,17 @@ export async function updateProject(actor: Actor, projectId: number, body: Recor
 export async function saveMember(actor: Actor, projectId: number, body: Record<string, unknown>) {
   const userId = positiveId(body.userId, 'person');
   const access = text(body.access, 'Access', 10, true);
-  if (!['member', 'viewer', 'editor', 'manager', 'remove', 'decline'].includes(access)) throw new ProjectError('Choose Member, Viewer, Editor or Creator.');
+  if (access === 'manager') throw new ProjectError("Only the person who created the project is its Creator. Choose Member, Viewer or Editor.");
+  if (!['member', 'viewer', 'editor', 'remove', 'decline'].includes(access)) throw new ProjectError('Choose Member, Viewer or Editor.');
   return withConnection(c => withLock(c, SHARING_LOCK, async () => {
     await requireProject(actor, projectId, 'manage', c);
     const target = (await loadPeople(c)).find(x => x.id === userId);
     if (!target && access !== 'remove' && access !== 'decline') throw new ProjectError('That account no longer exists.');
     if (target?.policy.full) throw new ProjectError('This person has full Projects access and already sees every project.');
-    // Only Super Admin, HM, Mod and the person who created the project make people Creators, or change
-    // or remove another Creator
+    // The project's Creator (the person who created it) keeps that role: nobody changes or removes it
     const [owner] = await c.query<Row[]>('SELECT created_by FROM doc_projects WHERE id = ?', [projectId]);
-    if (!actor.policy.full && Number(owner[0]?.created_by) !== actor.id) {
-      if (access === 'manager') throw new ProjectError('Only Super Admin, HM, Mod and the person who created this project can make someone a Creator.', 403);
-      const [current] = await c.query<Row[]>('SELECT access_level FROM doc_project_members WHERE project_id = ? AND user_id = ?', [projectId, userId]);
-      if (current[0]?.access_level === 'manager' && userId !== actor.id) {
-        throw new ProjectError("Only Super Admin, HM, Mod and the person who created this project can change another Creator's access.", 403);
-      }
+    if (Number(owner[0]?.created_by) === userId && access !== 'decline') {
+      throw new ProjectError('This is the person who created the project. They stay its Creator.', 403);
     }
     if (access === 'decline') {
       // An access request turned down: it goes away, and the person can ask again
@@ -336,6 +338,13 @@ export interface NewDocument {
   creationKey: string; title: string; visibility: string; source: string;
   templateId?: string; url?: string; upload?: File | null;
   permissions?: string;   // "Project members only": JSON [{ userId, level }] for this document
+  linkRole?: string;      // "Anyone with the link": 'reader' (view) or 'writer' (edit)
+}
+
+function linkRoleInput(value: unknown): LinkRole {
+  const role = value === undefined || value === null || value === '' ? 'reader' : String(value);
+  if (!LINK_ROLES.includes(role as LinkRole)) throw new ProjectError('Choose Viewer or Editor for link access.');
+  return role as LinkRole;
 }
 
 // Levels set for a "Project members only" document (from the new-document popup or Access). Only
@@ -359,11 +368,16 @@ async function storePermissions(c: Conn, actor: Actor, projectId: number, docume
   if (!wanted.size) return;
   const [members] = await c.query<Row[]>('SELECT user_id, access_level FROM doc_project_members WHERE project_id = ?', [projectId]);
   const levelOf = new Map(members.map(m => [Number(m.user_id), m.access_level as ProjectAccess]));
-  const fullIds = new Set((await loadPeople(c)).filter(x => x.policy.full).map(x => x.id));
+  const people = await loadPeople(c);
+  const fullIds = new Set(people.filter(x => x.policy.full).map(x => x.id));
+  const accounts = new Set(people.map(x => x.id));
   for (const [userId, level] of wanted) {
     const projectLevel = levelOf.get(userId);
-    if (!projectLevel || fullIds.has(userId) || userId === createdBy) continue;
-    if (level === defaultDocLevel(projectLevel)) {
+    if (fullIds.has(userId) || userId === createdBy) continue;
+    // Someone outside the project: a guest on this document (No access removes them)
+    const isDefault = projectLevel ? level === defaultDocLevel(projectLevel) : level === 'none';
+    if (!projectLevel && !accounts.has(userId) && !isDefault) continue;
+    if (isDefault) {
       await c.query('DELETE FROM doc_document_permissions WHERE document_id = ? AND user_id = ?', [documentId, userId]);
     } else {
       await c.query(
@@ -385,6 +399,7 @@ export async function addDocument(actor: Actor, projectId: number, input: NewDoc
   const mode = input.source;
   if (!['template', 'upload', 'url'].includes(mode)) throw new ProjectError('Choose a template, an upload or a link.');
   const permissions = visibility === 'invite' ? parsePermissions(input.permissions) : new Map<number, DocLevel>();
+  const linkRole = linkRoleInput(input.linkRole);
   await requireProject(actor, projectId, 'add');
 
   const url = mode === 'url' ? webUrl(text(input.url, 'Document link', 2048, true), 'Document link') : null;
@@ -432,16 +447,16 @@ export async function addDocument(actor: Actor, projectId: number, input: NewDoc
         ...(template ? { sourceUrl: String(template.source_url) } : mode === 'url' ? { sourceUrl: url! } : { upload: upload! }),
       });
       if (visibility === 'invite') await protectPrivateFile(saved.id);
-      else await makePublic(saved.id);
+      else await makePublic(saved.id, linkRole);
     }
 
     await c.beginTransaction();
     let documentId: number;
     try {
       const [res] = await c.query<mysql.ResultSetHeader>(
-        `INSERT INTO doc_documents (project_id, template_id, title, drive_file_id, document_url, mime_type, source_type, visibility, creation_key, created_by, created_by_name)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [projectId, template ? Number(template.id) : null, title, saved?.id ?? null, saved?.url ?? url, saved?.mimeType ?? null, mode, visibility, key, actor.id, actor.name]
+        `INSERT INTO doc_documents (project_id, template_id, title, drive_file_id, document_url, mime_type, source_type, visibility, link_role, creation_key, created_by, created_by_name)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [projectId, template ? Number(template.id) : null, title, saved?.id ?? null, saved?.url ?? url, saved?.mimeType ?? null, mode, visibility, linkRole, key, actor.id, actor.name]
       );
       documentId = res.insertId;
       await storePermissions(c, actor, projectId, documentId, actor.id, permissions);
@@ -487,10 +502,22 @@ export async function getDocumentAccess(actor: Actor, documentId: number) {
         WHERE m.project_id = ? ORDER BY FIELD(m.access_level, 'manager', 'editor', 'viewer', 'member'), u.display_name`,
       [doc.project_id]
     );
-    const fullIds = new Set((await loadPeople(c)).filter(x => x.policy.full).map(x => x.id));
+    const everyone = await loadPeople(c);
+    const fullIds = new Set(everyone.filter(x => x.policy.full).map(x => x.id));
     const overrides = await loadDocPermissions(c, [documentId]);
+    const memberIds = new Set(members.map(m => Number(m.user_id)));
+    const guestLevel = (id: number) => overrides.get(`${documentId}:${id}`);
+    const outside = everyone.filter(x => !fullIds.has(x.id) && !memberIds.has(x.id) && x.id !== Number(doc.created_by));
     return {
       document: { id: documentId, title: String(doc.title) },
+      // People outside the project who can open this one document
+      guests: outside
+        .filter(x => { const l = guestLevel(x.id); return l && l !== 'none'; })
+        .map(x => ({ userId: x.id, name: x.name, email: x.email, level: guestLevel(x.id) as DocLevel })),
+      // Everyone else who could be given access to it
+      candidates: outside
+        .filter(x => { const l = guestLevel(x.id); return !l || l === 'none'; })
+        .map(x => ({ id: x.id, name: x.name, email: x.email, role: x.role })),
       people: members
         .filter(m => !fullIds.has(Number(m.user_id)) && Number(m.user_id) !== Number(doc.created_by))
         .map(m => {
@@ -515,14 +542,26 @@ export async function saveDocumentAccess(actor: Actor, documentId: number, body:
     // Each person whose level on this document changed is told
     const after = await documentLevels(c, doc);
     const changedFor: Notified[] = [];
+    const guestsTold: Notified[] = [];
+    const [memberRows] = await c.query<Row[]>('SELECT user_id FROM doc_project_members WHERE project_id = ?', [doc.project_id]);
+    const memberIds = new Set(memberRows.map(m => Number(m.user_id)));
     for (const [id, now] of after) {
       const was = before.get(id)?.level;
-      if (!was || was === now.level) continue;
-      changedFor.push({ id, name: now.name, username: now.username,
-        text: `${actor.name} changed your access to "${doc.title}" from ${DOC_LEVEL_LABELS[was]} to ${DOC_LEVEL_LABELS[now.level]}` });
+      if (was === now.level) continue;
+      const list = memberIds.has(id) ? changedFor : guestsTold;
+      list.push({ id, name: now.name, username: now.username,
+        text: was
+          ? `${actor.name} changed your access to "${doc.title}" from ${DOC_LEVEL_LABELS[was]} to ${DOC_LEVEL_LABELS[now.level]}`
+          : `${actor.name} gave you ${DOC_LEVEL_LABELS[now.level]} access to "${doc.title}"` });
     }
-    await notifyPeople(c, actor, 'document-access', 'Document access changed', Number(doc.project_id), await projectName(c, Number(doc.project_id)),
-      changedFor, String(doc.title));
+    for (const [id, was] of before) {
+      if (after.has(id) || memberIds.has(id)) continue;   // a guest whose access was removed
+      guestsTold.push({ id, name: was.name, username: was.username, text: `${actor.name} removed your access to "${doc.title}"` });
+    }
+    const name = await projectName(c, Number(doc.project_id));
+    await notifyPeople(c, actor, 'document-access', 'Document access changed', Number(doc.project_id), name, changedFor, String(doc.title));
+    // Guests can't open the project, so their notification opens My Documents
+    await notifyPeople(c, actor, 'document-access', 'Document access changed', Number(doc.project_id), name, guestsTold, String(doc.title), false, 'documents::0');
     const sharing = await syncDocumentSharing(c, { documentId }, { recheck: true });
     return { message: 'Document access updated.', note: sharingNote(sharing) };
   }));
@@ -533,7 +572,7 @@ export async function saveDocumentAccess(actor: Actor, documentId: number, body:
 // Projects notifications in the bell (and the Admin Portal log): told to the people they are about,
 // never to the person who made the change. A failed notification never undoes the change.
 type Notified = { id: number; name: string; username: string; text: string };
-async function notifyPeople(c: Conn, actor: Actor, type: string, title: string, projectId: number, projectName: string, people: Notified[], detail: string, link = true) {
+async function notifyPeople(c: Conn, actor: Actor, type: string, title: string, projectId: number, projectName: string, people: Notified[], detail: string, link = true, ref?: string) {
   const who = people.filter(p => p.username && p.id !== actor.id);
   if (!who.length) return;
   try {
@@ -544,7 +583,7 @@ async function notifyPeople(c: Conn, actor: Actor, type: string, title: string, 
     );
     await c.query(
       'INSERT INTO notifications (recipient, type, team, title, body, task_ref, actor) VALUES ?',
-      [who.map(p => [p.username, type, 'projects', title, p.text.slice(0, 500), link ? `project::${projectId}` : 'project::0', actor.name.slice(0, 191)])]
+      [who.map(p => [p.username, type, 'projects', title, p.text.slice(0, 500), ref ?? (link ? `project::${projectId}` : 'project::0'), actor.name.slice(0, 191)])]
     );
   } catch (error) {
     console.error(`[projects] ${type} notification`, error);
@@ -589,6 +628,14 @@ async function documentLevels(c: Conn, doc: Row): Promise<Map<number, { level: D
     if (fullIds.has(id) || id === Number(doc.created_by)) continue;
     const level = overrides.get(`${doc.id}:${id}`) ?? defaultDocLevel(m.access_level as ProjectAccess);
     out.set(id, { level, name: String(m.display_name || m.username), username: String(m.username ?? '') });
+  }
+  // Guests: people outside the project with a level on this document
+  const people = new Map((await loadPeople(c)).map(x => [x.id, x]));
+  for (const [key, level] of overrides) {
+    const id = Number(key.split(':')[1]);
+    const person = people.get(id);
+    if (out.has(id) || !person || fullIds.has(id) || id === Number(doc.created_by) || level === 'none') continue;
+    out.set(id, { level, name: person.name, username: person.username });
   }
   return out;
 }
@@ -638,6 +685,65 @@ export async function requestAccess(actor: Actor, projectId: number) {
   });
 }
 
+// ─── Editing a document ──────────────────────────────────────────────────────
+
+// The Edit popup: title, who can open it, and (Anyone with the link) whether the link views or edits.
+// Only the person who added the document and Super Admin / HM / Mod. The Drive file follows: renamed,
+// moved between the project's folders, and its link access changed; then people's grants are updated.
+export async function updateDocument(actor: Actor, documentId: number, body: Record<string, unknown>) {
+  const title = text(body.title, 'Document title', 255, true);
+  const visibility = String(body.visibility ?? '');
+  if (!['public', 'invite'].includes(visibility)) throw new ProjectError('Choose who can open the document.');
+  const linkRole = linkRoleInput(body.linkRole);
+  return withConnection(c => withLock(c, SHARING_LOCK, async () => {
+    const [rows] = await c.query<Row[]>(
+      `SELECT d.id, d.project_id, d.title, d.visibility, d.link_role, d.drive_file_id, d.created_by,
+              p.name AS project_name, p.drive_folder_id, p.private_drive_folder_id, p.creation_key
+         FROM doc_documents d JOIN doc_projects p ON p.id = d.project_id WHERE d.id = ?`,
+      [documentId]
+    );
+    const doc = rows[0];
+    if (!doc) throw new ProjectError('This document no longer exists.', 404);
+    await requireProject(actor, Number(doc.project_id), 'view', c);
+    if (!actor.policy.full && Number(doc.created_by) !== actor.id) {
+      throw new ProjectError('Only the person who added this document, Super Admin, HM and Mod can edit it.', 403);
+    }
+    const fileId = doc.drive_file_id ? String(doc.drive_file_id) : null;
+    const projectId = Number(doc.project_id);
+    const visibilityChanged = visibility !== doc.visibility;
+    if (!fileId && (visibilityChanged || (visibility === 'public' && linkRole !== doc.link_role))) {
+      throw new ProjectError("This document is a link to a file outside the project's Drive, so its sharing can't be changed here. Only its title can.");
+    }
+
+    if (fileId) {
+      let folder: string | undefined;
+      if (visibilityChanged && visibility === 'invite') {
+        // To Project members only: link access off first, then into the owner-only folder
+        await removePublic(fileId);
+        folder = await ensurePrivateFolder(projectId, String(doc.project_name), doc.private_drive_folder_id ?? null);
+        if (folder !== doc.private_drive_folder_id) await c.query('UPDATE doc_projects SET private_drive_folder_id = ? WHERE id = ?', [folder, projectId]);
+      } else if (visibilityChanged) {
+        if (doc.drive_folder_id) folder = String(doc.drive_folder_id);
+        else {
+          const created = await ensureProjectFolder(String(doc.project_name), String(doc.creation_key || randomUUID()));
+          await c.query('UPDATE doc_projects SET drive_folder_id = ?, drive_folder_url = ? WHERE id = ?', [created.id, created.url, projectId]);
+          folder = created.id;
+        }
+      }
+      if (folder || title !== doc.title) await updateFile(fileId, { name: title !== doc.title ? title : undefined, folder });
+      if (visibility === 'public') await makePublic(fileId, linkRole);
+    }
+
+    await c.query('UPDATE doc_documents SET title = ?, visibility = ?, link_role = ? WHERE id = ?', [title, visibility, linkRole, documentId]);
+    await c.query('UPDATE doc_projects SET updated_at = CURRENT_TIMESTAMP WHERE id = ?', [projectId]);
+    await logChange(c, actor, 'doc_documents', documentId, 'Document edited',
+      JSON.stringify({ title: doc.title, visibility: doc.visibility, linkRole: doc.link_role }), JSON.stringify({ title, visibility, linkRole }));
+    const sharing = await syncDocumentSharing(c, { documentId }, { recheck: visibilityChanged });
+    const what = visibility === 'public' ? `Anyone with the link can ${linkRole === 'writer' ? 'edit' : 'view'} it.` : 'Only project members can open it.';
+    return { message: `Document saved. ${what}`, note: sharingNote(sharing), linkLabel: LINK_ROLE_LABELS[linkRole] };
+  }));
+}
+
 // Only the person who added a document, Super Admin or HM may delete it. Drive first (everyone's
 // access removed, file moved to Drive Trash), then the record, so a failure never leaves a deleted
 // record pointing at a file that is still shared.
@@ -669,19 +775,30 @@ export async function deleteDocument(actor: Actor, documentId: number) {
   }));
 }
 
+// What the document lists show about link access and editing a document
+function documentExtras(d: Row, full: boolean, actorId: number) {
+  return {
+    linkRole: (d.link_role === 'writer' ? 'writer' : 'reader') as LinkRole,
+    inDrive: !!d.drive_file_id,                                   // false: a pasted link kept as it is
+    canEdit: full || Number(d.created_by) === actorId,            // the Edit popup
+  };
+}
+
 // Every document the person can see, across their projects (the Documents page).
 export async function listDocuments(actor: Actor) {
   const scope = projectScope(actor);
   const full = actor.policy.full;
   const [rows] = await pool().query<Row[]>(
-    `SELECT d.id, d.title, d.source_type, d.visibility, d.mime_type, d.created_by, d.created_by_name, d.created_at,
+    `SELECT d.id, d.title, d.source_type, d.visibility, d.link_role, d.drive_file_id, d.mime_type, d.created_by, d.created_by_name, d.created_at,
             p.id AS project_id, p.name AS project_name, p.is_archived,
             (SELECT access_level FROM doc_project_members x WHERE x.project_id = p.id AND x.user_id = ?) AS my_access,
             (SELECT level FROM doc_document_permissions dp WHERE dp.document_id = d.id AND dp.user_id = ?) AS my_level,
             EXISTS (SELECT 1 FROM doc_pins pin WHERE pin.user_id = ? AND pin.kind = 'document' AND pin.item_id = d.id) AS pinned
        FROM doc_documents d JOIN doc_projects p ON p.id = d.project_id
-      WHERE ${scope.sql} ORDER BY pinned DESC, d.created_at DESC, d.id DESC`,
-    [actor.id, actor.id, actor.id, ...scope.values]
+      WHERE (${scope.sql})
+         OR (d.visibility = 'invite' AND EXISTS (SELECT 1 FROM doc_document_permissions g WHERE g.document_id = d.id AND g.user_id = ? AND g.level <> 'none'))
+      ORDER BY pinned DESC, d.created_at DESC, d.id DESC`,
+    [actor.id, actor.id, actor.id, ...scope.values, actor.id]
   );
   return {
     documents: rows.map(d => {
@@ -693,8 +810,11 @@ export async function listDocuments(actor: Actor) {
         projectId: Number(d.project_id), projectName: d.project_name, archived: !!d.is_archived,
         pinned: Number(d.pinned) === 1,
         myLevel: level ?? 'none', canOpen: !!level && level !== 'none',
-        canDelete: full || Number(d.created_by) === actor.id,
-        canSetAccess: d.visibility === 'invite' && level === 'editor' && (canManageProject(full, access) || Number(d.created_by) === actor.id),
+        shared: access === null,   // outside the project: shared with them on this document only
+        canDelete: full || (access !== null && Number(d.created_by) === actor.id),
+        ...documentExtras(d, full, actor.id),
+        ...(access === null ? { canEdit: false } : {}),
+        canSetAccess: access !== null && d.visibility === 'invite' && level === 'editor' && (canManageProject(full, access) || Number(d.created_by) === actor.id),
       };
     }),
   };

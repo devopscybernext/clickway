@@ -255,10 +255,40 @@ export async function protectPrivateFile(id: string, auth: DriveAuth = driveClie
   await auth.request({ url: `${API}/${id}`, method: 'PATCH', data: { writersCanShare: false } });
 }
 
-// "Anyone with the link" documents: viewable by link, not discoverable.
-export async function makePublic(id: string, auth: DriveAuth = driveClient()): Promise<void> {
-  if ((await permissions(id, auth)).some(p => p.type === 'anyone' && ['reader', 'writer'].includes(p.role))) return;
-  await auth.request({ url: `${API}/${id}/permissions`, method: 'POST', params: { supportsAllDrives: true }, data: { type: 'anyone', role: 'reader', allowFileDiscovery: false } });
+// "Anyone with the link" documents: viewable (reader) or editable (writer) by link, not discoverable.
+// An existing link permission is moved to the requested role.
+export async function makePublic(id: string, role: DriveRole = 'reader', auth: DriveAuth = driveClient()): Promise<void> {
+  const found = (await permissions(id, auth)).find(p => p.type === 'anyone');
+  if (found?.role === role) return;
+  if (found) {
+    await auth.request({ url: `${API}/${id}/permissions/${found.id}`, method: 'PATCH', params: { supportsAllDrives: true }, data: { role } });
+    return;
+  }
+  await auth.request({ url: `${API}/${id}/permissions`, method: 'POST', params: { supportsAllDrives: true }, data: { type: 'anyone', role, allowFileDiscovery: false } });
+}
+
+// Takes away "anyone with the link" access (a document changed to Project members only).
+export async function removePublic(id: string, auth: DriveAuth = driveClient()): Promise<void> {
+  for (const p of (await permissions(id, auth)).filter(x => x.type === 'anyone' || x.type === 'domain')) {
+    await revokeDocument(id, p.id, auth);
+  }
+}
+
+// Moves a file to another folder (its only parent afterwards) and/or renames it.
+export async function updateFile(id: string, change: { name?: string; folder?: string }, auth: DriveAuth = driveClient()): Promise<void> {
+  try {
+    const params: Record<string, string | boolean> = { supportsAllDrives: true, fields: 'id,parents' };
+    if (change.folder) {
+      if (!validId(change.folder)) throw new DriveError('Invalid Drive folder.');
+      const { data } = await auth.request<DriveFile>({ url: `${API}/${id}`, params: { fields: 'parents', supportsAllDrives: true } });
+      const others = (data.parents ?? []).filter(p => p !== change.folder);
+      if (!(data.parents ?? []).includes(change.folder)) params.addParents = change.folder;
+      if (others.length) params.removeParents = others.join(',');
+    }
+    await auth.request({ url: `${API}/${id}`, method: 'PATCH', params, data: change.name ? { name: change.name } : {} });
+  } catch (error) {
+    throw friendlyDriveError(error);
+  }
 }
 
 // Gives one person reader or writer access; an existing grant is moved to the requested role either way.

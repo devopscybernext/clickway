@@ -348,6 +348,23 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     return () => { live = false; };
   }, [user.username]);
   const navUser = projectsMenu ? { ...user, projectsMenu } : user;
+
+  // Login Tracker: when the dashboard opens after logging in, ask the browser for the person's location.
+  // The browser shows its own "Allow location?" prompt once and remembers the answer; if they allow it,
+  // the coordinates are saved on their latest login. Nothing else in the dashboard depends on it.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('geolocation' in navigator)) return;
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        void fetch('/api/login-log/location', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+        }).catch(() => { /* not important enough to show */ });
+      },
+      () => { /* denied or unavailable: the IP location is still recorded */ },
+      { enableHighAccuracy: true, timeout: 20_000, maximumAge: 5 * 60_000 },
+    );
+  }, [user.username]);
   const [helpSubTab, setHelpSubTab] = useState<HelpSubTab>('apply');
   const [pmBandwidthSubTab, setPmBandwidthSubTab] = useState<'current' | 'archive' | 'mine' | 'closed' | 'dashboard'>(
     firstLeaf.id === '11' && firstLeaf.subTab ? firstLeaf.subTab as 'current' | 'archive' | 'mine' | 'closed' | 'dashboard' : 'current');
@@ -489,6 +506,18 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     const id = setInterval(fetchAiTools, NEWS_REFRESH_INTERVAL);
     return () => clearInterval(id);
   }, [fetchAiTools]);
+
+  // The top bar's Refresh: reloads every page's data, including the pages that load their own
+  // (Documents, Help, Admin Portal), PM Projects, the Marketing team, holidays, AI tools and news.
+  const [pageRefreshKey, setPageRefreshKey] = useState(0);
+  const refreshEverything = useCallback(() => {
+    void fetchAll();
+    void fetchHolidays();
+    void fetchAiTools();
+    void fetchNews();
+    setEntryRefreshKey(k => k + 1);
+    setPageRefreshKey(k => k + 1);
+  }, [fetchAll, fetchHolidays, fetchAiTools, fetchNews]);
 
   // PM roster (Individual Analysis, and PM Projects' full-PM-list cards) —
   // fetched server-side via /api/pm-users so the password hash never
@@ -699,6 +728,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const openNotification = (n: NotificationItem) => {
     // Projects notifications open the project (Documents → My Projects); removals just open My Projects
     if (n.team === 'projects') {
+      // A document shared with someone outside its project opens My Documents
+      if (n.taskRef.startsWith('documents::')) { handleSheetChange({ id: '21', subTab: 'documents' }); return; }
       const projectId = Number(n.taskRef.split('::')[1]);
       handleSheetChange({ id: '21', subTab: 'projects' });
       if (projectId > 0) setProjectsFocus(f => ({ projectId, n: (f?.n ?? 0) + 1, members: n.type === 'access-request' }));
@@ -965,7 +996,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 </svg>
                 <p className="text-sm font-medium" style={{ color: 'var(--cn-text-muted)' }}>No chart data available</p>
                 <p className="text-xs" style={{ color: 'var(--cn-text-faint)' }}>Data may still be loading — it refreshes every 5 minutes</p>
-                <button onClick={fetchAll} className="mt-1 px-4 py-1.5 rounded-full text-xs font-semibold transition-all"
+                <button onClick={refreshEverything} className="mt-1 px-4 py-1.5 rounded-full text-xs font-semibold transition-all"
                   style={{ background: 'var(--cn-accent)', color: '#fff', border: 'none', cursor: 'pointer' }}>
                   Refresh Now
                 </button>
@@ -1020,7 +1051,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           lastUpdated={lastUpdated}
           loading={loading}
           selectedSheet={selectedSheet}
-          onRefresh={fetchAll}
+          onRefresh={refreshEverything}
           user={user}
           onLogout={onLogout}
           isAdmin={isAdmin}
@@ -1280,17 +1311,17 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           })()}
 
           {/* ── Projects: shared Google Drive documents per project (components/projects) ── */}
-          {isProjects && <ProjectsSection subTab={projectsSubTab} onSubTabChange={setProjectsSubTab} hasAccess={projectsMenu !== 'none'} focus={projectsFocus} />}
+          {isProjects && <ProjectsSection subTab={projectsSubTab} onSubTabChange={setProjectsSubTab} hasAccess={projectsMenu !== 'none'} focus={projectsFocus} refreshKey={pageRefreshKey} />}
 
           {/* ── Help: the Apply form and the table of queries ── */}
-          {isHelp && <Help subTab={helpSubTab} onSubTabChange={setHelpSubTab} canManage={canManageHelp(user.role)} />}
+          {isHelp && <Help key={pageRefreshKey} subTab={helpSubTab} onSubTabChange={setHelpSubTab} canManage={canManageHelp(user.role)} />}
 
           {isAdminPortal && canManageUsers(user.role) && (
             <section
               className="cn-card rounded-lg border transition-colors"
               style={{ background: 'var(--cn-bg-card)', borderColor: 'var(--cn-border)' }}
             >
-              <AdminPortal currentUsername={user.username} onChanged={refreshRoster} />
+              <AdminPortal currentUsername={user.username} onChanged={refreshRoster} refreshKey={pageRefreshKey} />
             </section>
           )}
 

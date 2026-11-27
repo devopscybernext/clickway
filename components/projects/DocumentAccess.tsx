@@ -47,11 +47,21 @@ export function AccessTable({ rows, onChange, disabled }: { rows: AccessRow[]; o
 
 export const permissionsOf = (rows: AccessRow[]) => rows.map(r => ({ userId: r.userId, level: r.level }));
 
-// The "Access" button on a document: loads, changes and saves its people's levels
+// People outside the project given access to this one document
+interface Guest { userId: number; name: string; email: string; level: DocLevel; removed?: boolean }
+interface Candidate { id: number; name: string; email: string; role: string }
+const GUEST_LEVELS: DocLevel[] = ['viewer', 'editor'];
+
+// The "Access" button on a document: loads, changes and saves its people's levels, including people
+// outside the project who can open only this document
 export function DocumentAccessModal({ documentId, title, onClose, onSaved }: {
   documentId: number; title: string; onClose: () => void; onSaved: (message: string, note?: string) => void;
 }) {
   const [rows, setRows] = useState<AccessRow[] | null>(null);
+  const [guests, setGuests] = useState<Guest[]>([]);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [addId, setAddId] = useState('');
+  const [addLevel, setAddLevel] = useState<DocLevel>('viewer');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -60,18 +70,36 @@ export function DocumentAccessModal({ documentId, title, onClose, onSaved }: {
       const r = await api(`/api/project-documents/${documentId}/access`);
       if (!r.success) { setError(r.error!); return; }
       setRows(r.people as AccessRow[]);
+      setGuests((r.guests as Guest[]) ?? []);
+      setCandidates((r.candidates as Candidate[]) ?? []);
     })();
   }, [documentId]);
+
+  const addGuest = () => {
+    const person = candidates.find(x => String(x.id) === addId);
+    if (!person) return;
+    setGuests(list => [...list.filter(g => g.userId !== person.id), { userId: person.id, name: person.name, email: person.email, level: addLevel }]);
+    setCandidates(list => list.filter(x => x.id !== person.id));
+    setAddId('');
+  };
+  const removeGuest = (g: Guest) => {
+    setGuests(list => list.map(x => (x.userId === g.userId ? { ...x, removed: true } : x)));
+  };
 
   const save = async () => {
     if (!rows) return;
     setBusy(true);
-    const r = await postJson(`/api/project-documents/${documentId}/access`, { permissions: permissionsOf(rows) }, 'PUT');
+    const permissions = [
+      ...permissionsOf(rows),
+      ...guests.map(g => ({ userId: g.userId, level: g.removed ? 'none' : g.level })),
+    ];
+    const r = await postJson(`/api/project-documents/${documentId}/access`, { permissions }, 'PUT');
     setBusy(false);
     if (!r.success) { setError(r.error!); return; }
     onSaved(String(r.message), typeof r.note === 'string' ? r.note : undefined);
   };
 
+  const shown = guests.filter(g => !g.removed);
   return (
     <Modal title={`Access: ${title}`} wide onClose={onClose}>
       <div className="space-y-4">
@@ -81,7 +109,49 @@ export function DocumentAccessModal({ documentId, title, onClose, onSaved }: {
         {error && <Notice kind="error" onClose={() => setError('')}>{error}</Notice>}
         {rows === null
           ? !error && <div className="flex justify-center py-8"><span className="w-6 h-6 border-2 border-[#FE4A23]/30 border-t-[#FE4A23] rounded-full animate-spin" /></div>
-          : <AccessTable rows={rows} disabled={busy} onChange={(id, level) => setRows(list => list && list.map(x => (x.userId === id ? { ...x, level } : x)))} />}
+          : (
+            <>
+              <p className="text-xs font-semibold" style={{ color: 'var(--cn-text-primary)' }}>Project members</p>
+              <AccessTable rows={rows} disabled={busy} onChange={(id, level) => setRows(list => list && list.map(x => (x.userId === id ? { ...x, level } : x)))} />
+
+              <div className="space-y-3 pt-2">
+                <div>
+                  <p className="text-xs font-semibold" style={{ color: 'var(--cn-text-primary)' }}>People outside the project</p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--cn-text-muted)' }}>They can open only this document (from My Documents), not the rest of the project.</p>
+                </div>
+                {shown.length > 0 && (
+                  <ul className="divide-y rounded-xl border" style={{ borderColor: 'var(--cn-border)' }}>
+                    {shown.map(g => (
+                      <li key={g.userId} className="flex flex-wrap items-center gap-3 px-4 py-3" style={{ borderColor: 'var(--cn-border)' }}>
+                        <div className="min-w-0 flex-1" style={{ flexBasis: '12rem' }}>
+                          <p className="text-sm font-semibold truncate" style={{ color: 'var(--cn-text-primary)' }}>{g.name}</p>
+                          <p className="text-xs break-all" style={{ color: 'var(--cn-text-faint)' }}>{g.email || 'No email: no Google access'} · Outside the project</p>
+                        </div>
+                        <select value={g.level} disabled={busy} aria-label={`Access to this document for ${g.name}`}
+                          onChange={e => setGuests(list => list.map(x => (x.userId === g.userId ? { ...x, level: e.target.value as DocLevel } : x)))}
+                          className="h-9 rounded-lg border px-3 text-xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#FE4A23]/30" style={{ ...inputStyle, width: '8.5rem' }}>
+                          {GUEST_LEVELS.map(l => <option key={l} value={l}>{DOC_LEVEL_LABELS[l]}</option>)}
+                        </select>
+                        <Button small disabled={busy} onClick={() => removeGuest(g)}>Remove</Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  <select value={addId} onChange={e => setAddId(e.target.value)} disabled={busy || candidates.length === 0} aria-label="Person outside the project"
+                    className="h-9 min-w-0 flex-1 rounded-lg border px-3 text-xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#FE4A23]/30" style={{ ...inputStyle, flexBasis: '14rem' }}>
+                    <option value="">{candidates.length ? 'Choose a person…' : 'Nobody else to add'}</option>
+                    {candidates.map(x => <option key={x.id} value={x.id}>{x.name}{x.email ? ` (${x.email})` : ''}</option>)}
+                  </select>
+                  <select value={addLevel} onChange={e => setAddLevel(e.target.value as DocLevel)} disabled={busy} aria-label="Access"
+                    className="h-9 rounded-lg border px-3 text-xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#FE4A23]/30" style={{ ...inputStyle, width: '8.5rem' }}>
+                    {GUEST_LEVELS.map(l => <option key={l} value={l}>{DOC_LEVEL_LABELS[l]}</option>)}
+                  </select>
+                  <Button small disabled={busy || !addId} onClick={addGuest}>Add</Button>
+                </div>
+              </div>
+            </>
+          )}
         <div className="flex justify-end gap-2">
           <Button onClick={onClose} disabled={busy}>Cancel</Button>
           <Button primary onClick={() => void save()} disabled={busy || !rows}>{busy ? 'Saving…' : 'Save access'}</Button>

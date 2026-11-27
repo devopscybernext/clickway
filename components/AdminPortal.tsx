@@ -8,6 +8,7 @@ import { DEPARTMENTS, NO_DEPARTMENT, SUB_DEPARTMENTS, type SubDeptKey } from '@/
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import NotificationsAdmin from './NotificationsAdmin';
 import ProjectSettings from './projects/ProjectSettings';
+import LoginTracker from './LoginTracker';
 
 interface AdminUser {
   row: number;
@@ -651,10 +652,11 @@ function AddUserDialog({ roleOptions, onClose, onAdded }: {
   );
 }
 
-// Admin Portal (HM and Admin): the accounts, the Notifications log and the Projects access settings, as tabs
-export default function AdminPortal({ currentUsername, onChanged }: { currentUsername?: string; onChanged?: () => void }) {
-  const [tab, setTab] = useState<'users' | 'notifications' | 'projects'>('users');
-  const tabs = [{ id: 'users', label: 'Users' }, { id: 'notifications', label: 'Notifications' }, { id: 'projects', label: 'Projects' }] as const;
+// Admin Portal (HM and Admin): the accounts, the Login Tracker, the Notifications log and the Projects settings, as tabs
+// refreshKey: the top bar's Refresh reloads the open tab (it stays on the same tab)
+export default function AdminPortal({ currentUsername, onChanged, refreshKey = 0 }: { currentUsername?: string; onChanged?: () => void; refreshKey?: number }) {
+  const [tab, setTab] = useState<'users' | 'logins' | 'notifications' | 'projects'>('users');
+  const tabs = [{ id: 'users', label: 'Users' }, { id: 'logins', label: 'Login Tracker' }, { id: 'notifications', label: 'Notifications' }, { id: 'projects', label: 'Projects' }] as const;
   return (
     <div>
       <div role="tablist" aria-label="Admin Portal" className="flex flex-wrap gap-2 px-3 sm:px-6 pt-3 sm:pt-5">
@@ -668,7 +670,9 @@ export default function AdminPortal({ currentUsername, onChanged }: { currentUse
           </button>
         ))}
       </div>
-      {tab === 'users' ? <AccountsPanel currentUsername={currentUsername} onChanged={onChanged} /> : tab === 'notifications' ? <NotificationsAdmin /> : <ProjectSettings />}
+      <div key={`${tab}-${refreshKey}`}>
+        {tab === 'users' ? <AccountsPanel currentUsername={currentUsername} onChanged={onChanged} /> : tab === 'logins' ? <LoginTracker /> : tab === 'notifications' ? <NotificationsAdmin /> : <ProjectSettings />}
+      </div>
     </div>
   );
 }

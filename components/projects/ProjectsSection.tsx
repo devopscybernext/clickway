@@ -18,14 +18,16 @@ export type ProjectsSubTab = 'all' | 'projects' | 'documents' | 'templates';
 //                  every document in those projects.
 //   Templates      full access.
 // `focus` opens one project (a click on an access notification in the bell); `members` also opens its
-// Members popup, where an access request is answered.
+// Members popup, where an access request is answered. `refreshKey` (the top bar's Refresh) reloads
+// whatever is showing: the project lists, the open project, My Documents or Templates.
 // Data comes from /api/projects/directory, /api/projects, /api/project-documents and
 // /api/project-templates; every rule is checked again on the server.
-export default function ProjectsSection({ subTab, onSubTabChange, hasAccess = true, focus }: {
+export default function ProjectsSection({ subTab, onSubTabChange, hasAccess = true, focus, refreshKey: outsideRefresh = 0 }: {
   subTab: ProjectsSubTab;
   onSubTabChange: (t: ProjectsSubTab) => void;
   hasAccess?: boolean;
   focus?: { projectId: number; n: number; members?: boolean };
+  refreshKey?: number;
 }) {
   const [mine, setMine] = useState<ProjectSummary[]>([]);
   const [all, setAll] = useState<ProjectSummary[]>([]);
@@ -49,6 +51,14 @@ export default function ProjectsSection({ subTab, onSubTabChange, hasAccess = tr
     setCanCreate(!!r.canCreate);
   }, [isAll]);
   useEffect(() => { if (subTab === 'all' || subTab === 'projects') void load(); }, [load, subTab]);
+
+  // The top bar's Refresh
+  const firstRefresh = useRef(true);
+  useEffect(() => {
+    if (firstRefresh.current) { firstRefresh.current = false; return; }
+    if (subTab === 'all' || subTab === 'projects') void load();
+    setRefreshKey(k => k + 1);
+  }, [outsideRefresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Without Projects access only All Projects is available
   useEffect(() => { if (!hasAccess && subTab !== 'all') onSubTabChange('all'); }, [hasAccess, subTab, onSubTabChange]);
@@ -86,7 +96,7 @@ export default function ProjectsSection({ subTab, onSubTabChange, hasAccess = tr
     if (!r.success) { set(!pinned); setFlash({ kind: 'error', text: r.error! }); }
   };
 
-  if (subTab === 'templates') return <TemplatesPage />;
+  if (subTab === 'templates') return <TemplatesPage key={refreshKey} />;
 
   // My Projects / My Documents switch
   const mySwitch = !isAll && (
@@ -120,7 +130,7 @@ export default function ProjectsSection({ subTab, onSubTabChange, hasAccess = tr
       {!open && mySwitch}
       {flash}
       {open !== null ? (
-        <ProjectDetail key={open} projectId={open} onBack={() => setOpen(null)} onChanged={changed}
+        <ProjectDetail key={open} projectId={open} onBack={() => setOpen(null)} onChanged={changed} reloadKey={refreshKey}
           openMembersKey={focus?.members && focus.projectId === open ? membersKey : 0} />
       ) : loadError ? (
         <div className="cn-card rounded-lg border p-6 text-sm" style={{ ...cardStyle, color: '#ef4444' }}>{loadError}</div>

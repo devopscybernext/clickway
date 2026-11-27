@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { UserPlus, X, MailWarning } from 'lucide-react';
 import { Button, inputClass, inputStyle, postJson } from './shared';
-import { ACCESS_LABELS, ACCESS_HINTS, PROJECT_LEVELS, type ProjectAccess } from '@/lib/projects/rules';
+import { ACCESS_LABELS, ACCESS_HINTS, ASSIGNABLE_LEVELS, PROJECT_LEVELS, type ProjectAccess } from '@/lib/projects/rules';
 import { formatDate } from './shared';
 
 export interface Member { userId: number; access: ProjectAccess; name: string; email: string; role: string; removedAccount: boolean; isMe: boolean }
@@ -11,29 +11,26 @@ export interface Person { id: number; name: string; email: string; role: string 
 export interface AccessRequest { userId: number; name: string; email: string; role: string; requestedAt: string | null }
 
 const LEVELS = PROJECT_LEVELS;
-// Only Super Admin, HM, Mod and the project's original creator make people Creators; other Creators can
-// give the other levels
-const levelsFor = (canAssignCreator: boolean) => (canAssignCreator ? LEVELS : LEVELS.filter(l => l !== 'manager'));
+// Creator is only ever the person who created the project, so it is never offered
+const choices = ASSIGNABLE_LEVELS;
 const LEVEL_HINT = ACCESS_HINTS;
 
-// The project's members. Creators (and Super Admin / HM / Mod) add people, change their level or
-// remove them, and answer access requests; Google access to the restricted documents follows at once.
+// The project's members. The project's Creator (and Super Admin / HM / Mod) add people, change their
+// level or remove them, and answer access requests; Editors can't manage members. Google access to the restricted documents follows at once.
 // Super Admin, HM and Mod are never listed: they have access to every project already.
-export default function ProjectMembers({ projectId, members, people, requests = [], canManage, fullAccess, canAssignCreator = fullAccess, onChanged }: {
+export default function ProjectMembers({ projectId, members, people, requests = [], canManage, fullAccess, onChanged }: {
   projectId: number;
   members: Member[];
   people: Person[];
   requests?: AccessRequest[];
   canManage: boolean;
   fullAccess: boolean;
-  canAssignCreator?: boolean;
   onChanged: (message: string, note?: string, error?: boolean) => void;
 }) {
   const [busy, setBusy] = useState<number | null>(null);
   const [addId, setAddId] = useState('');
   const [addLevel, setAddLevel] = useState<ProjectAccess>('viewer');
   const [requestLevel, setRequestLevel] = useState<Record<number, ProjectAccess>>({});
-  const choices = levelsFor(canAssignCreator);
 
   const save = async (userId: number, access: ProjectAccess | 'remove' | 'decline') => {
     setBusy(userId);
@@ -73,9 +70,8 @@ export default function ProjectMembers({ projectId, members, people, requests = 
       <ul className="divide-y" style={{ borderColor: 'var(--cn-border)' }}>
         {members.length === 0 && <li className="py-3 text-sm" style={{ color: 'var(--cn-text-muted)' }}>No members yet.</li>}
         {members.map(m => {
-          // A Creator doesn't change their own level here, so they can't lock themselves out, and only
-          // Super Admin, HM, Mod and the original creator change another Creator
-          const editable = canManage && (fullAccess || (!m.isMe && (canAssignCreator || m.access !== 'manager')));
+          // The Creator (who created the project) keeps that role: their row is never changed here
+          const editable = canManage && m.access !== 'manager' && (fullAccess || !m.isMe);
           return (
             <li key={m.userId} className="flex flex-wrap items-center gap-3 py-4" style={{ borderColor: 'var(--cn-border)' }}>
               <div className="min-w-0 flex-1" style={{ flexBasis: '12rem' }}>

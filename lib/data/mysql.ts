@@ -313,6 +313,48 @@ export const NOTIFICATION_LOG_SQL = `CREATE TABLE IF NOT EXISTS \`notification_l
   KEY \`idx_created\` (\`created_at\`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`;
 
+// Admin Portal > Login Tracker: one row per login and logout (lib/data/loginLog.ts)
+export const LOGIN_LOG_SQL = `CREATE TABLE IF NOT EXISTS \`login_log\` (
+  \`id\` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  \`created_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  \`event\` ENUM('login','logout') NOT NULL,
+  \`username\` VARCHAR(191) NOT NULL,
+  \`display_name\` VARCHAR(191) NOT NULL DEFAULT '',
+  \`email\` VARCHAR(191) NOT NULL DEFAULT '',
+  \`role\` VARCHAR(64) NOT NULL DEFAULT '',
+  \`ip\` VARCHAR(64) NOT NULL DEFAULT '',
+  \`browser\` VARCHAR(100) NOT NULL DEFAULT '',
+  \`os\` VARCHAR(100) NOT NULL DEFAULT '',
+  \`device\` VARCHAR(20) NOT NULL DEFAULT '',
+  \`user_agent\` VARCHAR(512) NOT NULL DEFAULT '',
+  \`city\` VARCHAR(100) NOT NULL DEFAULT '',
+  \`region\` VARCHAR(100) NOT NULL DEFAULT '',
+  \`country\` VARCHAR(100) NOT NULL DEFAULT '',
+  \`isp\` VARCHAR(191) NOT NULL DEFAULT '',
+  \`latitude\` DECIMAL(9,6) NULL,
+  \`longitude\` DECIMAL(9,6) NULL,
+  \`accuracy_m\` INT UNSIGNED NULL,
+  PRIMARY KEY (\`id\`),
+  KEY \`idx_created\` (\`created_at\`),
+  KEY \`idx_username\` (\`username\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`;
+
+// Login protection: wrong logins per device, for lib/data/loginGuard.ts (kept one day)
+export const LOGIN_ATTEMPTS_SQL = `CREATE TABLE IF NOT EXISTS \`login_attempts\` (
+  \`id\` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  \`created_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  \`device_id\` CHAR(36) NOT NULL,
+  \`fingerprint\` CHAR(64) NOT NULL,
+  \`had_cookie\` TINYINT(1) NOT NULL DEFAULT 1,
+  \`identifier\` VARCHAR(191) NOT NULL DEFAULT '',
+  \`ip\` VARCHAR(64) NOT NULL DEFAULT '',
+  \`user_agent\` VARCHAR(512) NOT NULL DEFAULT '',
+  PRIMARY KEY (\`id\`),
+  KEY \`idx_device\` (\`device_id\`, \`created_at\`),
+  KEY \`idx_fingerprint\` (\`fingerprint\`, \`created_at\`),
+  KEY \`idx_created\` (\`created_at\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`;
+
 // "Submitted To Akash" is now "Submitted To Web Admin": renames the status in rows that still
 // hold the old one. Safe to run any number of times.
 export async function renameSubmittedToAkash(): Promise<string[]> {
@@ -355,6 +397,8 @@ export async function ensureSchema(): Promise<string[]> {
   await pool.query(HELP_ATTACHMENTS_SQL);
   await pool.query(NOTIFICATIONS_SQL);
   await pool.query(NOTIFICATION_LOG_SQL);
+  await pool.query(LOGIN_LOG_SQL);
+  await pool.query(LOGIN_ATTEMPTS_SQL);
   await ensureProjectSchema(pool); // Projects: doc_projects and its tables (lib/projects/schema.ts)
   for (const ds of DATASETS) {
     await pool.query(createTableSql(ds));

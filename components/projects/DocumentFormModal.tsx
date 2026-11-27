@@ -29,6 +29,7 @@ export default function DocumentFormModal({ projectId, templates, members = [], 
   const [key] = useState(newKey);
   const [title, setTitle] = useState('');
   const [visibility, setVisibility] = useState<'invite' | 'public'>('invite');
+  const [linkRole, setLinkRole] = useState<'reader' | 'writer'>('reader');
   const [source, setSource] = useState<Source>(templates.length ? 'template' : 'upload');
   const [templateId, setTemplateId] = useState(templates[0] ? String(templates[0].id) : '');
   const [url, setUrl] = useState('');
@@ -60,6 +61,7 @@ export default function DocumentFormModal({ projectId, templates, members = [], 
     form.set('creationKey', key);
     form.set('title', title);
     form.set('visibility', visibility);
+    if (visibility === 'public') form.set('linkRole', linkRole);
     form.set('source', source);
     if (source === 'template') form.set('templateId', templateId);
     if (source === 'url') form.set('url', url);
@@ -100,7 +102,7 @@ export default function DocumentFormModal({ projectId, templates, members = [], 
 
         <Field label="Who can open it">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {([['invite', 'Project members only', 'Restricted. You choose each member\'s access next.'], ['public', 'Anyone with the link', 'Viewable by anyone who has the link.']] as const).map(([v, label, hint]) => (
+            {([['invite', 'Project members only', 'Restricted. You choose each member\'s access next.'], ['public', 'Anyone with the link', 'Anyone who has the link can view or edit it, as you choose.']] as const).map(([v, label, hint]) => (
               <label key={v} className="flex items-start gap-2 rounded-xl border p-4 cursor-pointer text-sm"
                 style={{ ...inputStyle, borderColor: visibility === v ? 'var(--cn-accent)' : 'var(--cn-border)' }}>
                 <input type="radio" name="visibility" checked={visibility === v} onChange={() => setVisibility(v)} className="mt-0.5 accent-[#FE4A23]" />
@@ -112,6 +114,17 @@ export default function DocumentFormModal({ projectId, templates, members = [], 
             ))}
           </div>
         </Field>
+
+        {visibility === 'public' && (
+          <Field label="People with the link can" htmlFor="df-link-role"
+            hint={source === 'url' ? 'A pasted link is saved as it is, so its own Google sharing applies.' : linkRole === 'reader' ? 'You and Super Admin, HM and Mod can still edit it.' : undefined}>
+            <select id="df-link-role" value={linkRole} onChange={e => setLinkRole(e.target.value as 'reader' | 'writer')} disabled={source === 'url'}
+              className={`${inputClass} cursor-pointer`} style={inputStyle}>
+              <option value="reader">View (Viewer)</option>
+              <option value="writer">Edit (Editor)</option>
+            </select>
+          </Field>
+        )}
 
         <div role="tablist" aria-label="Document source" className="flex flex-wrap gap-2">
           {SOURCES.map(s => (

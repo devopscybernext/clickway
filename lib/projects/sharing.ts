@@ -11,7 +11,9 @@ import { defaultDocLevel, type DocLevel, type ProjectAccess } from './rules';
 //                                                    one their project level gives (Member = No access,
 //                                                    Viewer = viewer, Editor and Creator = editor)
 // No access means no Google access. Anyone else who holds a grant from an earlier state (removed from
-// the project, level lowered, account removed, email changed) has it taken back. The ledger (doc_document_access) records the
+// the project, level lowered, account removed, email changed) has it taken back.
+// "Anyone with the link" documents whose link only views: the person who added the document, the
+// people with full access and the always editors are made Google editors, so they can still edit it. The ledger (doc_document_access) records the
 // intent before Google is called, so a lost answer can be finished or undone by running this again.
 // On top of that, the "always editors" (Admin Portal → Projects) get Drive editor on every restricted
 // document, through their own ledger (doc_document_email_access). Their address is then left out of
@@ -24,14 +26,18 @@ export async function loadAlwaysEditors(c: Pick<Conn, 'query'>): Promise<Set<str
 }
 
 // A person's level on one document. "Anyone with the link" documents open for everyone in the project
-// ('link'); for "Project members only" documents see the list above.
+// ('link'); for "Project members only" documents see the list above. People outside the project can be
+// given Viewer or Editor on one "Project members only" document (guests: a doc_document_permissions
+// row without project membership); that opens only that document, not the project.
 export type EffectiveLevel = DocLevel | 'link';
 export function effectiveLevel(
   doc: Record<string, unknown>,   // a doc_documents row: needs visibility and created_by
   person: { id: number; full: boolean; access: ProjectAccess | null },
   override: DocLevel | undefined,
 ): EffectiveLevel | null {
-  if (!person.full && !person.access) return null;           // not in the project
+  if (!person.full && !person.access) {                       // not in the project: a guest on this document?
+    return doc.visibility === 'invite' && override && override !== 'none' ? override : null;
+  }
   if (doc.visibility !== 'invite') return 'link';
   if (person.full || Number(doc.created_by) === person.id) return 'editor';
   return override ?? defaultDocLevel(person.access!);
@@ -45,6 +51,11 @@ export async function loadDocPermissions(c: Pick<Conn, 'query'>, documentIds: nu
     documentIds
   );
   return new Map(rows.map(r => [`${r.document_id}:${r.user_id}`, r.level as DocLevel]));
+}
+
+// "Anyone with the link" documents: who edits even when the link only views
+export function canAlwaysEdit(doc: Record<string, unknown>, userId: number, full: boolean, access: ProjectAccess | null): boolean {
+  return full || (access !== null && Number(doc.created_by) === userId);
 }
 
 export interface SharingResult { shared: number; revoked: number; failed: number; noEmail: string[] }
@@ -63,8 +74,8 @@ export async function syncDocumentSharing(
 
   // Who should hold access now
   const [docs] = await c.query<Row[]>(
-    `SELECT d.id, d.project_id, d.drive_file_id, d.visibility, d.created_by FROM doc_documents d
-      WHERE d.visibility = 'invite' AND d.drive_file_id IS NOT NULL ${where.length ? 'AND ' + where.join(' AND ') : ''}`,
+    `SELECT d.id, d.project_id, d.drive_file_id, d.visibility, d.link_role, d.created_by FROM doc_documents d
+      WHERE (d.visibility = 'invite' OR d.link_role = 'reader') AND d.drive_file_id IS NOT NULL ${where.length ? 'AND ' + where.join(' AND ') : ''}`,
     values
   );
   const always = await loadAlwaysEditors(c);
@@ -80,7 +91,10 @@ export async function syncDocumentSharing(
     const people = (await loadPeople(c)).filter(p => filter.userId === undefined || p.id === filter.userId);
     for (const d of docs) {
       for (const p of people) {
-        const lvl = effectiveLevel(d, { id: p.id, full: p.policy.full, access: level.get(`${d.project_id}:${p.id}`) ?? null }, overrides.get(`${d.id}:${p.id}`));
+        const access = level.get(`${d.project_id}:${p.id}`) ?? null;
+        const lvl = d.visibility === 'invite'
+          ? effectiveLevel(d, { id: p.id, full: p.policy.full, access }, overrides.get(`${d.id}:${p.id}`))
+          : canAlwaysEdit(d, p.id, p.policy.full, access) ? 'editor' : null;
         if (!lvl || lvl === 'none' || lvl === 'link') continue;
         if (!p.email) {
           if (!result.noEmail.includes(p.name)) result.noEmail.push(p.name);
@@ -184,12 +198,15 @@ export async function syncDocumentSharing(
 // Opening a document: checks the person may see it, makes sure their Google account has the right
 // Drive role on a restricted document (when their account has an email), and returns the document's link.
 export async function openDocument(c: Conn, actor: Actor, documentId: number): Promise<string> {
-  const [rows] = await c.query<Row[]>('SELECT id, project_id, document_url, drive_file_id, visibility, created_by FROM doc_documents WHERE id = ?', [documentId]);
+  const [rows] = await c.query<Row[]>('SELECT id, project_id, document_url, drive_file_id, visibility, link_role, created_by FROM doc_documents WHERE id = ?', [documentId]);
   const doc = rows[0];
   if (!doc) throw new ProjectError('This document no longer exists.', 404);
   const access = await projectAccess(actor, Number(doc.project_id), c);
-  if (!access) throw new ProjectError('You do not have access to this document.', 403);
   const overrides = await loadDocPermissions(c, [documentId]);
+  // Outside the project: only a guest on this document may open it
+  if (!access && !effectiveLevel(doc, { id: actor.id, full: false, access: null }, overrides.get(`${documentId}:${actor.id}`))) {
+    throw new ProjectError('You do not have access to this document.', 403);
+  }
   const lvl = effectiveLevel(doc, { id: actor.id, full: actor.policy.full, access }, overrides.get(`${documentId}:${actor.id}`));
   const isAlways = !!actor.email && (await loadAlwaysEditors(c)).has(actor.email);
   if ((!lvl || lvl === 'none') && !isAlways) {
@@ -199,7 +216,10 @@ export async function openDocument(c: Conn, actor: Actor, documentId: number): P
   // An account without an email address (often Super Admin or HM) gets no Google access from here: the
   // document simply opens, and Google lets them in if the Google account they are signed in to already
   // has access (for example the workspace account that owns the files, or an always editor).
-  if (doc.visibility === 'invite' && actor.email) {
+  // On a view-only link document, the person who added it and full access get a Google editor grant
+  const linkEditor = doc.visibility !== 'invite' && doc.link_role === 'reader' && !!doc.drive_file_id
+    && (isAlways || canAlwaysEdit(doc, actor.id, actor.policy.full, access));
+  if ((doc.visibility === 'invite' || linkEditor) && actor.email) {
     if (!doc.drive_file_id) throw new ProjectError('This document is unavailable.');
     if (isAlways) {
       // An always editor: make sure they are a Drive editor, through their own ledger
@@ -213,7 +233,7 @@ export async function openDocument(c: Conn, actor: Actor, documentId: number): P
       if (!['https:', 'http:'].includes(target.protocol)) throw new ProjectError('Invalid document link.');
       return target.href;
     }
-    const role: DriveRole = lvl === 'editor' ? 'writer' : 'reader';
+    const role: DriveRole = linkEditor || lvl === 'editor' ? 'writer' : 'reader';
     const [state] = await c.query<Row[]>('SELECT status, drive_role, email FROM doc_document_access WHERE document_id = ? AND user_id = ?', [documentId, actor.id]);
     const s = state[0];
     if (!(s && s.status === 'granted' && s.drive_role === role && s.email === actor.email)) {

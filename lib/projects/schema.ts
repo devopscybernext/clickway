@@ -68,6 +68,7 @@ export const PROJECT_TABLES_SQL: string[] = [
   \`mime_type\` VARCHAR(100) NULL,
   \`source_type\` ENUM('template','upload','url') NOT NULL,
   \`visibility\` ENUM('public','invite') NOT NULL DEFAULT 'invite',
+  \`link_role\` ENUM('reader','writer') NOT NULL DEFAULT 'reader',
   \`creation_key\` CHAR(36) NOT NULL,
   \`created_by\` INT UNSIGNED NULL,
   \`created_by_name\` VARCHAR(191) NULL,
@@ -183,6 +184,22 @@ export async function ensureProjectSchema(pool: mysql.Pool): Promise<void> {
   if (levels[0] && !String(levels[0].COLUMN_TYPE).includes("'member'")) {
     await pool.query("ALTER TABLE `doc_project_members` MODIFY `access_level` ENUM('member','viewer','editor','manager') NOT NULL DEFAULT 'viewer'");
   }
+  // Link access for "Anyone with the link" documents (added later): older documents stay view-only.
+  const [linkRole] = await pool.query<mysql.RowDataPacket[]>(
+    "SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'doc_documents' AND COLUMN_NAME = 'link_role'"
+  );
+  if (!linkRole.length) {
+    await pool.query("ALTER TABLE `doc_documents` ADD COLUMN `link_role` ENUM('reader','writer') NOT NULL DEFAULT 'reader' AFTER `visibility`");
+  }
+  // One Creator per project, the person who created it: anyone else who was made a Creator becomes an Editor.
+  await pool.query(
+    `UPDATE doc_project_members m JOIN doc_projects p ON p.id = m.project_id
+        SET m.access_level = 'editor'
+      WHERE m.access_level = 'manager' AND (p.created_by IS NULL OR m.user_id <> p.created_by)`
+  );
+  // Completed projects: the Completed status and the Completed list are the same thing.
+  await pool.query("UPDATE doc_projects SET status = 'completed' WHERE is_archived = 1 AND status <> 'completed'");
+  await pool.query("UPDATE doc_projects SET is_archived = 1 WHERE status = 'completed' AND is_archived = 0");
   if (!existing.length) {
     await pool.query('INSERT IGNORE INTO doc_always_editors (email, added_by) VALUES ?', [FIRST_ALWAYS_EDITORS.map(e => [e, 'setup'])]);
   }

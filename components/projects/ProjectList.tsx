@@ -17,7 +17,7 @@ function optionsOf(projects: ProjectSummary[], pick: (p: ProjectSummary) => stri
   return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]));
 }
 
-// The project cards, with search, status, platform, client, creator and archive filters. Projects the person pinned come first,
+// The project cards, with search, status, platform, client and creator filters, and Active / Completed lists. Projects the person pinned come first,
 // in their own "Pinned" group.
 export default function ProjectList({ projects, loading, canCreate, onOpen, onCreate, onTogglePin, onRequestAccess, title, subtitle, emptyText }: {
   projects: ProjectSummary[];
@@ -132,21 +132,23 @@ export default function ProjectList({ projects, loading, canCreate, onOpen, onCr
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search projects, clients, websites…" aria-label="Search projects"
             className={`${inputClass} pl-9`} style={inputStyle} />
         </div>
-        <div className={styles.archive} style={{ borderColor: 'var(--cn-border)' }} role="group" aria-label="Active or archived">
+        <div className={styles.archive} style={{ borderColor: 'var(--cn-border)' }} role="group" aria-label="Active or completed">
           {[false, true].map(a => (
-            <button key={String(a)} onClick={() => setArchived(a)} aria-pressed={archived === a}
+            <button key={String(a)} onClick={() => { setArchived(a); setStatus(''); }} aria-pressed={archived === a}
               
               style={archived === a ? { background: 'var(--cn-accent)', color: '#fff' } : { background: 'var(--cn-bg-input)', color: 'var(--cn-text-muted)' }}>
-              {a ? `Archived${archivedCount ? ` (${archivedCount})` : ''}` : 'Active'}
+              {a ? `Completed${archivedCount ? ` (${archivedCount})` : ''}` : 'Active'}
             </button>
           ))}
         </div>
         </div>
         <div className={styles.filters}>
-        <label className={styles.field}><span>Status</span><select value={status} onChange={e => setStatus(e.target.value)} aria-label="Status" className={inputClass} style={inputStyle}>
-          <option value="">All statuses</option>
-          {PROJECT_STATUSES.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
-        </select></label>
+        {!archived && (
+          <label className={styles.field}><span>Status</span><select value={status} onChange={e => setStatus(e.target.value)} aria-label="Status" className={inputClass} style={inputStyle}>
+            <option value="">All statuses</option>
+            {PROJECT_STATUSES.filter(s => s !== 'completed').map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+          </select></label>
+        )}
         {platforms.length > 0 && (
           <label className={styles.field}><span>Platform</span><select value={platform} onChange={e => setPlatform(e.target.value)} aria-label="Platform" className={inputClass} style={inputStyle}>
             <option value="">All platforms</option>
@@ -168,7 +170,7 @@ export default function ProjectList({ projects, loading, canCreate, onOpen, onCr
         </div>
         <div className={styles.footer}>
       <p className={styles.count} style={{ color: 'var(--cn-text-muted)' }} aria-live="polite">
-        {loading ? 'Loading projects…' : `${shown.length} ${archived ? 'archived' : 'active'} project${shown.length === 1 ? '' : 's'}`}
+        {loading ? 'Loading projects…' : `${shown.length} ${archived ? 'completed' : 'active'} project${shown.length === 1 ? '' : 's'}`}
       </p>
         {filtering && (
           <button type="button" onClick={clearFilters} className={styles.clear} style={{ color: 'var(--cn-accent)' }}>
