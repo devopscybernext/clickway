@@ -5,7 +5,7 @@ import {
   SHARING_LOCK, text, positiveId, webUrl, websiteUrl, creationKey,
 } from './store';
 import {
-  canManageProject, canAddDocuments, defaultDocLevel, ACCESS_LABELS,
+  canManageProject, canAddDocuments, defaultDocLevel, ACCESS_LABELS, DOC_LEVEL_LABELS,
   DOC_LEVELS, PROJECT_STATUSES, type DocLevel, type ProjectAccess, type ProjectStatus,
 } from './rules';
 import {
@@ -224,6 +224,8 @@ export async function getProject(actor: Actor, projectId: number) {
       createdBy: p.created_by_name ?? '', createdAt: iso(p.created_at), updatedAt: iso(p.updated_at),
     },
     access, canManage: manage, canAdd: canAddDocuments(access), fullAccess: full,
+    // Making people Creators: full access, or the person who created the project
+    canAssignCreator: manage && (full || Number(p.created_by) === actor.id),
     members: members.filter(m => !policyOf.get(Number(m.user_id))?.full).map(m => ({
       userId: Number(m.user_id), access: m.access_level as ProjectAccess,
       name: String(m.display_name || m.username || '(removed account)'), email: m.email ?? '', role: m.role ?? '',
@@ -238,7 +240,8 @@ export async function getProject(actor: Actor, projectId: number) {
         pinned: Number(d.pinned) === 1,
         myLevel: level ?? 'none', canOpen: !!level && level !== 'none',
         canDelete: full || Number(d.created_by) === actor.id,
-        canSetAccess: d.visibility === 'invite' && (manage || Number(d.created_by) === actor.id),
+        // A Creator whose own access to this document is No access can't change who opens it
+        canSetAccess: d.visibility === 'invite' && level === 'editor' && (manage || Number(d.created_by) === actor.id),
       };
     }),
     people: people.map(u => ({ id: u.id, name: u.name, email: u.email, role: u.role })),
@@ -281,14 +284,25 @@ export async function saveMember(actor: Actor, projectId: number, body: Record<s
     const target = (await loadPeople(c)).find(x => x.id === userId);
     if (!target && access !== 'remove' && access !== 'decline') throw new ProjectError('That account no longer exists.');
     if (target?.policy.full) throw new ProjectError('This person has full Projects access and already sees every project.');
+    // Only Super Admin, HM, Mod and the person who created the project make people Creators, or change
+    // or remove another Creator
+    const [owner] = await c.query<Row[]>('SELECT created_by FROM doc_projects WHERE id = ?', [projectId]);
+    if (!actor.policy.full && Number(owner[0]?.created_by) !== actor.id) {
+      if (access === 'manager') throw new ProjectError('Only Super Admin, HM, Mod and the person who created this project can make someone a Creator.', 403);
+      const [current] = await c.query<Row[]>('SELECT access_level FROM doc_project_members WHERE project_id = ? AND user_id = ?', [projectId, userId]);
+      if (current[0]?.access_level === 'manager' && userId !== actor.id) {
+        throw new ProjectError("Only Super Admin, HM, Mod and the person who created this project can change another Creator's access.", 403);
+      }
+    }
     if (access === 'decline') {
       // An access request turned down: it goes away, and the person can ask again
       await c.query('DELETE FROM doc_access_requests WHERE project_id = ? AND user_id = ?', [projectId, userId]);
       await logChange(c, actor, 'doc_project_members', projectId, 'Access request declined', String(userId), null);
       return { message: 'Request declined.' };
     }
+    const [before] = await c.query<Row[]>('SELECT access_level FROM doc_project_members WHERE project_id = ? AND user_id = ?', [projectId, userId]);
     const [cleared] = await c.query<mysql.ResultSetHeader>('DELETE FROM doc_access_requests WHERE project_id = ? AND user_id = ?', [projectId, userId]);
-    const approved = access !== 'remove' && cleared.affectedRows > 0;
+    const requested = access !== 'remove' && cleared.affectedRows > 0;
     if (access === 'remove') {
       await c.query('DELETE FROM doc_project_members WHERE project_id = ? AND user_id = ?', [projectId, userId]);
       await c.query('DELETE dp FROM doc_document_permissions dp JOIN doc_documents d ON d.id = dp.document_id WHERE d.project_id = ? AND dp.user_id = ?', [projectId, userId]);
@@ -299,7 +313,9 @@ export async function saveMember(actor: Actor, projectId: number, body: Record<s
       );
     }
     await logChange(c, actor, 'doc_project_members', projectId, 'Member access', String(userId), access);
-    if (approved && target) await notifyApproved(c, actor, projectId, target, access as ProjectAccess);
+    if (target) {
+      await notifyMemberChange(c, actor, projectId, target, (before[0]?.access_level as ProjectAccess | undefined) ?? null, access as ProjectAccess | 'remove', requested);
+    }
     const sharing = await syncDocumentSharing(c, { projectId, userId });
     return { message: access === 'remove' ? 'Member removed.' : 'Project access updated.', note: sharingNote(sharing) };
   }));
@@ -443,8 +459,9 @@ export async function addDocument(actor: Actor, projectId: number, input: NewDoc
 
 // ─── Document access ─────────────────────────────────────────────────────────
 
-// Who may set people's levels on a "Project members only" document: full access, the project's
-// Creators, and the person who added the document.
+// Who may set people's levels on a "Project members only" document: full access, the person who added
+// the document, and the project's Creators who can edit it themselves (a Creator set to No access or
+// Viewer on this document can't change it).
 async function requireDocumentAccessManager(actor: Actor, documentId: number, c: Conn) {
   const [rows] = await c.query<Row[]>('SELECT id, project_id, title, visibility, created_by FROM doc_documents WHERE id = ?', [documentId]);
   const doc = rows[0];
@@ -454,6 +471,8 @@ async function requireDocumentAccessManager(actor: Actor, documentId: number, c:
     throw new ProjectError("Only administrators, the project's Creators and the person who added this document can change who can open it.", 403);
   }
   if (doc.visibility !== 'invite') throw new ProjectError('Anyone in the project can open this document (Anyone with the link).');
+  const own = effectiveLevel(doc, { id: actor.id, full: actor.policy.full, access }, (await loadDocPermissions(c, [documentId])).get(`${documentId}:${actor.id}`));
+  if (own !== 'editor') throw new ProjectError("You don't have edit access to this document, so you can't change who can open it.", 403);
   return doc;
 }
 
@@ -490,8 +509,20 @@ export async function saveDocumentAccess(actor: Actor, documentId: number, body:
   const wanted = parsePermissions(body.permissions);
   return withConnection(c => withLock(c, SHARING_LOCK, async () => {
     const doc = await requireDocumentAccessManager(actor, documentId, c);
+    const before = await documentLevels(c, doc);
     await storePermissions(c, actor, Number(doc.project_id), documentId, Number(doc.created_by), wanted);
     await logChange(c, actor, 'doc_documents', documentId, 'Document access', null, JSON.stringify([...wanted]));
+    // Each person whose level on this document changed is told
+    const after = await documentLevels(c, doc);
+    const changedFor: Notified[] = [];
+    for (const [id, now] of after) {
+      const was = before.get(id)?.level;
+      if (!was || was === now.level) continue;
+      changedFor.push({ id, name: now.name, username: now.username,
+        text: `${actor.name} changed your access to "${doc.title}" from ${DOC_LEVEL_LABELS[was]} to ${DOC_LEVEL_LABELS[now.level]}` });
+    }
+    await notifyPeople(c, actor, 'document-access', 'Document access changed', Number(doc.project_id), await projectName(c, Number(doc.project_id)),
+      changedFor, String(doc.title));
     const sharing = await syncDocumentSharing(c, { documentId }, { recheck: true });
     return { message: 'Document access updated.', note: sharingNote(sharing) };
   }));
@@ -499,25 +530,67 @@ export async function saveDocumentAccess(actor: Actor, documentId: number, body:
 
 // ─── Access requests ─────────────────────────────────────────────────────────
 
-// Adding someone who had asked for access tells them in the notification bell. A failed notification
-// never undoes the add.
-async function notifyApproved(c: Conn, actor: Actor, projectId: number, person: { name: string; username: string }, level: ProjectAccess) {
-  if (!person.username) return;
+// Projects notifications in the bell (and the Admin Portal log): told to the people they are about,
+// never to the person who made the change. A failed notification never undoes the change.
+type Notified = { id: number; name: string; username: string; text: string };
+async function notifyPeople(c: Conn, actor: Actor, type: string, title: string, projectId: number, projectName: string, people: Notified[], detail: string, link = true) {
+  const who = people.filter(p => p.username && p.id !== actor.id);
+  if (!who.length) return;
   try {
-    const [rows] = await c.query<Row[]>('SELECT name FROM doc_projects WHERE id = ?', [projectId]);
-    const projectName = String(rows[0]?.name ?? 'the project');
-    const body = `${actor.name} added you to ${projectName} as ${ACCESS_LABELS[level]}`;
     await c.query(
       'INSERT INTO notification_log (type, team, project, task, assignee, detail, actor, recipients) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      ['access-granted', 'projects', projectName.slice(0, 255), '', person.name.slice(0, 191), ACCESS_LABELS[level], actor.name.slice(0, 191), person.name || person.username]
+      [type, 'projects', projectName.slice(0, 255), '', who.map(p => p.name || p.username).join(', ').slice(0, 191), detail.slice(0, 100), actor.name.slice(0, 191),
+        who.map(p => p.name || p.username).join(', ')]
     );
     await c.query(
-      'INSERT INTO notifications (recipient, type, team, title, body, task_ref, actor) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [person.username, 'access-granted', 'projects', 'Access granted', body.slice(0, 500), `project::${projectId}`, actor.name.slice(0, 191)]
+      'INSERT INTO notifications (recipient, type, team, title, body, task_ref, actor) VALUES ?',
+      [who.map(p => [p.username, type, 'projects', title, p.text.slice(0, 500), link ? `project::${projectId}` : 'project::0', actor.name.slice(0, 191)])]
     );
   } catch (error) {
-    console.error('[projects] access granted notification', error);
+    console.error(`[projects] ${type} notification`, error);
   }
+}
+
+async function projectName(c: Conn, projectId: number): Promise<string> {
+  const [rows] = await c.query<Row[]>('SELECT name FROM doc_projects WHERE id = ?', [projectId]);
+  return String(rows[0]?.name ?? 'a project');
+}
+
+// A person's project level changed: added (after asking for access, or directly), changed, or removed
+async function notifyMemberChange(c: Conn, actor: Actor, projectId: number, person: { id: number; name: string; username: string },
+  before: ProjectAccess | null, after: ProjectAccess | 'remove', requested: boolean) {
+  if (after !== 'remove' && before === after) return;
+  if (after === 'remove' && !before) return;
+  const name = await projectName(c, projectId);
+  if (after === 'remove') {
+    await notifyPeople(c, actor, 'project-access', 'Removed from project', projectId, name,
+      [{ ...person, text: `${actor.name} removed you from ${name}` }], 'Removed', false);
+  } else if (!before) {
+    await notifyPeople(c, actor, requested ? 'access-granted' : 'project-access', requested ? 'Access granted' : 'Added to project', projectId, name,
+      [{ ...person, text: `${actor.name} added you to ${name} as ${ACCESS_LABELS[after]}` }], ACCESS_LABELS[after]);
+  } else {
+    await notifyPeople(c, actor, 'project-access', 'Project access changed', projectId, name,
+      [{ ...person, text: `${actor.name} changed your access to ${name} from ${ACCESS_LABELS[before]} to ${ACCESS_LABELS[after]}` }],
+      `${ACCESS_LABELS[before]} → ${ACCESS_LABELS[after]}`);
+  }
+}
+
+// Everyone's level on one "Project members only" document (full-access people and its creator left out)
+async function documentLevels(c: Conn, doc: Row): Promise<Map<number, { level: DocLevel; name: string; username: string }>> {
+  const [members] = await c.query<Row[]>(
+    'SELECT m.user_id, m.access_level, u.username, u.display_name FROM doc_project_members m JOIN users u ON u.id = m.user_id WHERE m.project_id = ?',
+    [doc.project_id]
+  );
+  const fullIds = new Set((await loadPeople(c)).filter(x => x.policy.full).map(x => x.id));
+  const overrides = await loadDocPermissions(c, [Number(doc.id)]);
+  const out = new Map<number, { level: DocLevel; name: string; username: string }>();
+  for (const m of members) {
+    const id = Number(m.user_id);
+    if (fullIds.has(id) || id === Number(doc.created_by)) continue;
+    const level = overrides.get(`${doc.id}:${id}`) ?? defaultDocLevel(m.access_level as ProjectAccess);
+    out.set(id, { level, name: String(m.display_name || m.username), username: String(m.username ?? '') });
+  }
+  return out;
 }
 
 // Someone outside a project asks to join it (All Projects → Request Access). The project's creator is
@@ -621,7 +694,7 @@ export async function listDocuments(actor: Actor) {
         pinned: Number(d.pinned) === 1,
         myLevel: level ?? 'none', canOpen: !!level && level !== 'none',
         canDelete: full || Number(d.created_by) === actor.id,
-        canSetAccess: d.visibility === 'invite' && (canManageProject(full, access) || Number(d.created_by) === actor.id),
+        canSetAccess: d.visibility === 'invite' && level === 'editor' && (canManageProject(full, access) || Number(d.created_by) === actor.id),
       };
     }),
   };

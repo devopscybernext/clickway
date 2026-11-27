@@ -11,24 +11,29 @@ export interface Person { id: number; name: string; email: string; role: string 
 export interface AccessRequest { userId: number; name: string; email: string; role: string; requestedAt: string | null }
 
 const LEVELS = PROJECT_LEVELS;
+// Only Super Admin, HM, Mod and the project's original creator make people Creators; other Creators can
+// give the other levels
+const levelsFor = (canAssignCreator: boolean) => (canAssignCreator ? LEVELS : LEVELS.filter(l => l !== 'manager'));
 const LEVEL_HINT = ACCESS_HINTS;
 
 // The project's members. Creators (and Super Admin / HM / Mod) add people, change their level or
 // remove them, and answer access requests; Google access to the restricted documents follows at once.
 // Super Admin, HM and Mod are never listed: they have access to every project already.
-export default function ProjectMembers({ projectId, members, people, requests = [], canManage, fullAccess, onChanged }: {
+export default function ProjectMembers({ projectId, members, people, requests = [], canManage, fullAccess, canAssignCreator = fullAccess, onChanged }: {
   projectId: number;
   members: Member[];
   people: Person[];
   requests?: AccessRequest[];
   canManage: boolean;
   fullAccess: boolean;
+  canAssignCreator?: boolean;
   onChanged: (message: string, note?: string, error?: boolean) => void;
 }) {
   const [busy, setBusy] = useState<number | null>(null);
   const [addId, setAddId] = useState('');
   const [addLevel, setAddLevel] = useState<ProjectAccess>('viewer');
   const [requestLevel, setRequestLevel] = useState<Record<number, ProjectAccess>>({});
+  const choices = levelsFor(canAssignCreator);
 
   const save = async (userId: number, access: ProjectAccess | 'remove' | 'decline') => {
     setBusy(userId);
@@ -55,7 +60,7 @@ export default function ProjectMembers({ projectId, members, people, requests = 
                   <select value={requestLevel[q.userId] ?? 'member'} disabled={busy !== null} aria-label={`Level for ${q.name}`}
                     onChange={e => setRequestLevel(v => ({ ...v, [q.userId]: e.target.value as ProjectAccess }))}
                     className="h-9 rounded-lg border px-3 text-xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#FE4A23]/30" style={{ ...inputStyle, width: '8rem' }}>
-                    {LEVELS.map(l => <option key={l} value={l}>{ACCESS_LABELS[l]}</option>)}
+                    {choices.map(l => <option key={l} value={l}>{ACCESS_LABELS[l]}</option>)}
                   </select>
                   <Button small primary disabled={busy !== null} onClick={() => void save(q.userId, requestLevel[q.userId] ?? 'member')}>Add</Button>
                   <Button small disabled={busy !== null} onClick={() => void save(q.userId, 'decline')}>Decline</Button>
@@ -68,8 +73,9 @@ export default function ProjectMembers({ projectId, members, people, requests = 
       <ul className="divide-y" style={{ borderColor: 'var(--cn-border)' }}>
         {members.length === 0 && <li className="py-3 text-sm" style={{ color: 'var(--cn-text-muted)' }}>No members yet.</li>}
         {members.map(m => {
-          // A Creator doesn't change their own level here, so they can't lock themselves out
-          const editable = canManage && (fullAccess || !m.isMe);
+          // A Creator doesn't change their own level here, so they can't lock themselves out, and only
+          // Super Admin, HM, Mod and the original creator change another Creator
+          const editable = canManage && (fullAccess || (!m.isMe && (canAssignCreator || m.access !== 'manager')));
           return (
             <li key={m.userId} className="flex flex-wrap items-center gap-3 py-4" style={{ borderColor: 'var(--cn-border)' }}>
               <div className="min-w-0 flex-1" style={{ flexBasis: '12rem' }}>
@@ -85,7 +91,7 @@ export default function ProjectMembers({ projectId, members, people, requests = 
                   <select value={m.access} disabled={busy !== null || m.removedAccount} aria-label={`Access for ${m.name}`}
                     onChange={e => void save(m.userId, e.target.value as ProjectAccess)}
                     className="h-9 rounded-lg border px-3 text-xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#FE4A23]/30" style={{ ...inputStyle, width: '8rem' }}>
-                    {LEVELS.map(l => <option key={l} value={l}>{ACCESS_LABELS[l]}</option>)}
+                    {choices.map(l => <option key={l} value={l}>{ACCESS_LABELS[l]}</option>)}
                   </select>
                   <button onClick={() => { if (confirm(`Remove ${m.name} from this project? Their Google access to its restricted documents is removed too.`)) void save(m.userId, 'remove'); }}
                     disabled={busy !== null} aria-label={`Remove ${m.name}`} title="Remove from project"
@@ -113,7 +119,7 @@ export default function ProjectMembers({ projectId, members, people, requests = 
                 {people.map(p => <option key={p.id} value={p.id}>{p.name}{p.email ? ` · ${p.email}` : ' · no email'}</option>)}
               </select>
               <select value={addLevel} onChange={e => setAddLevel(e.target.value as ProjectAccess)} aria-label="Access" className={`${inputClass} w-auto cursor-pointer`} style={inputStyle}>
-                {LEVELS.map(l => <option key={l} value={l}>{ACCESS_LABELS[l]}</option>)}
+                {choices.map(l => <option key={l} value={l}>{ACCESS_LABELS[l]}</option>)}
               </select>
               <Button primary disabled={!addId || busy !== null} onClick={() => void save(Number(addId), addLevel)}>Add</Button>
             </div>

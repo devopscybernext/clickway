@@ -11,7 +11,7 @@ import { ACCESS_LABELS, STATUS_LABELS, type DocLevel, type ProjectAccess, type P
 
 interface Detail {
   project: { id: number; name: string; client: string; platform: string; website: string; description: string; status: ProjectStatus; archived: boolean; driveFolderUrl: string; createdBy: string; createdAt: string | null };
-  access: ProjectAccess; canManage: boolean; canAdd: boolean; fullAccess: boolean;
+  access: ProjectAccess; canManage: boolean; canAdd: boolean; fullAccess: boolean; canAssignCreator: boolean;
   members: Member[];
   documents: { id: number; title: string; source: string; visibility: 'invite' | 'public'; mimeType: string; template: string; createdBy: string; createdAt: string | null; pendingSharing: boolean; canDelete: boolean; pinned: boolean; myLevel: DocLevel | 'link'; canOpen: boolean; canSetAccess: boolean }[];
   people: Person[];
@@ -195,7 +195,7 @@ export default function ProjectDetail({ projectId, onBack, onChanged, openMember
               <p className="mt-1 text-sm" style={{ color: 'var(--cn-text-muted)' }}>{data.members.length} member{data.members.length === 1 ? '' : 's'}{data.fullAccess ? ' · Super Admin, HM and Mod can open every project.' : ''}</p>
             </div>
             {flash}
-            <ProjectMembers projectId={projectId} members={data.members} people={data.people} requests={data.requests} canManage={data.canManage} fullAccess={data.fullAccess} onChanged={changed} />
+            <ProjectMembers projectId={projectId} members={data.members} people={data.people} requests={data.requests} canManage={data.canManage} fullAccess={data.fullAccess} canAssignCreator={data.canAssignCreator} onChanged={changed} />
           </div>
         </Modal>
       )}

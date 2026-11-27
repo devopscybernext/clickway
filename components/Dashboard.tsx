@@ -693,12 +693,12 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [dashNow, setDashNow] = useState(() => Date.now());
   const dashPeriodInfo = periodInfo(navTeam === 'marketing' ? 'today' : dashPeriod, dashNow, navTeam === 'marketing' ? 'mdy' : 'dmy');
   const [focusTask, setFocusTask] = useState<string | null>(null);
-  const [focusField, setFocusField] = useState<Exclude<NotificationItem['type'], 'access-request' | 'access-granted'> | undefined>(undefined); // task notifications only
+  const [focusField, setFocusField] = useState<Exclude<NotificationItem['type'], 'access-request' | 'access-granted' | 'project-access' | 'document-access'> | undefined>(undefined); // task notifications only
   // changes on every click, so clicking the same notification again shows its task again
   const [focusClicks, setFocusClicks] = useState(0);
   const openNotification = (n: NotificationItem) => {
-    // Access requests and approvals open the project (Documents → My Projects)
-    if (n.type === 'access-request' || n.type === 'access-granted') {
+    // Projects notifications open the project (Documents → My Projects); removals just open My Projects
+    if (n.team === 'projects') {
       const projectId = Number(n.taskRef.split('::')[1]);
       handleSheetChange({ id: '21', subTab: 'projects' });
       if (projectId > 0) setProjectsFocus(f => ({ projectId, n: (f?.n ?? 0) + 1, members: n.type === 'access-request' }));
@@ -708,7 +708,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     const toAssigned = n.type === 'task-added' && opensTasksAssignedForNewTask(user.role);
     handleSheetChange({ id: toAssigned ? '1' : '9', team: n.team as Team });
     setFocusTask(n.taskRef);
-    setFocusField(n.type as Exclude<NotificationItem['type'], 'access-request' | 'access-granted'>);
+    setFocusField(n.type as Exclude<NotificationItem['type'], 'access-request' | 'access-granted' | 'project-access' | 'document-access'>);
     setFocusClicks(c => c + 1);
     void fetchAll();
     setEntryRefreshKey(k => k + 1);

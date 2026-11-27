@@ -1,7 +1,9 @@
 // Notifications (the bell in the top bar, and the log in the Admin Portal).
 // Shared by the server (lib/data/notifications.ts) and the screens.
 
-export type NotificationType = 'task-added' | 'pm-status' | 'task-status' | 'access-request' | 'access-granted';
+export type NotificationType = 'task-added' | 'pm-status' | 'task-status' | 'access-request' | 'access-granted' | 'project-access' | 'document-access';
+// The Projects ones (they open the project instead of a task)
+export const PROJECT_NOTIFICATION_TYPES: NotificationType[] = ['access-request', 'access-granted', 'project-access', 'document-access'];
 export type NotificationTeam = 'web' | 'marketing';
 // Where a notification came from: a task team, or Projects (Cybernext InHouse → Documents)
 export type NotificationSource = NotificationTeam | 'projects';
@@ -25,6 +27,8 @@ export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   'task-status': 'Task Status',
   'access-request': 'Access Request',
   'access-granted': 'Access Granted',
+  'project-access': 'Project Access',
+  'document-access': 'Document Access',
 };
 
 // One notification as the bell shows it
